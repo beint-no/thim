@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="#{home.title(${version})}">Thim</title>
+</head>
+<body>
+    <main>
+        <h1 th:text="#{home.title(${version})}">Thim</h1>
+        <p th:text="${greeting}">Greeting</p>
+        <ul>
+            <li th:each="feature : ${features}">
+                <strong th:text="${feature.name}">Name</strong>
+                <span th:text="${feature.description}">Description</span>
+            </li>
+        </ul>
+        <p th:if="${showFooter}">
+            <a href="/health" th:href="@{/health}" th:text="#{home.health}">Health</a>
+        </p>
+    </main>
+</body>
+</html>
