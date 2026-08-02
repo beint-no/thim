@@ -29,7 +29,7 @@ data class HomePage(
 class HomeCtrl {
     @GetMapping("/")
     fun home() = HomePage(
-        version = "0.3.0",
+        version = "0.3.1",
         greeting = "Typed models, compiled HTML, no runtime engine.",
         features = listOf(
             Feature("Safe", "Properties and messages are checked while the application compiles."),

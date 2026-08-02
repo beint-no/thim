@@ -9,6 +9,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodReturnValueHandler;
 import org.springframework.web.method.support.ModelAndViewContainer;
+import org.springframework.web.servlet.support.RequestContextUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -43,7 +44,7 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
         response.setContentType("text/html");
         modelAndViewContainer.setRequestHandled(true);
         var output = new HtmlOutput(response.getOutputStream());
-        templateSet.render(returnValue, new RenderContext(request.getLocale(), request.getContextPath()), output);
+        templateSet.render(returnValue, new RenderContext(RequestContextUtils.getLocale(request), request.getContextPath()), output);
         output.flush();
     }
 }
