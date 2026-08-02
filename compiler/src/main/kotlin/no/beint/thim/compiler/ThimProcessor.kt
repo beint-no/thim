@@ -38,7 +38,7 @@ private class ThimProcessor(
         try {
             validateConfiguration()
             val catalog = MessageCatalog.load(messagesDirectory)
-            val generator = RendererGenerator(generatedPackage, catalog)
+            val generator = RendererGenerator(catalog)
             val templateNames = mutableSetOf<String>()
             val compiled = models.map { model ->
                 val templateName = templateName(model)
@@ -69,28 +69,34 @@ private class ThimProcessor(
             dependencies = Dependencies(aggregating = true, *files),
             packageName = generatedPackage,
             fileName = registryName,
-            extensionName = "kt",
+            extensionName = "java",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.appendLine("package $generatedPackage")
+            output.appendLine("package $generatedPackage;")
             output.appendLine()
-            output.appendLine("import no.beint.thim.Html")
-            output.appendLine("import no.beint.thim.RenderContext")
-            output.appendLine("import no.beint.thim.TemplateSet")
+            output.appendLine("import java.io.IOException;")
+            output.appendLine("import no.beint.thim.Html;")
+            output.appendLine("import no.beint.thim.RenderContext;")
+            output.appendLine("import no.beint.thim.TemplateSet;")
             output.appendLine()
             compiled.forEach { output.append(it.source).appendLine() }
-            output.appendLine("public object $registryName : TemplateSet {")
-            output.appendLine("    override fun supports(modelType: Class<*>): Boolean =")
-            output.appendLine(compiled.joinToString(" ||\n") {
-                "        modelType === ${it.model.qualifiedName!!.asString()}::class.java"
-            })
+            output.appendLine("public final class $registryName implements TemplateSet {")
+            output.appendLine("    @Override")
+            output.appendLine("    public boolean supports(Class<?> modelType) {")
+            output.appendLine("        return " + compiled.joinToString(" ||\n            ") {
+                "modelType == ${it.model.qualifiedName!!.asString()}.class"
+            } + ";")
+            output.appendLine("    }")
             output.appendLine()
-            output.appendLine("    override fun render(model: Any, context: RenderContext, output: Appendable) {")
-            output.appendLine("        when (model) {")
+            output.appendLine("    @Override")
+            output.appendLine("    public void render(Object model, RenderContext context, Appendable output) throws IOException {")
             compiled.forEach {
-                output.appendLine("            is ${it.model.qualifiedName!!.asString()} -> ${it.rendererName}.render(model, context, output)")
+                val modelName = it.model.qualifiedName!!.asString()
+                output.appendLine("        if (model instanceof $modelName typed) {")
+                output.appendLine("            ${it.rendererName}.render(typed, context, output);")
+                output.appendLine("            return;")
+                output.appendLine("        }")
             }
-            output.appendLine("            else -> throw IllegalArgumentException(\"No compiled template for \${model.javaClass.name}\")")
-            output.appendLine("        }")
+            output.appendLine("        throw new IllegalArgumentException(\"No compiled template for \" + model.getClass().getName());")
             output.appendLine("    }")
             output.appendLine("}")
         }

@@ -2,7 +2,7 @@
 
 Thim is a strict, Kotlin-first AOT renderer for a deliberately small subset of Thymeleaf template syntax.
 
-Templates are parsed, type-checked and turned into direct Kotlin renderers by KSP. The runtime never parses templates, resolves property names, invokes methods reflectively or evaluates expressions.
+Templates are parsed and type-checked by KSP, then turned into direct Java renderers. The runtime never parses templates, resolves property names, invokes methods reflectively or evaluates expressions, and generated renderers do not depend on Kotlin.
 
 Thim requires JDK 26 or newer, Kotlin 2.4 and Spring Framework 7 when using the optional MVC adapter.
 
@@ -14,11 +14,11 @@ Thim currently accepts:
 - `th:text`
 - `th:each`
 - `th:if` and `th:unless`
-- static `th:href`, `th:src` and `th:action` URLs
-- `th:value` and boolean form attributes
+- property, message, static URL and quoted-literal values on ordinary `th:*` attributes
+- conditional HTML boolean attributes
 - literal `#{message}` expressions with typed arguments
 
-Every other `th:*` attribute is a compilation error. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate or unused messages, invalid message arguments and unsupported expressions also fail compilation.
+Legacy expression evaluation and semantic attributes such as `th:attr`, `th:field`, `th:object`, `th:replace`, `th:switch`, `th:utext` and `th:with` are compilation errors. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate or unused messages, invalid message arguments and unsupported expressions also fail compilation.
 
 ```kotlin
 @Thim("home")

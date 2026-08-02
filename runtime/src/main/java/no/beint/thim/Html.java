@@ -10,8 +10,13 @@ public final class Html {
         if (value == null) {
             return;
         }
+        text(output, value.toString());
+    }
 
-        var text = value.toString();
+    public static void text(Appendable output, String text) throws IOException {
+        if (text == null) {
+            return;
+        }
         var start = 0;
         for (var index = 0; index < text.length(); index++) {
             var escaped = switch (text.charAt(index)) {

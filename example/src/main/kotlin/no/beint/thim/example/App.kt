@@ -53,5 +53,5 @@ class HomeCtrl {
 @Configuration(proxyBeanMethods = false)
 class WebCfg {
     @Bean
-    fun thimWebMvcConfigurer() = ThimWebMvcConfigurer(ExampleTemplates)
+    fun thimWebMvcConfigurer() = ThimWebMvcConfigurer(ExampleTemplates())
 }

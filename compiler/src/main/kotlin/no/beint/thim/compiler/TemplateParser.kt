@@ -29,7 +29,6 @@ internal class TemplateParser(
                 else -> openElement()
             }
         }
-        require(stack.isEmpty()) { "$templateName: unclosed <${stack.last().name}> element" }
         return roots
     }
 
@@ -61,6 +60,9 @@ internal class TemplateParser(
         val selfClosing = inside.trimEnd().endsWith('/')
         val content = if (selfClosing) inside.trimEnd().dropLast(1) else inside
         val parsed = parseTag(content)
+        while (stack.lastOrNull()?.name?.let { autoCloses(it, parsed.first) } == true) {
+            stack.removeLast()
+        }
         val element = ElementNode(parsed.first, parsed.second, selfClosing = selfClosing)
         currentChildren().add(element)
         index = end + 1
@@ -83,6 +85,9 @@ internal class TemplateParser(
         val end = source.indexOf('>', index + 2)
         require(end >= 0) { "$templateName: unterminated closing element" }
         val name = source.substring(index + 2, end).trim().lowercase()
+        while (stack.lastOrNull()?.let { it.name != name && it.name in optionalEndElements } == true) {
+            stack.removeLast()
+        }
         val open = stack.removeLastOrNull()
         require(open != null && open.name == name) {
             "$templateName: closing </$name> does not match <${open?.name ?: "none"}>"
@@ -142,8 +147,22 @@ internal class TemplateParser(
     }
 
     private companion object {
-        val namePattern = Regex("[a-z][a-z0-9-]*")
-        val attributePattern = Regex("[A-Za-z_:][A-Za-z0-9_.:-]*")
+        fun autoCloses(open: String, next: String): Boolean = when (open) {
+            "li" -> next == "li"
+            "dt", "dd" -> next == "dt" || next == "dd"
+            "rt", "rp" -> next == "rt" || next == "rp"
+            "option" -> next == "option" || next == "optgroup"
+            "optgroup" -> next == "optgroup"
+            "thead" -> next == "tbody" || next == "tfoot"
+            "tbody" -> next == "tbody" || next == "tfoot"
+            "tr" -> next == "tr"
+            "th", "td" -> next == "th" || next == "td"
+            else -> false
+        }
+
+        val namePattern = Regex("[a-z][a-z0-9:._-]*")
+        val attributePattern = Regex("[^\\s=<>]+")
+        val optionalEndElements = setOf("li", "dt", "dd", "p", "rt", "rp", "optgroup", "option", "thead", "tbody", "tfoot", "tr", "th", "td")
         val voidElements = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr")
     }
 }
