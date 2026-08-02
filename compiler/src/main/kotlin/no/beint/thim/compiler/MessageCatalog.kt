@@ -12,7 +12,6 @@ internal data class MessageDefinition(
     val key: String,
     val base: String,
     val localized: Map<String, String>,
-    val placeholders: Set<Int>,
 )
 
 internal class MessageCatalog private constructor(
@@ -20,7 +19,13 @@ internal class MessageCatalog private constructor(
 ) {
     fun use(key: String, argumentCount: Int, context: String): MessageDefinition {
         val definition = definitions[key] ?: error("$context: message '$key' does not exist")
-        val expected = if (definition.placeholders.isEmpty()) 0 else definition.placeholders.max() + 1
+        val placeholders = placeholders(definition.base, "$context message '$key'")
+        definition.localized.forEach { (locale, value) ->
+            require(placeholders(value, "$context message '$key' locale '$locale'") == placeholders) {
+                "$context: message '$key' uses different placeholders in locale '$locale'"
+            }
+        }
+        val expected = if (placeholders.isEmpty()) 0 else placeholders.max() + 1
         require(argumentCount == expected) {
             "$context: message '$key' requires $expected arguments, received $argumentCount"
         }
@@ -59,15 +64,10 @@ internal class MessageCatalog private constructor(
 
                 base.forEach { (key, value) ->
                     require(key !in definitions) { "Duplicate message key '$key'" }
-                    val placeholders = placeholders(value, "$baseFile:$key")
                     val localizedValues = localized.mapValues { (locale, values) ->
-                        val localizedValue = values.getValue(key)
-                        require(placeholders(localizedValue, "$locale:$key") == placeholders) {
-                            "Message '$key' uses different placeholders in locale '$locale'"
-                        }
-                        localizedValue
+                        values.getValue(key)
                     }
-                    definitions[key] = MessageDefinition(key, value, localizedValues, placeholders)
+                    definitions[key] = MessageDefinition(key, value, localizedValues)
                 }
             }
             return MessageCatalog(definitions)
