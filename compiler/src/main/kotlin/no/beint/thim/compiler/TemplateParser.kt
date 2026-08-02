@@ -8,7 +8,6 @@ internal data class ElementNode(
     val name: String,
     val attributes: LinkedHashMap<String, String?>,
     val children: MutableList<Node> = mutableListOf(),
-    val selfClosing: Boolean = false,
 ) : Node
 
 internal class TemplateParser(
@@ -63,7 +62,7 @@ internal class TemplateParser(
         while (stack.lastOrNull()?.name?.let { autoCloses(it, parsed.first) } == true) {
             stack.removeLast()
         }
-        val element = ElementNode(parsed.first, parsed.second, selfClosing = selfClosing)
+        val element = ElementNode(parsed.first, parsed.second)
         currentChildren().add(element)
         index = end + 1
 

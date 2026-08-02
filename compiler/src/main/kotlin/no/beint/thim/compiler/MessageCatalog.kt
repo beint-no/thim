@@ -1,6 +1,5 @@
 package no.beint.thim.compiler
 
-import java.io.Reader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -9,7 +8,6 @@ import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
 
 internal data class MessageDefinition(
-    val key: String,
     val base: String,
     val localized: Map<String, String>,
 )
@@ -67,7 +65,7 @@ internal class MessageCatalog private constructor(
                     val localizedValues = localized.mapValues { (locale, values) ->
                         values.getValue(key)
                     }
-                    definitions[key] = MessageDefinition(key, value, localizedValues)
+                    definitions[key] = MessageDefinition(value, localizedValues)
                 }
             }
             return MessageCatalog(definitions)
@@ -84,7 +82,7 @@ internal class MessageCatalog private constructor(
             require(duplicate.isEmpty()) { "$path contains duplicate keys ${duplicate.sorted()}" }
 
             val properties = Properties()
-            Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader: Reader -> properties.load(reader) }
+            Files.newBufferedReader(path, StandardCharsets.UTF_8).use(properties::load)
             return properties.stringPropertyNames().associateWith(properties::getProperty)
         }
 

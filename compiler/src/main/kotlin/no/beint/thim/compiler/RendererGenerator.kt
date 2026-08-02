@@ -153,9 +153,10 @@ internal class RendererGenerator(
 
         when {
             expression.trim().startsWith("@{") -> {
+                val path = parseUrl(expression, location)
                 code.static(" $name=\"")
-                code.statement("Html.text(output, context.contextPath());")
-                code.static(escapeHtml(parseUrl(expression, location)) + "\"")
+                if (path.startsWith('/')) code.statement("Html.text(output, context.contextPath());")
+                code.static(escapeHtml(path) + "\"")
             }
             expression.trim().startsWith("#{") -> {
                 code.static(" $name=\"")
@@ -163,6 +164,12 @@ internal class RendererGenerator(
                 code.static("\"")
             }
             expression.trim().startsWith("\${") -> {
+                if (expression.trim() == "\${#locale.language}") {
+                    code.static(" $name=\"")
+                    code.statement("Html.text(output, context.locale().getLanguage());")
+                    code.static("\"")
+                    return
+                }
                 val value = scope.resolve(Expressions.path(expression, location), location)
                 if (value.nullable) {
                     val variable = "attribute${generatedVariable++}"
@@ -240,8 +247,8 @@ internal class RendererGenerator(
         val trimmed = value.trim()
         require(trimmed.startsWith("@{") && trimmed.endsWith('}')) { "$context: expected a @{/...} URL" }
         val path = trimmed.substring(2, trimmed.length - 1)
-        require(path.startsWith('/') && !path.contains("\${") && !path.contains('(')) {
-            "$context: only static absolute application paths are supported"
+        require((path.startsWith('/') || path.startsWith("https://")) && !path.contains("\${") && !path.contains('(')) {
+            "$context: only static absolute application or HTTPS URLs are supported"
         }
         return path
     }
@@ -366,10 +373,12 @@ internal class RendererGenerator(
 
         private fun flushStatic() {
             if (pending.isEmpty()) return
-            output.append("    ".repeat(depth))
-                .append("output.append(\"")
-                .append(javaString(pending.toString()))
-                .append("\");\n")
+            pending.chunked(16_000).forEach { chunk ->
+                output.append("    ".repeat(depth))
+                    .append("output.append(\"")
+                    .append(javaString(chunk))
+                    .append("\");\n")
+            }
             pending.clear()
         }
 

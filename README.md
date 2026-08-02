@@ -17,6 +17,7 @@ Thim currently accepts:
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
 - conditional HTML boolean attributes
 - literal `#{message}` expressions with typed arguments
+- `${#locale.language}` for the document language attribute
 
 Legacy expression evaluation and semantic attributes such as `th:attr`, `th:field`, `th:object`, `th:replace`, `th:switch`, `th:utext` and `th:with` are compilation errors. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate messages, invalid message arguments and unsupported expressions also fail compilation.
 
@@ -32,6 +33,22 @@ fun home() = HomePage("Hello", features)
 ```
 
 The generated `TemplateSet` is connected to Spring MVC with `ThimWebMvcConfigurer`. Controllers return typed page models directly; there is no view name or string-keyed model.
+
+The experimental modules are published at `https://maven.pkg.github.com/beint-no/thim`:
+
+```kotlin
+dependencies {
+    implementation("no.beint.thim:spring:0.1.0-experimental.3")
+    ksp("no.beint.thim:compiler:0.1.0-experimental.3")
+}
+
+ksp {
+    arg("thim.templates", layout.projectDirectory.dir("src/main/resources/templates").asFile.absolutePath)
+    arg("thim.messages", layout.projectDirectory.dir("src/main/resources").asFile.absolutePath)
+    arg("thim.package", "example.generated")
+    arg("thim.registry", "ExampleTemplates")
+}
+```
 
 Run the example with:
 
