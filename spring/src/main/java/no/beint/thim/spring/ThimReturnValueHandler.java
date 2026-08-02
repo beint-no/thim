@@ -2,6 +2,7 @@ package no.beint.thim.spring;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
 import no.beint.thim.TemplateSet;
 import org.springframework.core.MethodParameter;
@@ -36,6 +37,8 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("text/html");
         modelAndViewContainer.setRequestHandled(true);
-        templates.render(returnValue, new RenderContext(request.getLocale(), request.getContextPath()), response.getWriter());
+        var output = new HtmlOutput(response.getOutputStream());
+        templates.render(returnValue, new RenderContext(request.getLocale(), request.getContextPath()), output);
+        output.flush();
     }
 }

@@ -4,6 +4,8 @@ import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Nullability
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets
 
 internal data class CompiledTemplate(
     val model: KSClassDeclaration,
@@ -11,8 +13,22 @@ internal data class CompiledTemplate(
     val source: String,
 )
 
+internal class StaticContent {
+    private val output = ByteArrayOutputStream()
+
+    fun append(value: String): IntRange {
+        val start = output.size()
+        output.writeBytes(value.toByteArray(StandardCharsets.UTF_8))
+        return start until output.size()
+    }
+
+    fun bytes(): ByteArray = output.toByteArray()
+}
+
 internal class RendererGenerator(
     private val catalog: MessageCatalog,
+    private val staticContent: StaticContent,
+    private val registryName: String,
 ) {
     private var generatedVariable = 0
     private var regionalLocales = emptyMap<String, Int>()
@@ -20,8 +36,8 @@ internal class RendererGenerator(
 
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
-        val rendererName = model.simpleName.asString().replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
-        val code = CodeWriter()
+        val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
+        val code = CodeWriter(staticContent, registryName)
         val locales = if (usesMessages(nodes)) catalog.locales() else emptySet()
         regionalLocales = locales.filter { '-' in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
         languages = locales.filter { '-' !in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
@@ -30,7 +46,7 @@ internal class RendererGenerator(
         code.indent {
             code.line("private $rendererName() {}")
             code.line()
-            code.line("static void render($modelName model, RenderContext context, Appendable output) throws IOException {")
+            code.line("static void render($modelName model, RenderContext context, HtmlOutput output) throws IOException {")
             code.indent {
                 if (regionalLocales.isNotEmpty()) {
                     val cases = regionalLocales.entries.joinToString(" ") { (locale, index) ->
@@ -125,7 +141,7 @@ internal class RendererGenerator(
             renderMessage(Expressions.message(text, "$location th:text"), scope, code, "$location th:text")
         } else {
             val value = scope.resolve(Expressions.path(text, "$location th:text"), "$location th:text")
-            code.statement("Html.text(output, ${value.code});")
+            code.statement("output.text(${value.code});")
         }
 
         if (!transparent && element.name !in voidElements) code.static("</${element.name}>")
@@ -155,7 +171,7 @@ internal class RendererGenerator(
             expression.trim().startsWith("@{") -> {
                 val path = parseUrl(expression, location)
                 code.static(" $name=\"")
-                if (path.startsWith('/')) code.statement("Html.text(output, context.contextPath());")
+                if (path.startsWith('/')) code.statement("output.text(context.contextPath());")
                 code.static(escapeHtml(path) + "\"")
             }
             expression.trim().startsWith("#{") -> {
@@ -166,7 +182,7 @@ internal class RendererGenerator(
             expression.trim().startsWith("\${") -> {
                 if (expression.trim() == "\${#locale.language}") {
                     code.static(" $name=\"")
-                    code.statement("Html.text(output, context.locale().getLanguage());")
+                    code.statement("output.text(context.locale().getLanguage());")
                     code.static("\"")
                     return
                 }
@@ -176,12 +192,12 @@ internal class RendererGenerator(
                     code.statement("var $variable = ${value.code};")
                     code.open("if ($variable != null)")
                     code.static(" $name=\"")
-                    code.statement("Html.text(output, $variable);")
+                    code.statement("output.text($variable);")
                     code.static("\"")
                     code.close()
                 } else {
                     code.static(" $name=\"")
-                    code.statement("Html.text(output, ${value.code});")
+                    code.statement("output.text(${value.code});")
                     code.static("\"")
                 }
             }
@@ -237,7 +253,7 @@ internal class RendererGenerator(
         var start = 0
         placeholderPattern.findAll(pattern).forEach { match ->
             code.static(escapeHtml(pattern.substring(start, match.range.first)))
-            code.statement("Html.text(output, ${arguments[match.groupValues[1].toInt()]});")
+            code.statement("output.text(${arguments[match.groupValues[1].toInt()]});")
             start = match.range.last + 1
         }
         code.static(escapeHtml(pattern.substring(start)))
@@ -334,7 +350,10 @@ internal class RendererGenerator(
         }
     }
 
-    private class CodeWriter {
+    private class CodeWriter(
+        private val staticContent: StaticContent,
+        private val registryName: String,
+    ) {
         private val output = StringBuilder()
         private val pending = StringBuilder()
         private var depth = 0
@@ -373,12 +392,13 @@ internal class RendererGenerator(
 
         private fun flushStatic() {
             if (pending.isEmpty()) return
-            pending.chunked(16_000).forEach { chunk ->
-                output.append("    ".repeat(depth))
-                    .append("output.append(\"")
-                    .append(javaString(chunk))
-                    .append("\");\n")
-            }
+            val range = staticContent.append(pending.toString())
+            output.append("    ".repeat(depth))
+                .append("output.raw($registryName.STATIC, ")
+                .append(range.first)
+                .append(", ")
+                .append(range.last - range.first + 1)
+                .append(");\n")
             pending.clear()
         }
 
