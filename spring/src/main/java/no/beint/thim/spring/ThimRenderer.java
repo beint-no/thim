@@ -8,8 +8,10 @@ import no.beint.thim.TemplateSet;
 import org.springframework.web.servlet.support.RequestContextUtils;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Locale;
 import java.util.ServiceLoader;
 
 public final class ThimRenderer {
@@ -27,6 +29,10 @@ public final class ThimRenderer {
         return templates.stream().anyMatch(templateSet -> templateSet.supports(modelType));
     }
 
+    public boolean supportsReturnType(Class<?> returnType) {
+        return templates.stream().anyMatch(templateSet -> templateSet.supportsReturnType(returnType));
+    }
+
     public void render(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
         var templateSet = templates.stream()
                 .filter(candidate -> candidate.supports(model.getClass()))
@@ -37,5 +43,21 @@ public final class ThimRenderer {
         var output = new HtmlOutput(response.getOutputStream());
         templateSet.render(model, new RenderContext(RequestContextUtils.getLocale(request), request.getContextPath()), output);
         output.flush();
+    }
+
+    public String renderToString(Object model, Locale locale) throws IOException {
+        return renderToString(model, locale, "");
+    }
+
+    public String renderToString(Object model, Locale locale, String contextPath) throws IOException {
+        var templateSet = templates.stream()
+                .filter(candidate -> candidate.supports(model.getClass()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No compiled template for " + model.getClass().getName()));
+        var bytes = new ByteArrayOutputStream();
+        var output = new HtmlOutput(bytes);
+        templateSet.render(model, new RenderContext(locale, contextPath), output);
+        output.flush();
+        return bytes.toString(StandardCharsets.UTF_8);
     }
 }

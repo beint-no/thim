@@ -17,7 +17,7 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
 
     @Override
     public boolean supportsReturnType(MethodParameter returnType) {
-        return renderer.supports(returnType.getParameterType());
+        return renderer.supportsReturnType(returnType.getParameterType());
     }
 
     @Override

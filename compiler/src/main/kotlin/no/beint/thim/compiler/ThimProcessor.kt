@@ -112,6 +112,13 @@ private class ThimProcessor(
             output.appendLine("    }")
             output.appendLine()
             output.appendLine("    @Override")
+            output.appendLine("    public boolean supportsReturnType(Class<?> returnType) {")
+            output.appendLine("        return returnType != Object.class && (" + compiled.joinToString(" ||\n            ") {
+                "returnType.isAssignableFrom(${it.model.qualifiedName!!.asString()}.class)"
+            } + ");")
+            output.appendLine("    }")
+            output.appendLine()
+            output.appendLine("    @Override")
             output.appendLine("    public void render(Object model, RenderContext context, HtmlOutput output) throws IOException {")
             compiled.forEach {
                 val modelName = it.model.qualifiedName!!.asString()
