@@ -6,6 +6,7 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.FileSystemOperations;
 import org.gradle.api.provider.Property;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
@@ -65,6 +66,15 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract Property<String> getRegistryName();
 
     @Input
+    public abstract ListProperty<String> getModelPackages();
+
+    @Input
+    public abstract Property<Boolean> getStrictTemplates();
+
+    @Input
+    public abstract Property<Boolean> getFailOnUnusedMessages();
+
+    @Input
     public abstract Property<String> getModuleName();
 
     @Input
@@ -120,7 +130,10 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.templates=" + getTemplates().get().getAsFile().getAbsolutePath(),
                 "thim.messages=" + getMessages().get().getAsFile().getAbsolutePath(),
                 "thim.package=" + getGeneratedPackage().get(),
-                "thim.registry=" + getRegistryName().get()
+                "thim.registry=" + getRegistryName().get(),
+                "thim.modelPackages=" + String.join(",", getModelPackages().get()),
+                "thim.strictTemplates=" + getStrictTemplates().get(),
+                "thim.failOnUnusedMessages=" + getFailOnUnusedMessages().get()
         );
         var arguments = List.of(
                 "-java-source-roots=" + javaSources,

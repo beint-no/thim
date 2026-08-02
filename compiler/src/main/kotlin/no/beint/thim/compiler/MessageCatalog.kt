@@ -15,8 +15,11 @@ internal data class MessageDefinition(
 internal class MessageCatalog private constructor(
     private val definitions: Map<String, MessageDefinition>,
 ) {
+    private val used = linkedSetOf<String>()
+
     fun use(key: String, argumentCount: Int, context: String): MessageDefinition {
         val definition = definitions[key] ?: error("$context: message '$key' does not exist")
+        used += key
         val placeholders = placeholders(definition.base, "$context message '$key'")
         definition.localized.forEach { (locale, value) ->
             require(placeholders(value, "$context message '$key' locale '$locale'") == placeholders) {
@@ -34,6 +37,11 @@ internal class MessageCatalog private constructor(
         .flatMapTo(linkedSetOf()) { definition ->
             definition.localized.filterValues { it != definition.base }.keys
         }
+
+    fun requireAllUsed() {
+        val unused = definitions.keys - used
+        require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
+    }
 
     companion object {
         fun load(directory: Path): MessageCatalog {

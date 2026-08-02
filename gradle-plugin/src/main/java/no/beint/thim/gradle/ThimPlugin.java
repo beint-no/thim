@@ -27,6 +27,9 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getMessages().convention(project.getLayout().getProjectDirectory().dir("src/main/resources"));
         extension.getGeneratedPackage().convention(project.provider(() -> generatedPackage(project)));
         extension.getRegistryName().convention("ThimTemplates");
+        extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
+        extension.getStrictTemplates().convention(false);
+        extension.getFailOnUnusedMessages().convention(false);
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -50,6 +53,9 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.messages", extension.getMessages().map(directory -> directory.getAsFile().getAbsolutePath()));
         ksp.arg("thim.package", extension.getGeneratedPackage());
         ksp.arg("thim.registry", extension.getRegistryName());
+        ksp.arg("thim.modelPackages", extension.getModelPackages().map(packages -> String.join(",", packages)));
+        ksp.arg("thim.strictTemplates", extension.getStrictTemplates().map(String::valueOf));
+        ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
@@ -98,6 +104,9 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getLibraries().from(main.getCompileClasspath());
             task.getGeneratedPackage().set(extension.getGeneratedPackage());
             task.getRegistryName().set(extension.getRegistryName());
+            task.getModelPackages().set(extension.getModelPackages());
+            task.getStrictTemplates().set(extension.getStrictTemplates());
+            task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
             task.getModuleName().set(project.getName());
             task.getJdkHome().set(System.getProperty("java.home"));
             task.getProjectBase().set(project.getLayout().getProjectDirectory());
@@ -153,6 +162,11 @@ public final class ThimPlugin implements Plugin<Project> {
             packageName.append(javaIdentifier(identifier));
         }
         return packageName.append(".thim.generated").toString();
+    }
+
+    private String defaultModelPackage(Project project) {
+        var group = project.getGroup().toString();
+        return group.matches("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*") ? group + ".page" : "page";
     }
 
     private String javaIdentifier(String value) {

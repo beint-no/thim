@@ -1,5 +1,6 @@
 package no.beint.thim.example
 
+import no.beint.thim.example.page.HomePage
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.stereotype.Controller
@@ -18,18 +19,11 @@ data class Feature(
     val description: String,
 )
 
-data class HomePage(
-    val version: String,
-    val greeting: String,
-    val features: List<Feature>,
-    val showFooter: Boolean,
-)
-
 @Controller
 class HomeCtrl {
     @GetMapping("/")
     fun home() = HomePage(
-        version = "0.3.1",
+        version = "0.4.0",
         greeting = "Typed models, compiled HTML, no runtime engine.",
         features = listOf(
             Feature("Safe", "Properties and messages are checked while the application compiles."),

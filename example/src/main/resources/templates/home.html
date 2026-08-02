@@ -1,5 +1,5 @@
 <!doctype html>
-<html thim:model="no.beint.thim.example.HomePage" lang="en">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,8 +11,7 @@
         <p th:text="${greeting}">Greeting</p>
         <ul>
             <li th:each="feature : ${features}">
-                <strong th:text="${feature.name}">Name</strong>
-                <span th:text="${feature.description}">Description</span>
+                <th:block th:replace="~{fragments/feature :: feature(${feature})}"></th:block>
             </li>
         </ul>
         <p th:if="${showFooter}">

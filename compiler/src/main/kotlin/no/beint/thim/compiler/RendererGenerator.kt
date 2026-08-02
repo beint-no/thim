@@ -102,20 +102,32 @@ internal class RendererGenerator(
         }
 
         attributes["th:if"]?.let { condition ->
-            val resolved = scope.resolve(Expressions.path(condition, "$location th:if"), "$location th:if")
-            require(resolved.type.isBoolean() && !resolved.nullable) {
-                "$location: th:if requires a non-null Boolean"
+            val literal = condition.trim().toBooleanStrictOrNull()
+            if (literal != null) {
+                code.open("if ($literal)")
+                blocks++
+            } else {
+                val resolved = scope.resolve(Expressions.path(condition, "$location th:if"), "$location th:if")
+                require(resolved.type.isBoolean() && !resolved.nullable) {
+                    "$location: th:if requires a non-null Boolean"
+                }
+                code.open("if (${resolved.code})")
+                blocks++
             }
-            code.open("if (${resolved.code})")
-            blocks++
         }
         attributes["th:unless"]?.let { condition ->
-            val resolved = scope.resolve(Expressions.path(condition, "$location th:unless"), "$location th:unless")
-            require(resolved.type.isBoolean() && !resolved.nullable) {
-                "$location: th:unless requires a non-null Boolean"
+            val literal = condition.trim().toBooleanStrictOrNull()
+            if (literal != null) {
+                code.open("if (!${literal})")
+                blocks++
+            } else {
+                val resolved = scope.resolve(Expressions.path(condition, "$location th:unless"), "$location th:unless")
+                require(resolved.type.isBoolean() && !resolved.nullable) {
+                    "$location: th:unless requires a non-null Boolean"
+                }
+                code.open("if (!${resolved.code})")
+                blocks++
             }
-            code.open("if (!${resolved.code})")
-            blocks++
         }
 
         val transparent = element.name == "th:block"
@@ -158,6 +170,10 @@ internal class RendererGenerator(
     ) {
         val location = "$context th:$name"
         if (name in booleanAttributes) {
+            expression.trim().toBooleanStrictOrNull()?.let { literal ->
+                if (literal) code.static(" $name")
+                return
+            }
             val value = scope.resolve(Expressions.path(expression, location), location)
             require(value.type.isBoolean() && !value.nullable) {
                 "$location requires a non-null Boolean"
@@ -169,6 +185,11 @@ internal class RendererGenerator(
         }
 
         when {
+            expression.trim().toBooleanStrictOrNull() != null -> {
+                code.static(" $name=\"")
+                code.static(expression.trim())
+                code.static("\"")
+            }
             expression.trim().startsWith("@{") -> {
                 val path = parseUrl(expression, location)
                 code.static(" $name=\"")
@@ -439,7 +460,11 @@ internal class RendererGenerator(
         val eachPattern = Regex("([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*(\\$\\{.+})")
         val placeholderPattern = Regex("\\{(\\d+)}")
         val voidElements = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr")
-        val booleanAttributes = setOf("checked", "disabled", "multiple", "readonly", "required", "selected")
+        val booleanAttributes = setOf(
+            "allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer",
+            "disabled", "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple",
+            "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected",
+        )
         val controlAttributes = setOf("th:text", "th:each", "th:if", "th:unless", "th:fragment")
         val unsupportedAttributes = setOf(
             "th:attr", "th:case", "th:classappend", "th:errors", "th:field", "th:inline", "th:insert",

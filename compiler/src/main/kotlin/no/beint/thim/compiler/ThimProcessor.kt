@@ -19,7 +19,7 @@ public class ThimProcessorProvider : SymbolProcessorProvider {
 
 private data class TemplateSource(
     val name: String,
-    val modelName: String,
+    val model: KSClassDeclaration,
     val nodes: List<Node>,
 )
 
@@ -32,6 +32,13 @@ private class ThimProcessor(
     private val messagesDirectory = requiredPath(environment, "thim.messages")
     private val generatedPackage = environment.options["thim.package"] ?: "thim.generated"
     private val registryName = environment.options["thim.registry"] ?: "ThimTemplates"
+    private val modelPackages = environment.options["thim.modelPackages"]
+        .orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+    private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
+    private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
     private var completed = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -39,26 +46,26 @@ private class ThimProcessor(
 
         try {
             validateConfiguration()
-            val templates = typedTemplates()
+            val parsed = parsedTemplates()
+            val expander = FragmentExpander(parsed)
+            val templates = typedTemplates(resolver, parsed).map { template ->
+                template.copy(nodes = expander.expand(template.name, template.nodes))
+            }
             if (templates.isEmpty()) {
                 completed = true
                 return emptyList()
             }
-            val models = templates.associateWith { template ->
-                requireNotNull(resolver.getClassDeclarationByName(resolver.getKSNameFromString(template.modelName))) {
-                    "${template.name}: model '${template.modelName}' does not exist"
-                }
-            }
-            require(models.values.distinctBy { it.qualifiedName?.asString() }.size == models.size) {
+            require(templates.map { it.model.qualifiedName?.asString() }.distinct().size == templates.size) {
                 "A page model can only be assigned to one template"
             }
 
             val catalog = MessageCatalog.load(messagesDirectory)
             val staticContent = StaticContent()
             val generator = RendererGenerator(catalog, staticContent, registryName)
-            val compiled = models.map { (template, model) ->
-                generator.compile(template.name, model, template.nodes)
+            val compiled = templates.map { template ->
+                generator.compile(template.name, template.model, template.nodes)
             }
+            if (failOnUnusedMessages) catalog.requireAllUsed()
             generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {
@@ -126,26 +133,39 @@ private class ThimProcessor(
         }
     }
 
-    private fun typedTemplates(): List<TemplateSource> {
+    private fun parsedTemplates(): Map<String, List<Node>> {
         val paths = mutableListOf<Path>()
         Files.walk(templatesDirectory).use { stream ->
             stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".html") }.forEach(paths::add)
         }
-        return paths.sorted().mapNotNull { path ->
+        return paths.sorted().associate { path ->
             val source = Files.readString(path, StandardCharsets.UTF_8)
-            if (!source.contains("thim:model")) return@mapNotNull null
             val name = templateName(path)
-            val nodes = TemplateParser(name, source).parse()
-            val root = nodes.firstOrNull { it is ElementNode } as? ElementNode
-                ?: error("$name: a typed template needs a root element")
-            val declarations = nodes.asSequence().flatMap(Node::elements).filter { "thim:model" in it.attributes }.toList()
-            require(declarations.size == 1) { "$name: expected exactly one thim:model attribute" }
-            require(declarations.single() === root) { "$name: thim:model must be on the root element" }
-            val modelName = requireNotNull(root.attributes.remove("thim:model")) { "$name: thim:model needs a value" }
-            require(modelName.matches(modelNamePattern)) { "$name: invalid model name '$modelName'" }
-            TemplateSource(name, modelName, nodes)
+            name to TemplateParser(name, source).parse()
         }
     }
+
+    private fun typedTemplates(resolver: Resolver, parsed: Map<String, List<Node>>): List<TemplateSource> =
+        parsed.mapNotNull { (name, nodes) ->
+            val root = nodes.firstOrNull { it is ElementNode } as? ElementNode
+            require(nodes.asSequence().flatMap(Node::elements).none { element ->
+                element.attributes.keys.any { it.startsWith("thim:") }
+            }) { "$name: thim:* template attributes are not part of the language" }
+            val candidates = modelPackages.map { "$it.${conventionalModelName(name)}" }
+            val models = candidates.mapNotNull { candidate ->
+                resolver.getClassDeclarationByName(resolver.getKSNameFromString(candidate))
+            }
+            require(models.size <= 1) { "$name: model '${conventionalModelName(name)}' exists in multiple configured packages" }
+            val model = models.singleOrNull()
+            if (model == null) {
+                if (strictTemplates && !nodes.hasFragments()) {
+                    error("$name: model '${conventionalModelName(name)}' does not exist in $modelPackages")
+                }
+                return@mapNotNull null
+            }
+            require(root != null) { "$name: a typed template needs a root element" }
+            TemplateSource(name, model, nodes)
+        }
 
     private fun templateName(path: Path): String = templatesDirectory.relativize(path)
         .toString()
@@ -158,17 +178,28 @@ private class ThimProcessor(
             "Invalid generated package '$generatedPackage'"
         }
         require(registryName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid registry name '$registryName'" }
+        modelPackages.forEach { modelPackage ->
+            require(modelPackage.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
+                "Invalid model package '$modelPackage'"
+            }
+        }
     }
 
     private fun requiredPath(environment: SymbolProcessorEnvironment, key: String): Path =
         Path.of(requireNotNull(environment.options[key]) { "Missing KSP option '$key'" }).toAbsolutePath().normalize()
 
     private companion object {
-        val modelNamePattern = Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*")
+        fun conventionalModelName(templateName: String): String = templateName
+            .split(Regex("[^A-Za-z0-9]+"))
+            .filter(String::isNotEmpty)
+            .joinToString("") { it.replaceFirstChar(Char::uppercaseChar) } + "Page"
     }
 }
 
-private fun Node.elements(): Sequence<ElementNode> = when (this) {
+private fun List<Node>.hasFragments(): Boolean =
+    asSequence().flatMap(Node::elements).any { "th:fragment" in it.attributes }
+
+internal fun Node.elements(): Sequence<ElementNode> = when (this) {
     is ElementNode -> sequenceOf(this) + children.asSequence().flatMap(Node::elements)
     is RawNode -> emptySequence()
 }

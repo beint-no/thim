@@ -8,7 +8,13 @@ import org.springframework.context.annotation.Bean;
 public class ThimAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    ThimWebMvcConfigurer thimWebMvcConfigurer() {
-        return new ThimWebMvcConfigurer();
+    ThimRenderer thimRenderer() {
+        return new ThimRenderer();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    ThimWebMvcConfigurer thimWebMvcConfigurer(ThimRenderer renderer) {
+        return new ThimWebMvcConfigurer(renderer);
     }
 }

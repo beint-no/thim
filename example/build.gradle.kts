@@ -28,4 +28,7 @@ ksp {
     arg("thim.messages", layout.projectDirectory.dir("src/main/resources").asFile.absolutePath)
     arg("thim.package", "no.beint.thim.example.generated")
     arg("thim.registry", "ExampleTemplates")
+    arg("thim.modelPackages", "no.beint.thim.example.page")
+    arg("thim.strictTemplates", "true")
+    arg("thim.failOnUnusedMessages", "true")
 }

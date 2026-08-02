@@ -2,29 +2,22 @@ package no.beint.thim.spring;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import no.beint.thim.HtmlOutput;
-import no.beint.thim.RenderContext;
-import no.beint.thim.TemplateSet;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodReturnValueHandler;
 import org.springframework.web.method.support.ModelAndViewContainer;
-import org.springframework.web.servlet.support.RequestContextUtils;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Objects;
 
 public final class ThimReturnValueHandler implements HandlerMethodReturnValueHandler {
-    private final List<TemplateSet> templates;
+    private final ThimRenderer renderer;
 
-    public ThimReturnValueHandler(List<TemplateSet> templates) {
-        this.templates = List.copyOf(templates);
+    public ThimReturnValueHandler(ThimRenderer renderer) {
+        this.renderer = renderer;
     }
 
     @Override
     public boolean supportsReturnType(MethodParameter returnType) {
-        return templates.stream().anyMatch(templateSet -> templateSet.supports(returnType.getParameterType()));
+        return renderer.supports(returnType.getParameterType());
     }
 
     @Override
@@ -34,17 +27,13 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
             ModelAndViewContainer modelAndViewContainer,
             NativeWebRequest webRequest
     ) throws Exception {
-        var templateSet = templates.stream()
-                .filter(candidate -> candidate.supports(returnType.getParameterType()))
-                .findFirst()
-                .orElseThrow();
+        if (returnValue == null) {
+            modelAndViewContainer.setRequestHandled(true);
+            return;
+        }
         var request = Objects.requireNonNull(webRequest.getNativeRequest(HttpServletRequest.class));
         var response = Objects.requireNonNull(webRequest.getNativeResponse(HttpServletResponse.class));
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType("text/html");
         modelAndViewContainer.setRequestHandled(true);
-        var output = new HtmlOutput(response.getOutputStream());
-        templateSet.render(returnValue, new RenderContext(RequestContextUtils.getLocale(request), request.getContextPath()), output);
-        output.flush();
+        renderer.render(returnValue, request, response);
     }
 }
