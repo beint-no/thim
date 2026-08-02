@@ -1,6 +1,7 @@
 package no.beint.thim.compiler
 
 import com.google.devtools.ksp.getAllSuperTypes
+import com.google.devtools.ksp.getDeclaredFunctions
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Nullability
@@ -102,7 +103,7 @@ internal class RendererGenerator(
 
         attributes["th:if"]?.let { condition ->
             val resolved = scope.resolve(Expressions.path(condition, "$location th:if"), "$location th:if")
-            require(resolved.type.declaration.qualifiedName?.asString() == "kotlin.Boolean" && !resolved.nullable) {
+            require(resolved.type.isBoolean() && !resolved.nullable) {
                 "$location: th:if requires a non-null Boolean"
             }
             code.open("if (${resolved.code})")
@@ -110,7 +111,7 @@ internal class RendererGenerator(
         }
         attributes["th:unless"]?.let { condition ->
             val resolved = scope.resolve(Expressions.path(condition, "$location th:unless"), "$location th:unless")
-            require(resolved.type.declaration.qualifiedName?.asString() == "kotlin.Boolean" && !resolved.nullable) {
+            require(resolved.type.isBoolean() && !resolved.nullable) {
                 "$location: th:unless requires a non-null Boolean"
             }
             code.open("if (!${resolved.code})")
@@ -158,7 +159,7 @@ internal class RendererGenerator(
         val location = "$context th:$name"
         if (name in booleanAttributes) {
             val value = scope.resolve(Expressions.path(expression, location), location)
-            require(value.type.declaration.qualifiedName?.asString() == "kotlin.Boolean" && !value.nullable) {
+            require(value.type.isBoolean() && !value.nullable) {
                 "$location requires a non-null Boolean"
             }
             code.open("if (${value.code})")
@@ -273,7 +274,10 @@ internal class RendererGenerator(
         val candidates = sequenceOf(type) + (type.declaration as? KSClassDeclaration).orEmptySuperTypes()
         return candidates.firstOrNull {
             it.declaration.qualifiedName?.asString() in setOf(
-                "kotlin.collections.Iterable", "kotlin.collections.List", "kotlin.collections.Set", "kotlin.Array",
+                "kotlin.collections.Iterable", "kotlin.collections.Collection", "kotlin.collections.MutableCollection",
+                "kotlin.collections.List", "kotlin.collections.MutableList", "kotlin.collections.Set",
+                "kotlin.collections.MutableSet", "kotlin.Array", "java.lang.Iterable", "java.util.Collection",
+                "java.util.List", "java.util.Set",
             )
         }?.arguments?.firstOrNull()?.type?.resolve()
     }
@@ -299,6 +303,8 @@ internal class RendererGenerator(
 
     private data class ResolvedPath(val code: String, val type: KSType, val nullable: Boolean)
 
+    private data class Property(val type: KSType, val accessor: String)
+
     private class Scope(
         private val model: KSClassDeclaration,
         private val bindings: Map<String, Binding> = emptyMap(),
@@ -316,11 +322,11 @@ internal class RendererGenerator(
                 type = bound.type
                 nullable = bound.nullable
             } else {
-                val property = model.getAllProperties().firstOrNull { it.simpleName.asString() == first.name }
+                val property = model.property(first.name)
                     ?: error("$context: '${first.name}' is not a property of ${model.qualifiedName?.asString()}")
-                type = property.type.resolve()
+                type = property.type
                 nullable = type.nullability == Nullability.NULLABLE
-                code = "model.${getter(first.name, type)}()"
+                code = "model.${property.accessor}()"
             }
 
             expression.segments.drop(1).forEach { segment ->
@@ -329,10 +335,10 @@ internal class RendererGenerator(
                 }
                 val declaration = type.declaration as? KSClassDeclaration
                     ?: error("$context: ${type.declaration.qualifiedName?.asString()} has no properties")
-                val property = declaration.getAllProperties().firstOrNull { it.simpleName.asString() == segment.name }
+                val property = declaration.property(segment.name)
                     ?: error("$context: '${segment.name}' is not a property of ${declaration.qualifiedName?.asString()}")
-                val nextType = property.type.resolve()
-                val access = "$code.${getter(segment.name, nextType)}()"
+                val nextType = property.type
+                val access = "$code.${property.accessor}()"
                 code = if (segment.safe) "($code == null ? null : $access)" else access
                 type = nextType
                 nullable = segment.safe || type.nullability == Nullability.NULLABLE
@@ -340,8 +346,29 @@ internal class RendererGenerator(
             return ResolvedPath(code, type, nullable)
         }
 
+        private fun KSClassDeclaration.property(name: String): Property? {
+            getAllProperties().firstOrNull { it.simpleName.asString() == name }?.let { property ->
+                val type = property.type.resolve()
+                return Property(type, getter(name, type))
+            }
+            primaryConstructor?.parameters?.firstOrNull { it.name?.asString() == name }?.let { component ->
+                return Property(component.type.resolve(), name)
+            }
+            val capitalized = name.replaceFirstChar(Char::uppercaseChar)
+            val accessors = listOf(name, "get$capitalized", "is$capitalized")
+            val functions = getDeclaredFunctions() + getAllSuperTypes().flatMap { type ->
+                (type.declaration as? KSClassDeclaration)?.getDeclaredFunctions() ?: emptySequence()
+            }
+            val function = functions.firstOrNull { candidate ->
+                candidate.simpleName.asString() in accessors &&
+                    candidate.parameters.isEmpty() &&
+                    candidate.returnType != null
+            } ?: return null
+            return Property(function.returnType!!.resolve(), function.simpleName.asString())
+        }
+
         private fun getter(name: String, type: KSType): String {
-            val boolean = type.declaration.qualifiedName?.asString() == "kotlin.Boolean"
+            val boolean = type.isBoolean()
             return if (boolean && name.startsWith("is") && name.getOrNull(2)?.isUpperCase() == true) {
                 name
             } else {
@@ -435,3 +462,6 @@ internal class RendererGenerator(
         }
     }
 }
+
+private fun KSType.isBoolean(): Boolean =
+    declaration.qualifiedName?.asString() in setOf("kotlin.Boolean", "java.lang.Boolean", "boolean")

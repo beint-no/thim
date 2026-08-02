@@ -28,6 +28,7 @@ internal class TemplateParser(
                 else -> openElement()
             }
         }
+        require(stack.isEmpty()) { "$templateName: unclosed <${stack.last().name}> element" }
         return roots
     }
 
