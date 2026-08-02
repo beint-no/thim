@@ -33,7 +33,7 @@ Apply the plugin after the Kotlin JVM plugin:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.2.0-experimental.2"
+    id("no.beint.thim") version "0.2.0-experimental.3"
 }
 ```
 

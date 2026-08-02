@@ -5,6 +5,7 @@ import com.google.devtools.ksp.gradle.KspExtension;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.file.FileTree;
+import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
 
 import javax.lang.model.SourceVersion;
@@ -44,6 +45,14 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getInputs().files(extension.getMessages().map(directory -> propertyFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
+        });
+
+        var generatedResources = project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources");
+        project.getTasks().matching(task -> task.getName().equals("bootRun")).configureEach(task -> {
+            task.dependsOn("kspKotlin");
+            if (task instanceof JavaExec javaExec) {
+                javaExec.classpath(generatedResources);
+            }
         });
     }
 
