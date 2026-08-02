@@ -85,6 +85,9 @@ internal class RendererGenerator(
         require(!(attributes.containsKey("th:if") && attributes.containsKey("th:unless"))) {
             "$location: th:if and th:unless cannot be combined"
         }
+        require(!(attributes.containsKey("th:text") && attributes.containsKey("th:utext"))) {
+            "$location: th:text and th:utext cannot be combined"
+        }
 
         var scope = parentScope
         var blocks = 0
@@ -148,12 +151,19 @@ internal class RendererGenerator(
         }
 
         val text = attributes["th:text"]
-        if (text == null) {
+        val safeHtml = attributes["th:utext"]
+        if (text == null && safeHtml == null) {
             element.children.forEach { renderNode(it, scope, code, context) }
-        } else if (text.trim().startsWith("#{")) {
+        } else if (safeHtml != null) {
+            val value = scope.resolve(Expressions.path(safeHtml, "$location th:utext"), "$location th:utext")
+            require(value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable) {
+                "$location: th:utext requires a non-null no.beint.thim.SafeHtml property"
+            }
+            code.statement("output.raw(${value.code});")
+        } else if (requireNotNull(text).trim().startsWith("#{")) {
             renderMessage(Expressions.message(text, "$location th:text"), scope, code, "$location th:text")
         } else {
-            val value = scope.resolve(Expressions.path(text, "$location th:text"), "$location th:text")
+            val value = scope.resolve(Expressions.path(requireNotNull(text), "$location th:text"), "$location th:text")
             code.statement("output.text(${value.code});")
         }
 
@@ -465,10 +475,10 @@ internal class RendererGenerator(
             "disabled", "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple",
             "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected",
         )
-        val controlAttributes = setOf("th:text", "th:each", "th:if", "th:unless", "th:fragment")
+        val controlAttributes = setOf("th:text", "th:utext", "th:each", "th:if", "th:unless", "th:fragment")
         val unsupportedAttributes = setOf(
             "th:attr", "th:case", "th:classappend", "th:errors", "th:field", "th:inline", "th:insert",
-            "th:object", "th:remove", "th:replace", "th:switch", "th:utext", "th:with",
+            "th:object", "th:remove", "th:replace", "th:switch", "th:with",
         )
 
         fun javaString(value: String): String = buildString(value.length) {

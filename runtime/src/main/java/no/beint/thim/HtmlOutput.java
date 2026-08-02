@@ -53,6 +53,11 @@ public final class HtmlOutput {
         }
     }
 
+    public void raw(SafeHtml value) throws IOException {
+        var bytes = value.value().getBytes(StandardCharsets.UTF_8);
+        raw(bytes, 0, bytes.length);
+    }
+
     public void text(boolean value) throws IOException {
         var bytes = value ? TRUE : FALSE;
         raw(bytes, 0, bytes.length);
