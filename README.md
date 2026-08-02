@@ -43,7 +43,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.3.0"
+    id("no.beint.thim") version "0.3.1"
 }
 ```
 
@@ -52,7 +52,7 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.3.0"
+    id("no.beint.thim") version "0.3.1"
 }
 ```
 
