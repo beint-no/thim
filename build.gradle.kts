@@ -6,7 +6,7 @@ plugins {
 
 allprojects {
     group = "no.beint.thim"
-    version = "0.1.0-SNAPSHOT"
+    version = "0.1.0-experimental.1"
 }
 
 subprojects {
