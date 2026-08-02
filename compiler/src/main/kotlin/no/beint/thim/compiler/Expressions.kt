@@ -9,7 +9,9 @@ internal data class MessageExpression(val key: String, val arguments: List<PathE
 internal object Expressions {
     fun path(value: String, context: String): PathExpression {
         val trimmed = value.trim()
-        require(trimmed.startsWith("\${") && trimmed.endsWith('}')) { "$context: expected a \${...} expression" }
+        require(trimmed.startsWith("\${") && trimmed.endsWith('}')) {
+            "$context: expected one \${property} expression; move interpolation and logic to the page model"
+        }
         val body = trimmed.substring(2, trimmed.length - 1).trim()
         require(body.isNotEmpty()) { "$context: empty expression" }
 

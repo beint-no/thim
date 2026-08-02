@@ -5,12 +5,17 @@ import org.springframework.web.method.support.HandlerMethodReturnValueHandler;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
+import java.util.ServiceLoader;
 
 public final class ThimWebMvcConfigurer implements WebMvcConfigurer {
-    private final TemplateSet templates;
+    private final List<TemplateSet> templates;
 
-    public ThimWebMvcConfigurer(TemplateSet templates) {
-        this.templates = templates;
+    public ThimWebMvcConfigurer() {
+        this(ServiceLoader.load(TemplateSet.class).stream().map(ServiceLoader.Provider::get).toList());
+    }
+
+    public ThimWebMvcConfigurer(List<TemplateSet> templates) {
+        this.templates = List.copyOf(templates);
     }
 
     @Override

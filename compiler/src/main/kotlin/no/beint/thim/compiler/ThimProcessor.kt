@@ -17,6 +17,12 @@ public class ThimProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor = ThimProcessor(environment)
 }
 
+private data class TemplateSource(
+    val name: String,
+    val modelName: String,
+    val content: String,
+)
+
 private class ThimProcessor(
     environment: SymbolProcessorEnvironment,
 ) : SymbolProcessor {
@@ -30,28 +36,30 @@ private class ThimProcessor(
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
         if (completed) return emptyList()
-        val models = resolver.getSymbolsWithAnnotation("no.beint.thim.Thim")
-            .filterIsInstance<KSClassDeclaration>()
-            .toList()
-        if (models.isEmpty()) return emptyList()
 
         try {
             validateConfiguration()
-            val catalog = MessageCatalog.load(messagesDirectory)
-            val generator = RendererGenerator(generatedPackage, catalog)
-            val templateNames = mutableSetOf<String>()
-            val compiled = models.map { model ->
-                val templateName = templateName(model)
-                require(templateNames.add(templateName)) { "Template '$templateName' is assigned to more than one model" }
-                val path = templatesDirectory.resolve("$templateName.html").normalize()
-                require(path.startsWith(templatesDirectory.normalize())) { "Template name '$templateName' leaves the template directory" }
-                require(Files.isRegularFile(path)) { "Template '$templateName' does not exist at $path" }
-                val source = Files.readString(path, StandardCharsets.UTF_8)
-                generator.compile(templateName, model, TemplateParser(templateName, source).parse())
+            val templates = typedTemplates()
+            if (templates.isEmpty()) {
+                completed = true
+                return emptyList()
             }
-            val unused = catalog.unused()
-            require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
-            generate(compiled)
+            val models = templates.associateWith { template ->
+                requireNotNull(resolver.getClassDeclarationByName(resolver.getKSNameFromString(template.modelName))) {
+                    "${template.name}: model '${template.modelName}' does not exist"
+                }
+            }
+            require(models.values.distinctBy { it.qualifiedName?.asString() }.size == models.size) {
+                "A page model can only be assigned to one template"
+            }
+
+            val catalog = MessageCatalog.load(messagesDirectory)
+            val staticContent = StaticContent()
+            val generator = RendererGenerator(catalog, staticContent, registryName)
+            val compiled = models.map { (template, model) ->
+                generator.compile(template.name, model, TemplateParser(template.name, template.content).parse())
+            }
+            generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Thim compilation failed")
@@ -63,43 +71,84 @@ private class ThimProcessor(
         return emptyList()
     }
 
-    private fun generate(compiled: List<CompiledTemplate>) {
+    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray) {
         val files = compiled.mapNotNull { it.model.containingFile }.distinct().toTypedArray()
+        val dependencies = Dependencies(aggregating = true, *files)
         codeGenerator.createNewFile(
-            dependencies = Dependencies(aggregating = true, *files),
+            dependencies = dependencies,
             packageName = generatedPackage,
             fileName = registryName,
-            extensionName = "kt",
+            extensionName = "bin",
+        ).use { it.write(staticContent) }
+        codeGenerator.createNewFile(
+            dependencies = dependencies,
+            packageName = generatedPackage,
+            fileName = registryName,
+            extensionName = "java",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.appendLine("package $generatedPackage")
+            output.appendLine("package $generatedPackage;")
             output.appendLine()
-            output.appendLine("import no.beint.thim.Html")
-            output.appendLine("import no.beint.thim.RenderContext")
-            output.appendLine("import no.beint.thim.TemplateSet")
+            output.appendLine("import java.io.IOException;")
+            output.appendLine("import no.beint.thim.HtmlOutput;")
+            output.appendLine("import no.beint.thim.RenderContext;")
+            output.appendLine("import no.beint.thim.TemplateSet;")
             output.appendLine()
             compiled.forEach { output.append(it.source).appendLine() }
-            output.appendLine("public object $registryName : TemplateSet {")
-            output.appendLine("    override fun supports(modelType: Class<*>): Boolean =")
-            output.appendLine(compiled.joinToString(" ||\n") {
-                "        modelType === ${it.model.qualifiedName!!.asString()}::class.java"
-            })
+            output.appendLine("public final class $registryName implements TemplateSet {")
+            output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($registryName.class, \"$registryName.bin\");")
             output.appendLine()
-            output.appendLine("    override fun render(model: Any, context: RenderContext, output: Appendable) {")
-            output.appendLine("        when (model) {")
+            output.appendLine("    @Override")
+            output.appendLine("    public boolean supports(Class<?> modelType) {")
+            output.appendLine("        return " + compiled.joinToString(" ||\n            ") {
+                "modelType == ${it.model.qualifiedName!!.asString()}.class"
+            } + ";")
+            output.appendLine("    }")
+            output.appendLine()
+            output.appendLine("    @Override")
+            output.appendLine("    public void render(Object model, RenderContext context, HtmlOutput output) throws IOException {")
             compiled.forEach {
-                output.appendLine("            is ${it.model.qualifiedName!!.asString()} -> ${it.rendererName}.render(model, context, output)")
+                val modelName = it.model.qualifiedName!!.asString()
+                output.appendLine("        if (model instanceof $modelName typed) {")
+                output.appendLine("            ${it.rendererName}.render(typed, context, output);")
+                output.appendLine("            return;")
+                output.appendLine("        }")
             }
-            output.appendLine("            else -> throw IllegalArgumentException(\"No compiled template for \${model.javaClass.name}\")")
-            output.appendLine("        }")
+            output.appendLine("        throw new IllegalArgumentException(\"No compiled template for \" + model.getClass().getName());")
             output.appendLine("    }")
             output.appendLine("}")
         }
+        codeGenerator.createNewFileByPath(
+            dependencies = dependencies,
+            path = "META-INF/services/no.beint.thim.TemplateSet",
+            extensionName = "",
+        ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+            output.appendLine("$generatedPackage.$registryName")
+        }
     }
 
-    private fun templateName(model: KSClassDeclaration): String {
-        val annotation = model.annotations.single { it.annotationType.resolve().declaration.qualifiedName?.asString() == "no.beint.thim.Thim" }
-        return annotation.arguments.single { it.name?.asString() == "value" }.value as String
+    private fun typedTemplates(): List<TemplateSource> {
+        val paths = mutableListOf<Path>()
+        Files.walk(templatesDirectory).use { stream ->
+            stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".html") }.forEach(paths::add)
+        }
+        return paths.sorted().mapNotNull { path ->
+            val source = Files.readString(path, StandardCharsets.UTF_8)
+            val directives = modelDirective.findAll(source).toList()
+            require(directives.size <= 1) { "${templateName(path)}: expected at most one @thim-model declaration" }
+            directives.singleOrNull()?.let { directive ->
+                TemplateSource(
+                    name = templateName(path),
+                    modelName = directive.groupValues[1],
+                    content = source.removeRange(directive.range),
+                )
+            }
+        }
     }
+
+    private fun templateName(path: Path): String = templatesDirectory.relativize(path)
+        .toString()
+        .replace(path.fileSystem.separator, "/")
+        .removeSuffix(".html")
 
     private fun validateConfiguration() {
         require(Files.isDirectory(templatesDirectory)) { "Template directory does not exist: $templatesDirectory" }
@@ -111,4 +160,8 @@ private class ThimProcessor(
 
     private fun requiredPath(environment: SymbolProcessorEnvironment, key: String): Path =
         Path.of(requireNotNull(environment.options[key]) { "Missing KSP option '$key'" }).toAbsolutePath().normalize()
+
+    private companion object {
+        val modelDirective = Regex("<!--/\\*\\s*@thim-model\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)\\s*\\*/-->")
+    }
 }

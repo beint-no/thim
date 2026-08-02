@@ -1,44 +1,82 @@
 # Thim
 
-Thim is a strict, Kotlin-first AOT renderer for a deliberately small subset of Thymeleaf template syntax.
+Thim is a strict AOT HTML renderer for Kotlin applications. It accepts a deliberately small, source-compatible subset of Thymeleaf attributes and generates direct Java renderers during compilation.
 
-Templates are parsed, type-checked and turned into direct Kotlin renderers by KSP. The runtime never parses templates, resolves property names, invokes methods reflectively or evaluates expressions.
+There is no template engine, expression language, reflection, property lookup, message lookup or character encoder in the request path. Static HTML is stored once as UTF-8 bytes; generated code writes those bytes and escaped dynamic values directly to the response.
 
-Thim requires JDK 26 or newer, Kotlin 2.4 and Spring Framework 7 when using the optional MVC adapter.
+Thim requires JDK 26 or newer. The optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
+
+## Use
+
+Declare the page model in its template:
+
+```html
+<!--/* @thim-model no.example.web.HomePage */-->
+<!doctype html>
+<h1 th:text="#{home.title}">Home</h1>
+<p th:text="${greeting}">Greeting</p>
+```
+
+The declaration is a Thymeleaf parser-level comment, so the same template remains usable by Thymeleaf while it is being migrated. Thim removes it from rendered output.
+
+Return an ordinary Kotlin value. No annotation, view-name string or string-keyed model is needed:
+
+```kotlin
+data class HomePage(val greeting: String)
+
+@GetMapping("/")
+fun home() = HomePage("Hello")
+```
+
+Apply the plugin after the Kotlin JVM plugin:
+
+```kotlin
+plugins {
+    kotlin("jvm")
+    id("no.beint.thim") version "0.2.0-experimental.3"
+}
+```
+
+The plugin supplies the runtime, compiler and Spring adapter and tracks templates and messages as compilation inputs. Compiled template jars advertise their registries through Java's service loader, and the Spring adapter discovers all of them automatically. Its defaults are:
+
+```kotlin
+thim {
+    templates.set(layout.projectDirectory.dir("src/main/resources/templates"))
+    messages.set(layout.projectDirectory.dir("src/main/resources"))
+    generatedPackage.set("your.group.your_module.thim.generated")
+    registryName.set("ThimTemplates")
+}
+```
+
+Artifacts are currently published through `https://maven.pkg.github.com/beint-no/thim`. Add that repository to both `pluginManagement` and `dependencyResolutionManagement` until the plugin is published to the Gradle Plugin Portal and Maven Central.
 
 ## Language
 
-Thim currently accepts:
+Thim accepts:
 
 - `${property}` and null-safe property paths
 - `th:text`
 - `th:each`
 - `th:if` and `th:unless`
-- static `th:href`, `th:src` and `th:action` URLs
-- `th:value` and boolean form attributes
+- property, message, static URL and quoted-literal values on ordinary `th:*` attributes
+- conditional HTML boolean attributes
 - literal `#{message}` expressions with typed arguments
+- `${#locale.language}` for a language attribute
 
-Every other `th:*` attribute is a compilation error. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate or unused messages, invalid message arguments and unsupported expressions also fail compilation.
+Missing models, properties and messages; unsafe nullable access; locale drift; duplicate messages; invalid message arguments; malformed HTML; and unsupported expressions fail compilation.
 
-```kotlin
-@Thim("home")
-data class HomePage(
-    val greeting: String,
-    val features: List<Feature>,
-)
+There is intentionally no SpEL or OGNL. Attributes such as `th:attr`, `th:field`, `th:object`, `th:replace`, `th:switch`, `th:utext` and `th:with` are compilation errors in typed templates. Computation belongs in the page model.
 
-@GetMapping("/")
-fun home() = HomePage("Hello", features)
-```
+## Modules
 
-The generated `TemplateSet` is connected to Spring MVC with `ThimWebMvcConfigurer`. Controllers return typed page models directly; there is no view name or string-keyed model.
+- `runtime`: three dependency-free Java types
+- `compiler`: the Kotlin-aware KSP compiler; build time only
+- `spring`: the Java Spring MVC return-value adapter
+- `gradle-plugin`: the Java build integration
+- `example`: a complete Spring Boot application
 
-Run the example with:
-
-```shell
-./gradlew :example:bootRun
-```
+See [DESIGN.md](DESIGN.md) for the architecture, performance work and compatibility trade-offs.
 
 ## Relationship to Thymeleaf
 
-Thim is an independent clean-room implementation. It contains no Thymeleaf source code and has no runtime dependency on Thymeleaf. It implements a source-compatible subset of familiar Thymeleaf HTML attributes so existing templates can migrate incrementally. It is not affiliated with the Thymeleaf project and does not claim full Thymeleaf compatibility.
+Thim is an independent clean-room implementation. It contains no Thymeleaf source code and has no runtime dependency on Thymeleaf. It implements a source-compatible subset of familiar Thymeleaf HTML attributes so an application can migrate template by template. It is not affiliated with the Thymeleaf project and does not claim full Thymeleaf compatibility.

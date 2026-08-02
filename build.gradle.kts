@@ -1,3 +1,5 @@
+import org.gradle.api.publish.PublishingExtension
+
 plugins {
     kotlin("jvm") version "2.4.10" apply false
     id("com.google.devtools.ksp") version "2.3.10" apply false
@@ -6,7 +8,7 @@ plugins {
 
 allprojects {
     group = "no.beint.thim"
-    version = "0.1.0-SNAPSHOT"
+    version = "0.2.0-experimental.3"
 }
 
 subprojects {
@@ -17,6 +19,27 @@ subprojects {
 
         tasks.withType<JavaCompile>().configureEach {
             options.release.set(26)
+        }
+    }
+
+    plugins.withId("maven-publish") {
+        extensions.configure<PublishingExtension> {
+            repositories {
+                maven {
+                    name = "GitHubPackages"
+                    url = uri("https://maven.pkg.github.com/beint-no/thim")
+                    credentials {
+                        username = providers.gradleProperty("gpr.user")
+                            .orElse(providers.environmentVariable("GITHUB_ACTOR"))
+                            .orElse("beint-no")
+                            .get()
+                        password = providers.gradleProperty("gpr.key")
+                            .orElse(providers.environmentVariable("GITHUB_TOKEN"))
+                            .orElse(providers.environmentVariable("GH_TOKEN"))
+                            .orNull
+                    }
+                }
+            }
         }
     }
 }

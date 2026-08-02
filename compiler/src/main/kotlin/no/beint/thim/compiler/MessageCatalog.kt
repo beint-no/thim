@@ -1,6 +1,5 @@
 package no.beint.thim.compiler
 
-import java.io.Reader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -9,28 +8,32 @@ import kotlin.io.path.extension
 import kotlin.io.path.nameWithoutExtension
 
 internal data class MessageDefinition(
-    val key: String,
     val base: String,
     val localized: Map<String, String>,
-    val placeholders: Set<Int>,
 )
 
 internal class MessageCatalog private constructor(
     private val definitions: Map<String, MessageDefinition>,
 ) {
-    private val referenced = linkedSetOf<String>()
-
     fun use(key: String, argumentCount: Int, context: String): MessageDefinition {
         val definition = definitions[key] ?: error("$context: message '$key' does not exist")
-        val expected = if (definition.placeholders.isEmpty()) 0 else definition.placeholders.max() + 1
+        val placeholders = placeholders(definition.base, "$context message '$key'")
+        definition.localized.forEach { (locale, value) ->
+            require(placeholders(value, "$context message '$key' locale '$locale'") == placeholders) {
+                "$context: message '$key' uses different placeholders in locale '$locale'"
+            }
+        }
+        val expected = if (placeholders.isEmpty()) 0 else placeholders.max() + 1
         require(argumentCount == expected) {
             "$context: message '$key' requires $expected arguments, received $argumentCount"
         }
-        referenced.add(key)
         return definition
     }
 
-    fun unused(): Set<String> = definitions.keys - referenced
+    fun locales(): Set<String> = definitions.values
+        .flatMapTo(linkedSetOf()) { definition ->
+            definition.localized.filterValues { it != definition.base }.keys
+        }
 
     companion object {
         fun load(directory: Path): MessageCatalog {
@@ -59,15 +62,10 @@ internal class MessageCatalog private constructor(
 
                 base.forEach { (key, value) ->
                     require(key !in definitions) { "Duplicate message key '$key'" }
-                    val placeholders = placeholders(value, "$baseFile:$key")
                     val localizedValues = localized.mapValues { (locale, values) ->
-                        val localizedValue = values.getValue(key)
-                        require(placeholders(localizedValue, "$locale:$key") == placeholders) {
-                            "Message '$key' uses different placeholders in locale '$locale'"
-                        }
-                        localizedValue
+                        values.getValue(key)
                     }
-                    definitions[key] = MessageDefinition(key, value, localizedValues, placeholders)
+                    definitions[key] = MessageDefinition(value, localizedValues)
                 }
             }
             return MessageCatalog(definitions)
@@ -84,7 +82,7 @@ internal class MessageCatalog private constructor(
             require(duplicate.isEmpty()) { "$path contains duplicate keys ${duplicate.sorted()}" }
 
             val properties = Properties()
-            Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader: Reader -> properties.load(reader) }
+            Files.newBufferedReader(path, StandardCharsets.UTF_8).use(properties::load)
             return properties.stringPropertyNames().associateWith(properties::getProperty)
         }
 

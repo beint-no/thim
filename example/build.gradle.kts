@@ -13,14 +13,11 @@ kotlin {
     jvmToolchain(26)
     compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
 }
-
-
 tasks.withType<KotlinJvmCompile>().configureEach {
     jvmTargetValidationMode.set(JvmTargetValidationMode.IGNORE)
 }
 
 dependencies {
-    implementation(project(":runtime"))
     implementation(project(":spring"))
     implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.0")
     ksp(project(":compiler"))
