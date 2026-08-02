@@ -49,8 +49,6 @@ private class ThimProcessor(
                 val source = Files.readString(path, StandardCharsets.UTF_8)
                 generator.compile(templateName, model, TemplateParser(templateName, source).parse())
             }
-            val unused = catalog.unused()
-            require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
             generate(compiled)
             completed = true
         } catch (exception: IllegalArgumentException) {

@@ -18,7 +18,7 @@ Thim currently accepts:
 - conditional HTML boolean attributes
 - literal `#{message}` expressions with typed arguments
 
-Legacy expression evaluation and semantic attributes such as `th:attr`, `th:field`, `th:object`, `th:replace`, `th:switch`, `th:utext` and `th:with` are compilation errors. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate or unused messages, invalid message arguments and unsupported expressions also fail compilation.
+Legacy expression evaluation and semantic attributes such as `th:attr`, `th:field`, `th:object`, `th:replace`, `th:switch`, `th:utext` and `th:with` are compilation errors. Missing properties, unsafe nullable access, missing messages, locale drift, duplicate messages, invalid message arguments and unsupported expressions also fail compilation.
 
 ```kotlin
 @Thim("home")

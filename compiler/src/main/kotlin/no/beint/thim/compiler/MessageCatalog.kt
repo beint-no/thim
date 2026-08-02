@@ -18,19 +18,14 @@ internal data class MessageDefinition(
 internal class MessageCatalog private constructor(
     private val definitions: Map<String, MessageDefinition>,
 ) {
-    private val referenced = linkedSetOf<String>()
-
     fun use(key: String, argumentCount: Int, context: String): MessageDefinition {
         val definition = definitions[key] ?: error("$context: message '$key' does not exist")
         val expected = if (definition.placeholders.isEmpty()) 0 else definition.placeholders.max() + 1
         require(argumentCount == expected) {
             "$context: message '$key' requires $expected arguments, received $argumentCount"
         }
-        referenced.add(key)
         return definition
     }
-
-    fun unused(): Set<String> = definitions.keys - referenced
 
     fun locales(): Set<String> = definitions.values
         .flatMapTo(linkedSetOf()) { definition ->
