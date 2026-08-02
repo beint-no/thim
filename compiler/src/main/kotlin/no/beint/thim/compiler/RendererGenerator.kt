@@ -155,11 +155,17 @@ internal class RendererGenerator(
         if (text == null && safeHtml == null) {
             element.children.forEach { renderNode(it, scope, code, context) }
         } else if (safeHtml != null) {
-            val value = scope.resolve(Expressions.path(safeHtml, "$location th:utext"), "$location th:utext")
-            require(value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable) {
-                "$location: th:utext requires a non-null no.beint.thim.SafeHtml property"
+            if (safeHtml.trim().startsWith("#{")) {
+                val message = Expressions.message(safeHtml, "$location th:utext")
+                require(message.arguments.isEmpty()) { "$location: raw messages cannot contain arguments" }
+                renderMessage(message, scope, code, "$location th:utext", raw = true)
+            } else {
+                val value = scope.resolve(Expressions.path(safeHtml, "$location th:utext"), "$location th:utext")
+                require(value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable) {
+                    "$location: th:utext requires a non-null no.beint.thim.SafeHtml property"
+                }
+                code.statement("output.raw(${value.code});")
             }
-            code.statement("output.raw(${value.code});")
         } else if (requireNotNull(text).trim().startsWith("#{")) {
             renderMessage(Expressions.message(text, "$location th:text"), scope, code, "$location th:text")
         } else {
@@ -239,7 +245,13 @@ internal class RendererGenerator(
         }
     }
 
-    private fun renderMessage(expression: MessageExpression, scope: Scope, code: CodeWriter, context: String) {
+    private fun renderMessage(
+        expression: MessageExpression,
+        scope: Scope,
+        code: CodeWriter,
+        context: String,
+        raw: Boolean = false,
+    ) {
         val definition = catalog.use(expression.key, expression.arguments.size, context)
         val arguments = expression.arguments.map { scope.resolve(it, context).code }
         val localized = definition.localized.filterValues { it != definition.base }
@@ -250,7 +262,7 @@ internal class RendererGenerator(
             code.open("switch (locale)")
             regional.forEach { (locale, value) ->
                 code.open("case ${regionalLocales.getValue(locale)} ->")
-                appendMessage(value, arguments, code)
+                appendMessage(value, arguments, code, raw)
                 code.close()
             }
             code.open("default ->")
@@ -259,15 +271,15 @@ internal class RendererGenerator(
             code.open("switch (language)")
             languageValues.forEach { (locale, value) ->
                 code.open("case ${languages.getValue(locale)} ->")
-                appendMessage(value, arguments, code)
+                appendMessage(value, arguments, code, raw)
                 code.close()
             }
             code.open("default ->")
-            appendMessage(definition.base, arguments, code)
+            appendMessage(definition.base, arguments, code, raw)
             code.close()
             code.close()
         } else {
-            appendMessage(definition.base, arguments, code)
+            appendMessage(definition.base, arguments, code, raw)
         }
         if (regional.isNotEmpty()) {
             code.close()
@@ -281,14 +293,14 @@ internal class RendererGenerator(
         )
     }
 
-    private fun appendMessage(pattern: String, arguments: List<String>, code: CodeWriter) {
+    private fun appendMessage(pattern: String, arguments: List<String>, code: CodeWriter, raw: Boolean = false) {
         var start = 0
         placeholderPattern.findAll(pattern).forEach { match ->
-            code.static(escapeHtml(pattern.substring(start, match.range.first)))
+            code.static(if (raw) pattern.substring(start, match.range.first) else escapeHtml(pattern.substring(start, match.range.first)))
             code.statement("output.text(${arguments[match.groupValues[1].toInt()]});")
             start = match.range.last + 1
         }
-        code.static(escapeHtml(pattern.substring(start)))
+        code.static(if (raw) pattern.substring(start) else escapeHtml(pattern.substring(start)))
     }
 
     private fun parseUrl(value: String, context: String): String {
