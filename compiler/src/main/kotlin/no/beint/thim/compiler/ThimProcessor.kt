@@ -20,7 +20,7 @@ public class ThimProcessorProvider : SymbolProcessorProvider {
 private data class TemplateSource(
     val name: String,
     val modelName: String,
-    val content: String,
+    val nodes: List<Node>,
 )
 
 private class ThimProcessor(
@@ -57,7 +57,7 @@ private class ThimProcessor(
             val staticContent = StaticContent()
             val generator = RendererGenerator(catalog, staticContent, registryName)
             val compiled = models.map { (template, model) ->
-                generator.compile(template.name, model, TemplateParser(template.name, template.content).parse())
+                generator.compile(template.name, model, template.nodes)
             }
             generate(compiled, staticContent.bytes())
             completed = true
@@ -133,15 +133,17 @@ private class ThimProcessor(
         }
         return paths.sorted().mapNotNull { path ->
             val source = Files.readString(path, StandardCharsets.UTF_8)
-            val directives = modelDirective.findAll(source).toList()
-            require(directives.size <= 1) { "${templateName(path)}: expected at most one @thim-model declaration" }
-            directives.singleOrNull()?.let { directive ->
-                TemplateSource(
-                    name = templateName(path),
-                    modelName = directive.groupValues[1],
-                    content = source.removeRange(directive.range),
-                )
-            }
+            if (!source.contains("thim:model")) return@mapNotNull null
+            val name = templateName(path)
+            val nodes = TemplateParser(name, source).parse()
+            val root = nodes.firstOrNull { it is ElementNode } as? ElementNode
+                ?: error("$name: a typed template needs a root element")
+            val declarations = nodes.asSequence().flatMap(Node::elements).filter { "thim:model" in it.attributes }.toList()
+            require(declarations.size == 1) { "$name: expected exactly one thim:model attribute" }
+            require(declarations.single() === root) { "$name: thim:model must be on the root element" }
+            val modelName = requireNotNull(root.attributes.remove("thim:model")) { "$name: thim:model needs a value" }
+            require(modelName.matches(modelNamePattern)) { "$name: invalid model name '$modelName'" }
+            TemplateSource(name, modelName, nodes)
         }
     }
 
@@ -162,6 +164,11 @@ private class ThimProcessor(
         Path.of(requireNotNull(environment.options[key]) { "Missing KSP option '$key'" }).toAbsolutePath().normalize()
 
     private companion object {
-        val modelDirective = Regex("<!--/\\*\\s*@thim-model\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)\\s*\\*/-->")
+        val modelNamePattern = Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*")
     }
+}
+
+private fun Node.elements(): Sequence<ElementNode> = when (this) {
+    is ElementNode -> sequenceOf(this) + children.asSequence().flatMap(Node::elements)
+    is RawNode -> emptySequence()
 }

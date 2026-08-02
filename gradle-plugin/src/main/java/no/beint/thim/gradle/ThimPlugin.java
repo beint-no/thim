@@ -4,14 +4,22 @@ import com.google.devtools.ksp.gradle.KspAATask;
 import com.google.devtools.ksp.gradle.KspExtension;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.FileTree;
+import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
+import org.gradle.api.tasks.SourceSet;
 
 import javax.lang.model.SourceVersion;
+import java.util.ArrayList;
 import java.util.Locale;
 
 public final class ThimPlugin implements Plugin<Project> {
+    private static final String KSP_VERSION = "2.3.10";
+    private static final String KOTLIN_VERSION = "2.3.20";
+
     @Override
     public void apply(Project project) {
         var extension = project.getExtensions().create("thim", ThimExtension.class);
@@ -21,6 +29,11 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getRegistryName().convention("ThimTemplates");
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
+        project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
+            if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
+                configureJavaProject(project, extension);
+            }
+        }));
     }
 
     private void configureKotlinProject(Project project, ThimExtension extension) {
@@ -54,6 +67,66 @@ public final class ThimPlugin implements Plugin<Project> {
                 javaExec.classpath(generatedResources);
             }
         });
+    }
+
+    private void configureJavaProject(Project project, ThimExtension extension) {
+        var version = implementationVersion(project);
+        project.getDependencies().add("implementation", "no.beint.thim:spring:" + version);
+
+        var runner = dependencyConfiguration(project, "thimCompilerRuntime");
+        project.getDependencies().add(runner.getName(), "com.google.devtools.ksp:symbol-processing-aa-embeddable:" + KSP_VERSION);
+        project.getDependencies().add(runner.getName(), "com.google.devtools.ksp:symbol-processing-common-deps:" + KSP_VERSION);
+        project.getDependencies().add(runner.getName(), "com.google.devtools.ksp:symbol-processing-api:" + KSP_VERSION);
+        project.getDependencies().add(runner.getName(), "org.jetbrains.kotlin:kotlin-stdlib:" + KOTLIN_VERSION);
+        project.getDependencies().add(runner.getName(), "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2");
+
+        var processor = dependencyConfiguration(project, "thimProcessor");
+        project.getDependencies().add(processor.getName(), "no.beint.thim:compiler:" + version);
+
+        var sourceSets = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
+        var main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+        var modelSourceDirectories = new ArrayList<>(main.getJava().getSrcDirs());
+        var generatedBase = project.getLayout().getBuildDirectory().dir("generated/thim/main");
+        var compileThim = project.getTasks().register("compileThim", ThimCompile.class, task -> {
+            task.setGroup("build");
+            task.setDescription("Compiles typed HTML templates into Java renderers");
+            task.getModelSources().from(modelSourceDirectories);
+            task.getTemplates().set(extension.getTemplates());
+            task.getMessages().set(extension.getMessages());
+            task.getRunnerClasspath().from(runner);
+            task.getProcessorClasspath().from(processor);
+            task.getLibraries().from(main.getCompileClasspath());
+            task.getGeneratedPackage().set(extension.getGeneratedPackage());
+            task.getRegistryName().set(extension.getRegistryName());
+            task.getModuleName().set(project.getName());
+            task.getJdkHome().set(System.getProperty("java.home"));
+            task.getProjectBase().set(project.getLayout().getProjectDirectory());
+            task.getOutputBase().set(generatedBase);
+            task.getJavaOutput().set(generatedBase.map(directory -> directory.dir("java")));
+            task.getKotlinOutput().set(generatedBase.map(directory -> directory.dir("kotlin")));
+            task.getResourceOutput().set(generatedBase.map(directory -> directory.dir("resources")));
+            task.getClassOutput().set(generatedBase.map(directory -> directory.dir("classes")));
+            task.getCaches().set(project.getLayout().getBuildDirectory().dir("thim/caches"));
+            task.getEmptyKotlinSources().set(project.getLayout().getBuildDirectory().dir("thim/empty-kotlin"));
+        });
+
+        main.getJava().srcDir(compileThim.flatMap(ThimCompile::getJavaOutput));
+        main.getResources().srcDir(compileThim.flatMap(ThimCompile::getResourceOutput));
+
+        project.getTasks().named(JavaPlugin.COMPILE_JAVA_TASK_NAME).configure(task -> task.dependsOn(compileThim));
+        project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME).configure(task -> task.dependsOn(compileThim));
+    }
+
+    private Configuration dependencyConfiguration(Project project, String name) {
+        var configuration = project.getConfigurations().create(name);
+        configuration.setCanBeConsumed(false);
+        configuration.setCanBeResolved(true);
+        return configuration;
+    }
+
+    private String implementationVersion(Project project) {
+        var version = ThimPlugin.class.getPackage().getImplementationVersion();
+        return version == null ? project.getVersion().toString() : version;
     }
 
     private FileTree htmlFiles(Project project, java.io.File directory) {

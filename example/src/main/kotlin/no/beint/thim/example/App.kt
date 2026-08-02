@@ -29,10 +29,10 @@ data class HomePage(
 class HomeCtrl {
     @GetMapping("/")
     fun home() = HomePage(
-        version = "0.1",
-        greeting = "Typed Kotlin, compiled HTML, no runtime engine.",
+        version = "0.3.0",
+        greeting = "Typed models, compiled HTML, no runtime engine.",
         features = listOf(
-            Feature("Safe", "Properties and messages are checked while Kotlin compiles."),
+            Feature("Safe", "Properties and messages are checked while the application compiles."),
             Feature("Small", "The runtime contains three dependency-free Java types."),
             Feature("Fast", "Generated code writes directly to the HTTP response."),
         ),

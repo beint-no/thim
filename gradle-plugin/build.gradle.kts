@@ -21,3 +21,7 @@ gradlePlugin {
 tasks.jar {
     manifest.attributes["Implementation-Version"] = project.version
 }
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Xlint:deprecation")
+}
