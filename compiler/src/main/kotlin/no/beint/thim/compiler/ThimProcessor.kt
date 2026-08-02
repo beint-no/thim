@@ -59,7 +59,7 @@ private class ThimProcessor(
             val compiled = models.map { (template, model) ->
                 generator.compile(template.name, model, TemplateParser(template.name, template.content).parse())
             }
-            generate(compiled, staticContent.bytes(), springBootAvailable(resolver))
+            generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Thim compilation failed")
@@ -71,7 +71,7 @@ private class ThimProcessor(
         return emptyList()
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, springBoot: Boolean) {
+    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray) {
         val files = compiled.mapNotNull { it.model.containingFile }.distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
         codeGenerator.createNewFile(
@@ -117,48 +117,12 @@ private class ThimProcessor(
             output.appendLine("    }")
             output.appendLine("}")
         }
-        if (springBoot) {
-            generateSpringBootConfiguration(dependencies)
-        }
-    }
-
-    private fun generateSpringBootConfiguration(dependencies: Dependencies) {
-        val configurationName = "ThimAutoConfiguration"
-        codeGenerator.createNewFile(
-            dependencies = dependencies,
-            packageName = generatedPackage,
-            fileName = configurationName,
-            extensionName = "java",
-        ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.appendLine("package $generatedPackage;")
-            output.appendLine()
-            output.appendLine("import no.beint.thim.TemplateSet;")
-            output.appendLine("import no.beint.thim.spring.ThimWebMvcConfigurer;")
-            output.appendLine("import org.springframework.boot.autoconfigure.AutoConfiguration;")
-            output.appendLine("import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;")
-            output.appendLine("import org.springframework.context.annotation.Bean;")
-            output.appendLine()
-            output.appendLine("@AutoConfiguration")
-            output.appendLine("public class $configurationName {")
-            output.appendLine("    @Bean")
-            output.appendLine("    @ConditionalOnMissingBean(TemplateSet.class)")
-            output.appendLine("    TemplateSet thimTemplates() {")
-            output.appendLine("        return new $registryName();")
-            output.appendLine("    }")
-            output.appendLine()
-            output.appendLine("    @Bean")
-            output.appendLine("    @ConditionalOnMissingBean(ThimWebMvcConfigurer.class)")
-            output.appendLine("    ThimWebMvcConfigurer thimWebMvcConfigurer(TemplateSet templates) {")
-            output.appendLine("        return new ThimWebMvcConfigurer(templates);")
-            output.appendLine("    }")
-            output.appendLine("}")
-        }
         codeGenerator.createNewFileByPath(
             dependencies = dependencies,
-            path = "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports",
+            path = "META-INF/services/no.beint.thim.TemplateSet",
             extensionName = "",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.appendLine("$generatedPackage.$configurationName")
+            output.appendLine("$generatedPackage.$registryName")
         }
     }
 
@@ -185,10 +149,6 @@ private class ThimProcessor(
         .toString()
         .replace(path.fileSystem.separator, "/")
         .removeSuffix(".html")
-
-    private fun springBootAvailable(resolver: Resolver): Boolean =
-        resolver.getClassDeclarationByName(resolver.getKSNameFromString("org.springframework.boot.autoconfigure.AutoConfiguration")) != null &&
-            resolver.getClassDeclarationByName(resolver.getKSNameFromString("no.beint.thim.spring.ThimWebMvcConfigurer")) != null
 
     private fun validateConfiguration() {
         require(Files.isDirectory(templatesDirectory)) { "Template directory does not exist: $templatesDirectory" }

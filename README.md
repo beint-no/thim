@@ -33,11 +33,11 @@ Apply the plugin after the Kotlin JVM plugin:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.2.0-experimental.1"
+    id("no.beint.thim") version "0.2.0-experimental.2"
 }
 ```
 
-The plugin supplies the runtime, compiler and Spring adapter, tracks templates and messages as compilation inputs, and generates Spring Boot auto-configuration. Its defaults are:
+The plugin supplies the runtime, compiler and Spring adapter and tracks templates and messages as compilation inputs. Compiled template jars advertise their registries through Java's service loader, and the Spring adapter discovers all of them automatically. Its defaults are:
 
 ```kotlin
 thim {

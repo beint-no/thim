@@ -17,7 +17,7 @@ Compatibility is useful only where it does not weaken those properties. Familiar
 2. KSP finds templates containing `@thim-model` declarations and resolves those Kotlin types.
 3. The compiler parses HTML, resolves every supported expression, validates nullability and validates every localized message bundle.
 4. It emits readable Java renderer source and one package-local binary resource containing all static UTF-8 content.
-5. `javac` produces ordinary named classes. Spring Boot registration is generated only when Boot and the MVC adapter are present.
+5. `javac` produces ordinary named classes. Each template jar publishes its registry through Java's service-provider mechanism.
 6. A request constructs one buffered `HtmlOutput`, writes static byte ranges and encodes escaped dynamic values directly into that buffer.
 
 Template-only and message-only edits therefore invalidate compilation. This is essential: relying only on KSP source inputs would incorrectly leave generated renderers up to date.
@@ -54,7 +54,9 @@ Giving up more source compatibility is worthwhile only for features that remain 
 
 ## Spring boundary
 
-The compiler and runtime do not depend on Spring. The MVC adapter recognizes a generated page-model return type and writes the response. Generated Boot auto-configuration is only an integration convenience; a non-Boot application can instantiate its generated `TemplateSet` directly.
+The compiler and runtime do not depend on Spring. The MVC adapter discovers every generated `TemplateSet` on the application classpath, recognizes page-model return types and writes the response. This supports templates compiled in any number of feature modules without an application-level registry.
+
+Spring Boot auto-configuration lives in the Spring adapter rather than generated application code. A non-Boot application can instantiate `ThimWebMvcConfigurer` or its generated `TemplateSet` directly.
 
 ## JDK evolution
 
