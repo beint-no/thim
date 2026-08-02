@@ -32,6 +32,11 @@ internal class MessageCatalog private constructor(
 
     fun unused(): Set<String> = definitions.keys - referenced
 
+    fun locales(): Set<String> = definitions.values
+        .flatMapTo(linkedSetOf()) { definition ->
+            definition.localized.filterValues { it != definition.base }.keys
+        }
+
     companion object {
         fun load(directory: Path): MessageCatalog {
             if (!Files.exists(directory)) return MessageCatalog(emptyMap())

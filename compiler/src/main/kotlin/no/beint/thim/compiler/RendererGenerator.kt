@@ -15,11 +15,16 @@ internal class RendererGenerator(
     private val catalog: MessageCatalog,
 ) {
     private var generatedVariable = 0
+    private var regionalLocales = emptyMap<String, Int>()
+    private var languages = emptyMap<String, Int>()
 
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
         val rendererName = model.simpleName.asString().replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
         val code = CodeWriter()
+        val locales = if (usesMessages(nodes)) catalog.locales() else emptySet()
+        regionalLocales = locales.filter { '-' in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
+        languages = locales.filter { '-' !in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
 
         code.line("final class $rendererName {")
         code.indent {
@@ -27,6 +32,18 @@ internal class RendererGenerator(
             code.line()
             code.line("static void render($modelName model, RenderContext context, Appendable output) throws IOException {")
             code.indent {
+                if (regionalLocales.isNotEmpty()) {
+                    val cases = regionalLocales.entries.joinToString(" ") { (locale, index) ->
+                        "case \"${javaString(locale)}\" -> $index;"
+                    }
+                    code.statement("var locale = switch (context.locale().toLanguageTag()) { $cases default -> 0; };")
+                }
+                if (languages.isNotEmpty()) {
+                    val cases = languages.entries.joinToString(" ") { (locale, index) ->
+                        "case \"${javaString(locale)}\" -> $index;"
+                    }
+                    code.statement("var language = switch (context.locale().getLanguage()) { $cases default -> 0; };")
+                }
                 val scope = Scope(model)
                 nodes.forEach { renderNode(it, scope, code, templateName) }
             }
@@ -170,22 +187,23 @@ internal class RendererGenerator(
     private fun renderMessage(expression: MessageExpression, scope: Scope, code: CodeWriter, context: String) {
         val definition = catalog.use(expression.key, expression.arguments.size, context)
         val arguments = expression.arguments.map { scope.resolve(it, context).code }
-        val regional = definition.localized.filterKeys { '-' in it }
-        val languages = definition.localized.filterKeys { '-' !in it }
+        val localized = definition.localized.filterValues { it != definition.base }
+        val regional = localized.filterKeys { '-' in it }
+        val languageValues = localized.filterKeys { '-' !in it }
 
         if (regional.isNotEmpty()) {
-            code.open("switch (context.locale().toLanguageTag())")
+            code.open("switch (locale)")
             regional.forEach { (locale, value) ->
-                code.open("case \"${javaString(locale)}\" ->")
+                code.open("case ${regionalLocales.getValue(locale)} ->")
                 appendMessage(value, arguments, code)
                 code.close()
             }
             code.open("default ->")
         }
-        if (languages.isNotEmpty()) {
-            code.open("switch (context.locale().getLanguage())")
-            languages.forEach { (locale, value) ->
-                code.open("case \"${javaString(locale)}\" ->")
+        if (languageValues.isNotEmpty()) {
+            code.open("switch (language)")
+            languageValues.forEach { (locale, value) ->
+                code.open("case ${languages.getValue(locale)} ->")
                 appendMessage(value, arguments, code)
                 code.close()
             }
@@ -200,6 +218,12 @@ internal class RendererGenerator(
             code.close()
             code.close()
         }
+    }
+
+    private fun usesMessages(nodes: List<Node>): Boolean = nodes.any { node ->
+        node is ElementNode && (
+            node.attributes.values.any { it?.trim()?.startsWith("#{") == true } || usesMessages(node.children)
+        )
     }
 
     private fun appendMessage(pattern: String, arguments: List<String>, code: CodeWriter) {
