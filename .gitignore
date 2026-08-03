@@ -3,3 +3,4 @@ build/
 **/build/
 .idea/
 *.iml
+.maven-central.local.properties

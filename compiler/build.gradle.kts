@@ -4,7 +4,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
     kotlin("jvm")
-    `maven-publish`
+    id("com.vanniktech.maven.publish")
 }
 
 kotlin {
@@ -18,12 +18,4 @@ tasks.withType<KotlinJvmCompile>().configureEach {
 
 dependencies {
     implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["kotlin"])
-        }
-    }
 }

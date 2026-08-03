@@ -1,6 +1,6 @@
 plugins {
     `java-gradle-plugin`
-    `maven-publish`
+    id("com.vanniktech.maven.publish")
 }
 
 dependencies {
