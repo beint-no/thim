@@ -70,13 +70,13 @@ public final class ThimPlugin implements Plugin<Project> {
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
 
-        var thimCheck = project.getTasks().register("thimCheck", task -> {
+        var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
+                .matching(task -> task.getName().equals("kspKotlin"));
+        project.getTasks().register("thimCheck", task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
+            task.dependsOn(kspKotlinTasks);
         });
-        project.getTasks().withType(KspAATask.class)
-                .matching(task -> task.getName().equals("kspKotlin"))
-                .configureEach(task -> thimCheck.configure(check -> check.dependsOn(task)));
 
         var generatedResources = project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources");
         project.getTasks().matching(task -> task.getName().equals("bootRun")).configureEach(task -> {
