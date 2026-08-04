@@ -33,7 +33,7 @@ internal class FragmentExpander(
                     attributes[name] = value?.let { substitute(it, bindings) }
                 }
                 val children = node.children.flatMap { expand(it, template, bindings, stack) }.toMutableList()
-                listOf(ElementNode(node.name, attributes, children))
+                listOf(ElementNode(node.name, attributes, node.location, node.attributeLocations, children))
             } else {
                 val reference = reference(substitute(replacement, bindings), template, bindings)
                 expand(reference, bindings, stack)
@@ -62,7 +62,13 @@ internal class FragmentExpander(
         }
         val attributes = LinkedHashMap(fragment.element.attributes)
         attributes.remove("th:fragment")
-        val copy = ElementNode(fragment.element.name, attributes, fragment.element.children.toMutableList())
+        val copy = ElementNode(
+            fragment.element.name,
+            attributes,
+            fragment.element.location,
+            fragment.element.attributeLocations,
+            fragment.element.children.toMutableList(),
+        )
         return expand(copy, fragment.template, parentBindings + localBindings, stack + key)
     }
 

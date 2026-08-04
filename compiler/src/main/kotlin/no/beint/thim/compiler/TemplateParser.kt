@@ -7,6 +7,8 @@ internal data class RawNode(val value: String) : Node
 internal data class ElementNode(
     val name: String,
     val attributes: LinkedHashMap<String, String?>,
+    val location: SourceLocation,
+    val attributeLocations: Map<String, SourceLocation>,
     val children: MutableList<Node> = mutableListOf(),
 ) : Node
 
@@ -28,7 +30,9 @@ internal class TemplateParser(
                 else -> openElement()
             }
         }
-        require(stack.isEmpty()) { "$templateName: unclosed <${stack.last().name}> element" }
+        requireDiagnostic(stack.isEmpty(), "THIM-HTML-UNCLOSED", stack.lastOrNull()?.location) {
+            "unclosed <${stack.last().name}> element"
+        }
         return roots
     }
 
@@ -42,7 +46,9 @@ internal class TemplateParser(
 
     private fun rawUntil(marker: String) {
         val end = source.indexOf(marker, index + marker.length)
-        require(end >= 0) { "$templateName: unterminated $marker block" }
+        requireDiagnostic(end >= 0, "THIM-HTML-UNTERMINATED", location(index)) {
+            "unterminated $marker block"
+        }
         val next = end + marker.length
         currentChildren().add(RawNode(source.substring(index, next)))
         index = next
@@ -59,11 +65,11 @@ internal class TemplateParser(
         val inside = source.substring(index + 1, end)
         val selfClosing = inside.trimEnd().endsWith('/')
         val content = if (selfClosing) inside.trimEnd().dropLast(1) else inside
-        val parsed = parseTag(content)
-        while (stack.lastOrNull()?.name?.let { autoCloses(it, parsed.first) } == true) {
+        val parsed = parseTag(content, index + 1)
+        while (stack.lastOrNull()?.name?.let { autoCloses(it, parsed.name) } == true) {
             stack.removeLast()
         }
-        val element = ElementNode(parsed.first, parsed.second)
+        val element = ElementNode(parsed.name, parsed.attributes, parsed.location, parsed.attributeLocations)
         currentChildren().add(element)
         index = end + 1
 
@@ -73,7 +79,9 @@ internal class TemplateParser(
         if (element.name == "script" || element.name == "style") {
             val closing = "</${element.name}>"
             val close = source.indexOf(closing, index, ignoreCase = true)
-            require(close >= 0) { "$templateName: unclosed <${element.name}> element" }
+            requireDiagnostic(close >= 0, "THIM-HTML-UNCLOSED", element.location) {
+                "unclosed <${element.name}> element"
+            }
             element.children.add(RawNode(source.substring(index, close)))
             index = close + closing.length
             return
@@ -83,14 +91,16 @@ internal class TemplateParser(
 
     private fun closeElement() {
         val end = source.indexOf('>', index + 2)
-        require(end >= 0) { "$templateName: unterminated closing element" }
+        requireDiagnostic(end >= 0, "THIM-HTML-UNTERMINATED", location(index)) {
+            "unterminated closing element"
+        }
         val name = source.substring(index + 2, end).trim().lowercase()
         while (stack.lastOrNull()?.let { it.name != name && it.name in optionalEndElements } == true) {
             stack.removeLast()
         }
         val open = stack.removeLastOrNull()
-        require(open != null && open.name == name) {
-            "$templateName: closing </$name> does not match <${open?.name ?: "none"}>"
+        requireDiagnostic(open != null && open.name == name, "THIM-HTML-MISMATCH", location(index)) {
+            "closing </$name> does not match <${open?.name ?: "none"}>"
         }
         index = end + 1
     }
@@ -107,46 +117,80 @@ internal class TemplateParser(
                 return position
             }
         }
-        error("$templateName: unterminated element")
+        diagnostic("THIM-HTML-UNTERMINATED", location(start), "unterminated element")
     }
 
-    private fun parseTag(content: String): Pair<String, LinkedHashMap<String, String?>> {
+    private fun parseTag(content: String, contentOffset: Int): ParsedTag {
         var position = 0
         while (position < content.length && content[position].isWhitespace()) position++
         val nameStart = position
         while (position < content.length && !content[position].isWhitespace()) position++
         val name = content.substring(nameStart, position).lowercase()
-        require(name.matches(namePattern)) { "$templateName: invalid element name '$name'" }
+        requireDiagnostic(name.matches(namePattern), "THIM-HTML-ELEMENT", location(contentOffset + nameStart)) {
+            "invalid element name '$name'"
+        }
 
         val attributes = linkedMapOf<String, String?>()
+        val attributeLocations = linkedMapOf<String, SourceLocation>()
         while (position < content.length) {
             while (position < content.length && content[position].isWhitespace()) position++
             if (position == content.length) break
             val attributeStart = position
             while (position < content.length && !content[position].isWhitespace() && content[position] != '=') position++
             val attributeName = content.substring(attributeStart, position)
-            require(attributeName.matches(attributePattern)) { "$templateName: invalid attribute '$attributeName'" }
-            require(attributeName !in attributes) { "$templateName: duplicate '$attributeName' attribute on <$name>" }
+            val attributeLocation = location(contentOffset + attributeStart)
+            requireDiagnostic(attributeName.matches(attributePattern), "THIM-HTML-ATTRIBUTE", attributeLocation) {
+                "invalid attribute '$attributeName'"
+            }
+            requireDiagnostic(attributeName !in attributes, "THIM-HTML-DUPLICATE-ATTRIBUTE", attributeLocation) {
+                "duplicate '$attributeName' attribute on <$name>"
+            }
             while (position < content.length && content[position].isWhitespace()) position++
             var value: String? = null
             if (position < content.length && content[position] == '=') {
                 position++
                 while (position < content.length && content[position].isWhitespace()) position++
-                require(position < content.length && content[position] in charArrayOf('"', '\'')) {
-                    "$templateName: '$attributeName' must use a quoted value"
+                requireDiagnostic(position < content.length && content[position] in charArrayOf('"', '\''), "THIM-HTML-ATTRIBUTE-QUOTE", attributeLocation) {
+                    "'$attributeName' must use a quoted value"
                 }
                 val quote = content[position++]
                 val valueStart = position
                 while (position < content.length && content[position] != quote) position++
-                require(position < content.length) { "$templateName: unterminated '$attributeName' value" }
+                requireDiagnostic(position < content.length, "THIM-HTML-UNTERMINATED", attributeLocation) {
+                    "unterminated '$attributeName' value"
+                }
                 value = content.substring(valueStart, position++)
             }
             attributes[attributeName] = value
+            attributeLocations[attributeName] = attributeLocation
         }
-        return name to attributes
+        return ParsedTag(name, attributes, location(contentOffset + nameStart), attributeLocations)
+    }
+
+    private fun location(offset: Int): SourceLocation {
+        var line = 1
+        var column = 1
+        var position = 0
+        while (position < offset && position < source.length) {
+            if (source[position] == '\n') {
+                line++
+                column = 1
+            } else {
+                column++
+            }
+            position++
+        }
+        return SourceLocation(templateName, line, column)
     }
 
     private companion object {
+        data class ParsedTag(
+            val name: String,
+            val attributes: LinkedHashMap<String, String?>,
+            val location: SourceLocation,
+            val attributeLocations: Map<String, SourceLocation>,
+        )
+
         fun autoCloses(open: String, next: String): Boolean = when (open) {
             "li" -> next == "li"
             "dt", "dd" -> next == "dt" || next == "dd"

@@ -18,7 +18,9 @@ internal class MessageCatalog private constructor(
     private val used = linkedSetOf<String>()
 
     fun use(key: String, argumentCount: Int, context: String): MessageDefinition {
-        val definition = definitions[key] ?: error("$context: message '$key' does not exist")
+        val definition = definitions[key] ?: error(
+            "$context: message '$key' does not exist${suggestion(key, definitions.keys)}",
+        )
         used += key
         val placeholders = placeholders(definition.base, "$context message '$key'")
         definition.localized.forEach { (locale, value) ->
@@ -114,6 +116,28 @@ internal class MessageCatalog private constructor(
         private fun localeOf(path: Path): String? {
             val match = localeSuffix.find(path.nameWithoutExtension) ?: return null
             return match.groupValues[1].replace('_', '-')
+        }
+
+        private fun suggestion(value: String, candidates: Collection<String>): String {
+            val nearest = candidates.minByOrNull { distance(value, it) } ?: return ""
+            return if (distance(value, nearest) <= 2) "; did you mean '$nearest'?" else ""
+        }
+
+        private fun distance(left: String, right: String): Int {
+            var previous = IntArray(right.length + 1) { it }
+            left.forEachIndexed { leftIndex, leftCharacter ->
+                val current = IntArray(right.length + 1)
+                current[0] = leftIndex + 1
+                right.forEachIndexed { rightIndex, rightCharacter ->
+                    current[rightIndex + 1] = minOf(
+                        previous[rightIndex + 1] + 1,
+                        current[rightIndex] + 1,
+                        previous[rightIndex] + if (leftCharacter == rightCharacter) 0 else 1,
+                    )
+                }
+                previous = current
+            }
+            return previous[right.length]
         }
 
         private val bundlePattern = Regex("(?:messages|[A-Za-z0-9_-]+-msgs)(?:_[a-z]{2}(?:_[A-Z]{2})?)?\\.properties")

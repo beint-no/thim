@@ -6,6 +6,7 @@ import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
 import no.beint.thim.TemplateSet;
 import org.springframework.web.servlet.support.RequestContextUtils;
+import org.springframework.web.servlet.support.RequestDataValueProcessor;
 
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
@@ -16,13 +17,23 @@ import java.util.ServiceLoader;
 
 public final class ThimRenderer {
     private final List<TemplateSet> templates;
+    private final RequestDataValueProcessor requestDataValueProcessor;
 
     public ThimRenderer() {
-        this(ServiceLoader.load(TemplateSet.class).stream().map(ServiceLoader.Provider::get).toList());
+        this((RequestDataValueProcessor) null);
+    }
+
+    public ThimRenderer(RequestDataValueProcessor requestDataValueProcessor) {
+        this(ServiceLoader.load(TemplateSet.class).stream().map(ServiceLoader.Provider::get).toList(), requestDataValueProcessor);
     }
 
     public ThimRenderer(List<TemplateSet> templates) {
+        this(templates, null);
+    }
+
+    public ThimRenderer(List<TemplateSet> templates, RequestDataValueProcessor requestDataValueProcessor) {
         this.templates = List.copyOf(templates);
+        this.requestDataValueProcessor = requestDataValueProcessor;
     }
 
     public boolean supports(Class<?> modelType) {
@@ -41,7 +52,13 @@ public final class ThimRenderer {
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("text/html");
         var output = new HtmlOutput(response.getOutputStream());
-        templateSet.render(model, new RenderContext(RequestContextUtils.getLocale(request), request.getContextPath()), output);
+        templateSet.render(
+                model,
+                new RenderContext(
+                        RequestContextUtils.getLocale(request),
+                        request.getContextPath(),
+                        new SpringRequestDataValues(request, requestDataValueProcessor)),
+                output);
         output.flush();
     }
 

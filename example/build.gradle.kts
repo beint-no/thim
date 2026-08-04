@@ -1,6 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import com.google.devtools.ksp.gradle.KspAATask
+import org.gradle.api.tasks.PathSensitivity
 
 plugins {
     kotlin("jvm")
@@ -31,4 +33,17 @@ ksp {
     arg("thim.modelPackages", "no.beint.thim.example.page")
     arg("thim.strictTemplates", "true")
     arg("thim.failOnUnusedMessages", "true")
+}
+
+tasks.withType<KspAATask>().configureEach {
+    inputs.files(fileTree(layout.projectDirectory.dir("src/main/resources/templates")) {
+        include("**/*.html")
+    })
+        .withPropertyName("thimTemplates")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(fileTree(layout.projectDirectory.dir("src/main/resources")) {
+        include("**/*.properties")
+    })
+        .withPropertyName("thimMessages")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
