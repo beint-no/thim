@@ -117,7 +117,22 @@ internal class FragmentExpander(
             val binding = bindings[match.groupValues[1]]
             if (binding is ValueBinding) return binding.value
         }
-        var result = value
+        val result = StringBuilder()
+        var index = 0
+        while (true) {
+            val start = value.indexOf("\${", index)
+            val end = if (start == -1) -1 else value.indexOf('}', start + 2)
+            if (end == -1) break
+            result.append(value, index, start)
+            result.append(substituteExpression(value.substring(start, end + 1), bindings))
+            index = end + 1
+        }
+        result.append(value, index, value.length)
+        return result.toString()
+    }
+
+    private fun substituteExpression(expression: String, bindings: Map<String, Binding>): String {
+        var result = expression
         bindings.forEach { (name, binding) ->
             if (binding is ValueBinding) {
                 val replacement = binding.value
