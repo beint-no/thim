@@ -5,6 +5,7 @@ import org.gradle.api.GradleException;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.FileSystemOperations;
+import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.tasks.CacheableTask;
@@ -15,6 +16,7 @@ import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
@@ -101,6 +103,9 @@ public abstract class ThimCompile extends DefaultTask {
     @OutputDirectory
     public abstract DirectoryProperty getCaches();
 
+    @OutputFile
+    public abstract RegularFileProperty getReportFile();
+
     @Internal
     public abstract DirectoryProperty getEmptyKotlinSources();
 
@@ -112,10 +117,10 @@ public abstract class ThimCompile extends DefaultTask {
                 getKotlinOutput().get().getAsFile(),
                 getResourceOutput().get().getAsFile(),
                 getClassOutput().get().getAsFile(),
-                getCaches().get().getAsFile(),
                 getEmptyKotlinSources().get().getAsFile()
         );
         fileSystemOperations.delete(spec -> spec.delete(outputDirectories));
+        Files.createDirectories(getCaches().get().getAsFile().toPath());
         for (var directory : outputDirectories) {
             Files.createDirectories(directory.toPath());
         }
@@ -166,5 +171,17 @@ public abstract class ThimCompile extends DefaultTask {
         if (!provider.isFile()) {
             throw new GradleException("Thim did not generate a template registry");
         }
+
+        writeReport();
+    }
+
+    private void writeReport() throws IOException {
+        var report = getReportFile().get().getAsFile();
+        Files.createDirectories(report.toPath().getParent());
+        Files.writeString(report.toPath(), """
+                {
+                  "status": "valid"
+                }
+                """);
     }
 }
