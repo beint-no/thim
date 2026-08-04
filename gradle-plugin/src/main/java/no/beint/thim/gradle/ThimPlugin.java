@@ -5,15 +5,19 @@ import com.google.devtools.ksp.gradle.KspExtension;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.file.Directory;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
 
 import javax.lang.model.SourceVersion;
+import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 public final class ThimPlugin implements Plugin<Project> {
@@ -66,6 +70,14 @@ public final class ThimPlugin implements Plugin<Project> {
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
 
+        var thimCheck = project.getTasks().register("thimCheck", task -> {
+            task.setGroup("verification");
+            task.setDescription("Validates Thim templates with the production compiler");
+        });
+        project.getTasks().withType(KspAATask.class)
+                .matching(task -> task.getName().equals("kspKotlin"))
+                .configureEach(task -> thimCheck.configure(check -> check.dependsOn(task)));
+
         var generatedResources = project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources");
         project.getTasks().matching(task -> task.getName().equals("bootRun")).configureEach(task -> {
             task.dependsOn("kspKotlin");
@@ -96,27 +108,13 @@ public final class ThimPlugin implements Plugin<Project> {
         var compileThim = project.getTasks().register("compileThim", ThimCompile.class, task -> {
             task.setGroup("build");
             task.setDescription("Compiles typed HTML templates into Java renderers");
-            task.getModelSources().from(modelSourceDirectories);
-            task.getTemplates().set(extension.getTemplates());
-            task.getMessages().set(extension.getMessages());
-            task.getRunnerClasspath().from(runner);
-            task.getProcessorClasspath().from(processor);
-            task.getLibraries().from(main.getCompileClasspath());
-            task.getGeneratedPackage().set(extension.getGeneratedPackage());
-            task.getRegistryName().set(extension.getRegistryName());
-            task.getModelPackages().set(extension.getModelPackages());
-            task.getStrictTemplates().set(extension.getStrictTemplates());
-            task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
-            task.getModuleName().set(project.getName());
-            task.getJdkHome().set(System.getProperty("java.home"));
-            task.getProjectBase().set(project.getLayout().getProjectDirectory());
-            task.getOutputBase().set(generatedBase);
-            task.getJavaOutput().set(generatedBase.map(directory -> directory.dir("java")));
-            task.getKotlinOutput().set(generatedBase.map(directory -> directory.dir("kotlin")));
-            task.getResourceOutput().set(generatedBase.map(directory -> directory.dir("resources")));
-            task.getClassOutput().set(generatedBase.map(directory -> directory.dir("classes")));
-            task.getCaches().set(project.getLayout().getBuildDirectory().dir("thim/caches"));
-            task.getEmptyKotlinSources().set(project.getLayout().getBuildDirectory().dir("thim/empty-kotlin"));
+            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, generatedBase, "main");
+        });
+        var checkBase = project.getLayout().getBuildDirectory().dir("generated/thim/check");
+        project.getTasks().register("thimCheck", ThimCompile.class, task -> {
+            task.setGroup("verification");
+            task.setDescription("Validates Thim templates with the production compiler");
+            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, checkBase, "check");
         });
 
         main.getJava().srcDir(compileThim.flatMap(ThimCompile::getJavaOutput));
@@ -124,6 +122,41 @@ public final class ThimPlugin implements Plugin<Project> {
 
         project.getTasks().named(JavaPlugin.COMPILE_JAVA_TASK_NAME).configure(task -> task.dependsOn(compileThim));
         project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME).configure(task -> task.dependsOn(compileThim));
+    }
+
+    private void configureThimTask(
+            Project project,
+            ThimExtension extension,
+            SourceSet main,
+            List<File> modelSourceDirectories,
+            Configuration runner,
+            Configuration processor,
+            ThimCompile task,
+            Provider<Directory> generatedBase,
+            String purpose
+    ) {
+        task.getModelSources().from(modelSourceDirectories);
+        task.getTemplates().set(extension.getTemplates());
+        task.getMessages().set(extension.getMessages());
+        task.getRunnerClasspath().from(runner);
+        task.getProcessorClasspath().from(processor);
+        task.getLibraries().from(main.getCompileClasspath());
+        task.getGeneratedPackage().set(extension.getGeneratedPackage());
+        task.getRegistryName().set(extension.getRegistryName());
+        task.getModelPackages().set(extension.getModelPackages());
+        task.getStrictTemplates().set(extension.getStrictTemplates());
+        task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
+        task.getModuleName().set(project.getName() + "-" + purpose);
+        task.getJdkHome().set(System.getProperty("java.home"));
+        task.getProjectBase().set(project.getLayout().getProjectDirectory());
+        task.getOutputBase().set(generatedBase);
+        task.getJavaOutput().set(generatedBase.map(directory -> directory.dir("java")));
+        task.getKotlinOutput().set(generatedBase.map(directory -> directory.dir("kotlin")));
+        task.getResourceOutput().set(generatedBase.map(directory -> directory.dir("resources")));
+        task.getClassOutput().set(generatedBase.map(directory -> directory.dir("classes")));
+        task.getCaches().set(project.getLayout().getBuildDirectory().dir("thim/" + purpose + "/caches"));
+        task.getReportFile().set(project.getLayout().getBuildDirectory().file("reports/thim/" + purpose + ".json"));
+        task.getEmptyKotlinSources().set(project.getLayout().getBuildDirectory().dir("thim/" + purpose + "/empty-kotlin"));
     }
 
     private Configuration dependencyConfiguration(Project project, String name) {

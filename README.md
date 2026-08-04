@@ -78,6 +78,15 @@ The default model package is `<project group>.page`. Nested template names are p
 
 `strictTemplates` rejects every non-fragment template without a matching page model. `failOnUnusedMessages` is suitable when the configured message bundles are owned entirely by the compiled templates. Leave it disabled for a bundle also used by backend code unless that usage is checked separately.
 
+Use `thimCheck` for fast template validation during development:
+
+```shell
+./gradlew thimCheck
+./gradlew thimCheck --continuous
+```
+
+`thimCheck` uses the same parser, fragment expansion, type analysis, message validation and safety checks as normal compilation. Java modules run the production compiler into isolated check outputs and write a cacheable machine-readable report to `build/reports/thim/check.json`. Kotlin modules delegate to the KSP task configured by the plugin, so diagnostics match ordinary Kotlin compilation.
+
 Artifacts are published through `https://maven.pkg.github.com/beint-no/thim`. Add that repository to `pluginManagement` and dependency resolution.
 
 ## Language
