@@ -78,26 +78,36 @@ internal class RendererGenerator(
     }
 
     private fun renderElement(element: ElementNode, parentScope: Scope, code: CodeWriter, context: String) {
-        val location = "$context:<${element.name}>"
+        val location = "${element.location} THIM-TEMPLATE-ELEMENT <$context:${element.name}>"
         val attributes = element.attributes
         val unsupported = attributes.keys.filter { it in unsupportedAttributes }
-        require(unsupported.isEmpty()) { "$location: unsupported attributes $unsupported" }
-        require(!(attributes.containsKey("th:if") && attributes.containsKey("th:unless"))) {
-            "$location: th:if and th:unless cannot be combined"
+        requireDiagnostic(unsupported.isEmpty(), "THIM-ATTRIBUTE-UNSUPPORTED", element.location) {
+            "<${element.name}> has unsupported attributes $unsupported"
         }
-        require(!(attributes.containsKey("th:text") && attributes.containsKey("th:utext"))) {
-            "$location: th:text and th:utext cannot be combined"
+        requireDiagnostic(!(attributes.containsKey("th:if") && attributes.containsKey("th:unless")), "THIM-CONDITION-CONFLICT", element.location) {
+            "<${element.name}> cannot combine th:if and th:unless"
+        }
+        requireDiagnostic(!(attributes.containsKey("th:text") && attributes.containsKey("th:utext")), "THIM-TEXT-CONFLICT", element.location) {
+            "<${element.name}> cannot combine th:text and th:utext"
         }
 
         var scope = parentScope
         var blocks = 0
         attributes["th:each"]?.let { each ->
-            val match = eachPattern.matchEntire(each.trim()) ?: error("$location: expected 'item : \${items}'")
+            val attributeLocation = attributeLocation(element, "th:each")
+            val match = eachPattern.matchEntire(each.trim())
+                ?: diagnostic("THIM-EACH-SYNTAX", attributeLocation, "expected 'item : \${items}'")
             val variable = match.groupValues[1]
-            val collection = scope.resolve(Expressions.path(match.groupValues[2], "$location th:each"), "$location th:each")
-            require(!collection.nullable) { "$location: th:each collection cannot be nullable" }
+            val collection = scope.resolve(
+                Expressions.path(match.groupValues[2], diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:each")),
+                diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:each"),
+                attributeLocation,
+            )
+            requireDiagnostic(!collection.nullable, "THIM-EACH-NULLABLE", attributeLocation) {
+                "th:each collection cannot be nullable"
+            }
             val elementType = iterableElement(collection.type)
-                ?: error("$location: '${match.groupValues[2]}' is not iterable")
+                ?: diagnostic("THIM-EACH-NOT-ITERABLE", attributeLocation, "'${match.groupValues[2]}' is not iterable")
             val generatedName = "item${generatedVariable++}"
             code.open("for (var $generatedName : ${collection.code})")
             scope = scope.withBinding(variable, Binding(generatedName, elementType, elementType.nullability == Nullability.NULLABLE))
@@ -105,28 +115,38 @@ internal class RendererGenerator(
         }
 
         attributes["th:if"]?.let { condition ->
+            val attributeLocation = attributeLocation(element, "th:if")
             val literal = condition.trim().toBooleanStrictOrNull()
             if (literal != null) {
                 code.open("if ($literal)")
                 blocks++
             } else {
-                val resolved = scope.resolve(Expressions.path(condition, "$location th:if"), "$location th:if")
-                require(resolved.type.isBoolean() && !resolved.nullable) {
-                    "$location: th:if requires a non-null Boolean"
+                val resolved = scope.resolve(
+                    Expressions.path(condition, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:if")),
+                    diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:if"),
+                    attributeLocation,
+                )
+                requireDiagnostic(resolved.type.isBoolean() && !resolved.nullable, "THIM-CONDITION-TYPE", attributeLocation) {
+                    "th:if requires a non-null Boolean"
                 }
                 code.open("if (${resolved.code})")
                 blocks++
             }
         }
         attributes["th:unless"]?.let { condition ->
+            val attributeLocation = attributeLocation(element, "th:unless")
             val literal = condition.trim().toBooleanStrictOrNull()
             if (literal != null) {
                 code.open("if (!${literal})")
                 blocks++
             } else {
-                val resolved = scope.resolve(Expressions.path(condition, "$location th:unless"), "$location th:unless")
-                require(resolved.type.isBoolean() && !resolved.nullable) {
-                    "$location: th:unless requires a non-null Boolean"
+                val resolved = scope.resolve(
+                    Expressions.path(condition, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:unless")),
+                    diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:unless"),
+                    attributeLocation,
+                )
+                requireDiagnostic(resolved.type.isBoolean() && !resolved.nullable, "THIM-CONDITION-TYPE", attributeLocation) {
+                    "th:unless requires a non-null Boolean"
                 }
                 code.open("if (!${resolved.code})")
                 blocks++
@@ -144,10 +164,20 @@ internal class RendererGenerator(
             }
             element.attributes.forEach { (name, expression) ->
                 if (name.startsWith("th:") && name !in controlAttributes) {
-                    renderAttribute(name.removePrefix("th:"), requireNotNull(expression), scope, code, location)
+                    renderAttribute(
+                        name.removePrefix("th:"),
+                        requireNotNull(expression),
+                        element,
+                        scope,
+                        code,
+                        location,
+                    )
                 }
             }
             code.static(">")
+            if (element.name == "form" && "th:action" in attributes) {
+                renderExtraHiddenFields(code)
+            }
         }
 
         val text = attributes["th:text"]
@@ -155,21 +185,44 @@ internal class RendererGenerator(
         if (text == null && safeHtml == null) {
             element.children.forEach { renderNode(it, scope, code, context) }
         } else if (safeHtml != null) {
+            val attributeLocation = attributeLocation(element, "th:utext")
             if (safeHtml.trim().startsWith("#{")) {
-                val message = Expressions.message(safeHtml, "$location th:utext")
-                require(message.arguments.isEmpty()) { "$location: raw messages cannot contain arguments" }
-                renderMessage(message, scope, code, "$location th:utext", raw = true)
+                val message = Expressions.message(safeHtml, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:utext"))
+                requireDiagnostic(message.arguments.isEmpty(), "THIM-RAW-MESSAGE-ARGUMENTS", attributeLocation) {
+                    "raw messages cannot contain arguments"
+                }
+                renderMessage(message, scope, code, diagnosticContext(attributeLocation, "THIM-MESSAGE", "th:utext"), attributeLocation, raw = true)
             } else {
-                val value = scope.resolve(Expressions.path(safeHtml, "$location th:utext"), "$location th:utext")
-                require(value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable) {
-                    "$location: th:utext requires a non-null no.beint.thim.SafeHtml property"
+                val value = scope.resolve(
+                    Expressions.path(safeHtml, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:utext")),
+                    diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:utext"),
+                    attributeLocation,
+                )
+                requireDiagnostic(
+                    value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable,
+                    "THIM-RAW-HTML-TYPE",
+                    attributeLocation,
+                ) {
+                    "th:utext requires a non-null no.beint.thim.SafeHtml property"
                 }
                 code.statement("output.raw(${value.code});")
             }
         } else if (requireNotNull(text).trim().startsWith("#{")) {
-            renderMessage(Expressions.message(text, "$location th:text"), scope, code, "$location th:text")
+            val attributeLocation = attributeLocation(element, "th:text")
+            renderMessage(
+                Expressions.message(text, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:text")),
+                scope,
+                code,
+                diagnosticContext(attributeLocation, "THIM-MESSAGE", "th:text"),
+                attributeLocation,
+            )
         } else {
-            val value = scope.resolve(Expressions.path(requireNotNull(text), "$location th:text"), "$location th:text")
+            val attributeLocation = attributeLocation(element, "th:text")
+            val value = scope.resolve(
+                Expressions.path(requireNotNull(text), diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:text")),
+                diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:text"),
+                attributeLocation,
+            )
             code.statement("output.text(${value.code});")
         }
 
@@ -180,19 +233,25 @@ internal class RendererGenerator(
     private fun renderAttribute(
         name: String,
         expression: String,
+        element: ElementNode,
         scope: Scope,
         code: CodeWriter,
         context: String,
     ) {
-        val location = "$context th:$name"
+        val attributeLocation = attributeLocation(element, "th:$name")
+        val location = diagnosticContext(attributeLocation, "THIM-ATTRIBUTE", "th:$name")
         if (name in booleanAttributes) {
             expression.trim().toBooleanStrictOrNull()?.let { literal ->
                 if (literal) code.static(" $name")
                 return
             }
-            val value = scope.resolve(Expressions.path(expression, location), location)
-            require(value.type.isBoolean() && !value.nullable) {
-                "$location requires a non-null Boolean"
+            val value = scope.resolve(
+                Expressions.path(expression, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:$name")),
+                diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:$name"),
+                attributeLocation,
+            )
+            requireDiagnostic(value.type.isBoolean() && !value.nullable, "THIM-BOOLEAN-ATTRIBUTE-TYPE", attributeLocation) {
+                "th:$name requires a non-null Boolean"
             }
             code.open("if (${value.code})")
             code.static(" $name")
@@ -209,12 +268,30 @@ internal class RendererGenerator(
             expression.trim().startsWith("@{") -> {
                 val path = parseUrl(expression, location)
                 code.static(" $name=\"")
-                if (path.startsWith('/')) code.statement("output.text(context.contextPath());")
-                code.static(escapeHtml(path) + "\"")
+                val url = if (path.startsWith('/')) {
+                    "context.contextPath() + \"${javaString(path)}\""
+                } else {
+                    "\"${javaString(path)}\""
+                }
+                when (name) {
+                    "action" -> {
+                        val method = formMethod(element)
+                        code.statement("output.text(context.requestDataValues().processAction($url, \"${javaString(method)}\"));")
+                    }
+                    "href", "src" -> code.statement("output.text(context.requestDataValues().processUrl($url));")
+                    else -> code.statement("output.text($url);")
+                }
+                code.static("\"")
             }
             expression.trim().startsWith("#{") -> {
                 code.static(" $name=\"")
-                renderMessage(Expressions.message(expression, location), scope, code, location)
+                renderMessage(
+                    Expressions.message(expression, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:$name")),
+                    scope,
+                    code,
+                    diagnosticContext(attributeLocation, "THIM-MESSAGE", "th:$name"),
+                    attributeLocation,
+                )
                 code.static("\"")
             }
             expression.trim().startsWith("\${") -> {
@@ -224,7 +301,11 @@ internal class RendererGenerator(
                     code.static("\"")
                     return
                 }
-                val value = scope.resolve(Expressions.path(expression, location), location)
+                val value = scope.resolve(
+                    Expressions.path(expression, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:$name")),
+                    diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:$name"),
+                    attributeLocation,
+                )
                 if (value.nullable) {
                     val variable = "attribute${generatedVariable++}"
                     code.statement("var $variable = ${value.code};")
@@ -241,8 +322,23 @@ internal class RendererGenerator(
             }
             expression.length >= 2 && expression.first() == '\'' && expression.last() == '\'' ->
                 code.static(" $name=\"${escapeHtml(expression.substring(1, expression.length - 1))}\"")
-            else -> error("$location: expected a property, message, URL, or quoted literal")
+            else -> diagnostic("THIM-ATTRIBUTE-EXPRESSION", attributeLocation, "expected a property, message, URL, or quoted literal")
         }
+    }
+
+    private fun renderExtraHiddenFields(code: CodeWriter) {
+        code.open("for (var field : context.requestDataValues().extraHiddenFields().entrySet())")
+        code.static("<input type=\"hidden\" name=\"")
+        code.statement("output.text(field.getKey());")
+        code.static("\" value=\"")
+        code.statement("output.text(field.getValue());")
+        code.static("\">")
+        code.close()
+    }
+
+    private fun formMethod(element: ElementNode): String {
+        val method = element.attributes["method"]?.trim()?.lowercase() ?: "get"
+        return if (method in setOf("get", "post")) method else "get"
     }
 
     private fun renderMessage(
@@ -250,10 +346,13 @@ internal class RendererGenerator(
         scope: Scope,
         code: CodeWriter,
         context: String,
+        location: SourceLocation?,
         raw: Boolean = false,
     ) {
         val definition = catalog.use(expression.key, expression.arguments.size, context)
-        val arguments = expression.arguments.map { scope.resolve(it, context).code }
+        val arguments = expression.arguments.map {
+            scope.resolve(it, diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "message argument"), location).code
+        }
         val localized = definition.localized.filterValues { it != definition.base }
         val regional = localized.filterKeys { '-' in it }
         val languageValues = localized.filterKeys { '-' !in it }
@@ -313,6 +412,15 @@ internal class RendererGenerator(
         return path
     }
 
+    private fun attributeLocation(element: ElementNode, name: String): SourceLocation =
+        element.attributeLocations[name] ?: element.location
+
+    private fun diagnosticContext(location: SourceLocation?, code: String, subject: String): String =
+        buildString {
+            if (location != null) append(location).append(' ')
+            append(code).append(' ').append(subject)
+        }
+
     private fun iterableElement(type: KSType): KSType? {
         val candidates = sequenceOf(type) + (type.declaration as? KSClassDeclaration).orEmptySuperTypes()
         return candidates.firstOrNull {
@@ -354,7 +462,7 @@ internal class RendererGenerator(
     ) {
         fun withBinding(name: String, binding: Binding) = Scope(model, bindings + (name to binding))
 
-        fun resolve(expression: PathExpression, context: String): ResolvedPath {
+        fun resolve(expression: PathExpression, context: String, location: SourceLocation?): ResolvedPath {
             val first = expression.segments.first()
             val bound = bindings[first.name]
             var code: String
@@ -366,20 +474,28 @@ internal class RendererGenerator(
                 nullable = bound.nullable
             } else {
                 val property = model.property(first.name)
-                    ?: error("$context: '${first.name}' is not a property of ${model.qualifiedName?.asString()}")
+                    ?: diagnostic(
+                        "THIM-PROPERTY-UNKNOWN",
+                        location,
+                        "'${first.name}' is not a property of ${model.qualifiedName?.asString()}${model.suggestion(first.name)}",
+                    )
                 type = property.type
                 nullable = type.nullability == Nullability.NULLABLE
                 code = "model.${property.accessor}()"
             }
 
             expression.segments.drop(1).forEach { segment ->
-                require(!nullable || segment.safe) {
-                    "$context: '${segment.name}' dereferences a nullable value; use ?."
+                requireDiagnostic(!nullable || segment.safe, "THIM-PROPERTY-NULLABLE-DEREFERENCE", location) {
+                    "'${segment.name}' dereferences a nullable value; use ?."
                 }
                 val declaration = type.declaration as? KSClassDeclaration
-                    ?: error("$context: ${type.declaration.qualifiedName?.asString()} has no properties")
+                    ?: diagnostic("THIM-PROPERTY-NOT-OBJECT", location, "${type.declaration.qualifiedName?.asString()} has no properties")
                 val property = declaration.property(segment.name)
-                    ?: error("$context: '${segment.name}' is not a property of ${declaration.qualifiedName?.asString()}")
+                    ?: diagnostic(
+                        "THIM-PROPERTY-UNKNOWN",
+                        location,
+                        "'${segment.name}' is not a property of ${declaration.qualifiedName?.asString()}${declaration.suggestion(segment.name)}",
+                    )
                 val nextType = property.type
                 val access = "$code.${property.accessor}()"
                 code = if (segment.safe) "($code == null ? null : $access)" else access
@@ -408,6 +524,42 @@ internal class RendererGenerator(
                     candidate.returnType != null
             } ?: return null
             return Property(function.returnType!!.resolve(), function.simpleName.asString())
+        }
+
+        private fun KSClassDeclaration.suggestion(name: String): String {
+            val nearest = propertyNames().minByOrNull { distance(name, it) } ?: return ""
+            return if (distance(name, nearest) <= 2) "; did you mean '$nearest'?" else ""
+        }
+
+        private fun KSClassDeclaration.propertyNames(): Set<String> = buildSet {
+            getAllProperties().forEach { add(it.simpleName.asString()) }
+            primaryConstructor?.parameters?.forEach { parameter ->
+                parameter.name?.asString()?.let(::add)
+            }
+            getDeclaredFunctions().forEach { function ->
+                val name = function.simpleName.asString()
+                when {
+                    name.startsWith("get") && name.length > 3 -> add(name.substring(3).replaceFirstChar(Char::lowercaseChar))
+                    name.startsWith("is") && name.length > 2 -> add(name)
+                }
+            }
+        }
+
+        private fun distance(left: String, right: String): Int {
+            var previous = IntArray(right.length + 1) { it }
+            left.forEachIndexed { leftIndex, leftCharacter ->
+                val current = IntArray(right.length + 1)
+                current[0] = leftIndex + 1
+                right.forEachIndexed { rightIndex, rightCharacter ->
+                    current[rightIndex + 1] = minOf(
+                        previous[rightIndex + 1] + 1,
+                        current[rightIndex] + 1,
+                        previous[rightIndex] + if (leftCharacter == rightCharacter) 0 else 1,
+                    )
+                }
+                previous = current
+            }
+            return previous[right.length]
         }
 
         private fun getter(name: String, type: KSType): String {
