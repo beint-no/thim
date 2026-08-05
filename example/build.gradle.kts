@@ -34,6 +34,8 @@ ksp {
     arg("thim.modelPackages", "no.beint.thim.example.page")
     arg("thim.strictTemplates", "true")
     arg("thim.failOnUnusedMessages", "true")
+    arg("thim.strictModels", "true")
+    arg("thim.failOnUnusedProperties", "true")
 }
 
 tasks.withType<KspAATask>().configureEach {

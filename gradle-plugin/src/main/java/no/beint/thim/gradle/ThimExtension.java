@@ -22,4 +22,10 @@ public abstract class ThimExtension {
     public abstract Property<Boolean> getValidateRoutes();
 
     public abstract ListProperty<String> getExternalPaths();
+
+    public abstract Property<Boolean> getStrictModels();
+
+    public abstract Property<Boolean> getFailOnUnusedProperties();
+
+    public abstract ListProperty<String> getForbiddenModelAnnotations();
 }

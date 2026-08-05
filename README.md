@@ -71,12 +71,16 @@ thim {
     modelPackages.set(listOf("no.example.page"))
     strictTemplates.set(true)
     failOnUnusedMessages.set(true)
+    strictModels.set(true)
+    failOnUnusedProperties.set(true)
 }
 ```
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
 `strictTemplates` rejects every non-fragment template without a matching page model. `failOnUnusedMessages` is suitable when the configured message bundles are owned entirely by the compiled templates. Leave it disabled for a bundle also used by backend code unless that usage is checked separately.
+
+`strictModels` opts page models into a closed-world contract for render-only data. A strict model and every type reachable from its properties must be immutable data prepared for rendering: mutable properties and setters are rejected, along with `Any`/`Object` properties, map-shaped data, raw collections, and `th:each` over collections that are not materialized (`List`, `Set`, `Collection`, or an array). Types annotated with a persistence annotation are rejected so entities and lazy collections never reach a renderer; the default list covers JPA (`@Entity`, `@Embeddable`, `@MappedSuperclass` in both `jakarta.persistence` and `javax.persistence`) and can be replaced through `forbiddenModelAnnotations`. Model properties no expanded template reads are reported as warnings; `failOnUnusedProperties` turns them into errors. Keep it disabled for models whose properties are also consumed by backend code.
 
 Use `thimCheck` for fast template validation during development:
 

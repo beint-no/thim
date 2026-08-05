@@ -39,6 +39,14 @@ private class ThimProcessor(
         .filter(String::isNotEmpty)
     private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
     private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
+    private val strictModels = environment.options["thim.strictModels"].toBoolean()
+    private val failOnUnusedProperties = environment.options["thim.failOnUnusedProperties"].toBoolean()
+    private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
+        ?.split(',')
+        ?.map(String::trim)
+        ?.filter(String::isNotEmpty)
+        ?.toSet()
+        ?: defaultForbiddenModelAnnotations
     private val validateRoutes = environment.options["thim.validateRoutes"]?.toBoolean() ?: true
     private val externalPaths = environment.options["thim.externalPaths"]
         .orEmpty()
@@ -64,6 +72,10 @@ private class ThimProcessor(
             require(templates.map { it.model.qualifiedName?.asString() }.distinct().size == templates.size) {
                 "A page model can only be assigned to one template"
             }
+            if (strictModels) {
+                val checker = StrictModelChecker(forbiddenModelAnnotations)
+                templates.forEach { checker.check(it.model) }
+            }
 
             val catalog = MessageCatalog.load(messagesDirectory)
             val routeCatalog = if (validateRoutes) {
@@ -72,11 +84,12 @@ private class ThimProcessor(
                 RouteCatalog(emptyList(), emptyList())
             }
             val staticContent = StaticContent()
-            val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName)
+            val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName, strictModels)
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }
             if (failOnUnusedMessages) catalog.requireAllUsed()
+            if (strictModels) reportUnusedProperties(templates, generator)
             generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {
@@ -87,6 +100,21 @@ private class ThimProcessor(
             completed = true
         }
         return emptyList()
+    }
+
+    private fun reportUnusedProperties(templates: List<TemplateSource>, generator: RendererGenerator) {
+        val unused = templates.flatMap { template ->
+            val used = generator.usedRootProperties(template.model)
+            modelProperties(template.model)
+                .filter { property -> property.aliases.none(used::contains) }
+                .map { "${template.model.qualifiedName?.asString()}.${it.name} is not used by template '${template.name}'" }
+        }
+        if (unused.isEmpty()) return
+        if (failOnUnusedProperties) {
+            diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
+        } else {
+            unused.forEach { logger.warn("THIM-MODEL-UNUSED-PROPERTY $it") }
+        }
     }
 
     private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray) {

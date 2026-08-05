@@ -32,11 +32,16 @@ internal class RendererGenerator(
     private val routes: RouteCatalog,
     private val staticContent: StaticContent,
     private val registryName: String,
+    private val strictModels: Boolean = false,
 ) {
     private var generatedVariable = 0
     private var regionalLocales = emptyMap<String, Int>()
     private var languages = emptyMap<String, Int>()
     private var formErrors: ResolvedPath? = null
+    private val usedRootProperties = mutableMapOf<String, MutableSet<String>>()
+
+    fun usedRootProperties(model: KSClassDeclaration): Set<String> =
+        usedRootProperties[model.qualifiedName?.asString()] ?: emptySet()
 
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
@@ -64,7 +69,9 @@ internal class RendererGenerator(
                     }
                     code.statement("var language = switch (context.locale().getLanguage()) { $cases default -> 0; };")
                 }
-                val scope = Scope(model)
+                val scope = Scope(model, recordUse = { property ->
+                    usedRootProperties.getOrPut(modelName, ::mutableSetOf).add(property)
+                })
                 formErrors = scope.errorsProperty()
                 nodes.forEach { renderNode(it, scope, code, templateName) }
             }
@@ -120,6 +127,11 @@ internal class RendererGenerator(
             }
             val elementType = iterableElement(collection.type)
                 ?: diagnostic("THIM-EACH-NOT-ITERABLE", attributeLocation, "'${match.groupValues[2]}' is not iterable")
+            if (strictModels) {
+                requireDiagnostic(isMaterialized(collection.type), "THIM-EACH-NOT-MATERIALIZED", attributeLocation) {
+                    "strict models require a materialized collection (List, Set, Collection, or array) for th:each"
+                }
+            }
             val generatedName = "item${generatedVariable++}"
             code.open("for (var $generatedName : ${collection.code})")
             scope = scope.withBinding(variable, Binding(generatedName, elementType, elementType.nullability == Nullability.NULLABLE))
@@ -744,6 +756,18 @@ internal class RendererGenerator(
         }?.arguments?.firstOrNull()?.type?.resolve()
     }
 
+    private fun isMaterialized(type: KSType): Boolean {
+        val candidates = sequenceOf(type) + (type.declaration as? KSClassDeclaration).orEmptySuperTypes()
+        return candidates.any {
+            it.declaration.qualifiedName?.asString() in setOf(
+                "kotlin.collections.Collection", "kotlin.collections.MutableCollection",
+                "kotlin.collections.List", "kotlin.collections.MutableList", "kotlin.collections.Set",
+                "kotlin.collections.MutableSet", "kotlin.Array", "java.util.Collection",
+                "java.util.List", "java.util.Set",
+            )
+        }
+    }
+
     private fun KSClassDeclaration?.orEmptySuperTypes(): Sequence<KSType> = this?.getAllSuperTypes() ?: emptySequence()
 
     private fun escapeHtml(value: String): String = buildString(value.length) {
@@ -769,15 +793,16 @@ internal class RendererGenerator(
 
     private class Scope(
         private val model: KSClassDeclaration,
+        private val recordUse: (String) -> Unit = {},
         private val bindings: Map<String, Binding> = emptyMap(),
         private val selection: Binding? = null,
         private val select: Binding? = null,
     ) {
-        fun withBinding(name: String, binding: Binding) = Scope(model, bindings + (name to binding), selection, select)
+        fun withBinding(name: String, binding: Binding) = Scope(model, recordUse, bindings + (name to binding), selection, select)
 
-        fun withSelection(binding: Binding) = Scope(model, bindings, binding, select)
+        fun withSelection(binding: Binding) = Scope(model, recordUse, bindings, binding, select)
 
-        fun withSelectValue(binding: Binding) = Scope(model, bindings, selection, binding)
+        fun withSelectValue(binding: Binding) = Scope(model, recordUse, bindings, selection, binding)
 
         fun hasSelection(): Boolean = selection != null
 
@@ -787,6 +812,7 @@ internal class RendererGenerator(
             val property = model.property("errors") ?: return null
             val typeName = property.type.declaration.qualifiedName?.asString()
             if (typeName != "no.beint.thim.FormErrors" || property.type.nullability == Nullability.NULLABLE) return null
+            recordUse("errors")
             return ResolvedPath("model.${property.accessor}()", property.type, false)
         }
 
@@ -833,6 +859,7 @@ internal class RendererGenerator(
                         location,
                         "'${first.name}' is not a property of ${model.qualifiedName?.asString()}${model.suggestion(first.name)}",
                     )
+                recordUse(first.name)
                 type = property.type
                 nullable = type.nullability == Nullability.NULLABLE
                 code = "model.${property.accessor}()"

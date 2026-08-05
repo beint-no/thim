@@ -36,6 +36,11 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getFailOnUnusedMessages().convention(false);
         extension.getValidateRoutes().convention(true);
         extension.getExternalPaths().convention(java.util.List.of());
+        extension.getStrictModels().convention(false);
+        extension.getFailOnUnusedProperties().convention(false);
+        extension.getForbiddenModelAnnotations().convention(java.util.List.of(
+                "jakarta.persistence.Entity", "jakarta.persistence.Embeddable", "jakarta.persistence.MappedSuperclass",
+                "javax.persistence.Entity", "javax.persistence.Embeddable", "javax.persistence.MappedSuperclass"));
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -64,6 +69,9 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
         ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
         ksp.arg("thim.externalPaths", extension.getExternalPaths().map(paths -> String.join(",", paths)));
+        ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
+        ksp.arg("thim.failOnUnusedProperties", extension.getFailOnUnusedProperties().map(String::valueOf));
+        ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
@@ -152,6 +160,9 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
         task.getValidateRoutes().set(extension.getValidateRoutes());
         task.getExternalPaths().set(extension.getExternalPaths());
+        task.getStrictModels().set(extension.getStrictModels());
+        task.getFailOnUnusedProperties().set(extension.getFailOnUnusedProperties());
+        task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));
         task.getProjectBase().set(project.getLayout().getProjectDirectory());

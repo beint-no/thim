@@ -83,6 +83,15 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract ListProperty<String> getExternalPaths();
 
     @Input
+    public abstract Property<Boolean> getStrictModels();
+
+    @Input
+    public abstract Property<Boolean> getFailOnUnusedProperties();
+
+    @Input
+    public abstract ListProperty<String> getForbiddenModelAnnotations();
+
+    @Input
     public abstract Property<String> getModuleName();
 
     @Input
@@ -146,7 +155,10 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.strictTemplates=" + getStrictTemplates().get(),
                 "thim.failOnUnusedMessages=" + getFailOnUnusedMessages().get(),
                 "thim.validateRoutes=" + getValidateRoutes().get(),
-                "thim.externalPaths=" + String.join(",", getExternalPaths().get())
+                "thim.externalPaths=" + String.join(",", getExternalPaths().get()),
+                "thim.strictModels=" + getStrictModels().get(),
+                "thim.failOnUnusedProperties=" + getFailOnUnusedProperties().get(),
+                "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get())
         );
         var arguments = List.of(
                 "-java-source-roots=" + javaSources,
