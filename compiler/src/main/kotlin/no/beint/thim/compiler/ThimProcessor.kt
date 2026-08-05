@@ -73,9 +73,10 @@ private class ThimProcessor(
             require(templates.map { it.model.qualifiedName?.asString() }.distinct().size == templates.size) {
                 "A page model can only be assigned to one template"
             }
+            val problems = mutableListOf<String>()
             if (strictModels) {
                 val checker = StrictModelChecker(forbiddenModelAnnotations)
-                templates.forEach { checker.check(it.model) }
+                templates.forEach { template -> collect(problems) { checker.check(template.model) } }
             }
 
             val catalog = MessageCatalog.load(messagesDirectory)
@@ -89,16 +90,17 @@ private class ThimProcessor(
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }
-            if (generator.errors.isNotEmpty()) {
-                generator.errors.forEach(logger::error)
+            problems += generator.errors
+            collect(problems) { if (failOnUnusedMessages) catalog.requireAllUsed() }
+            collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
+            collect(problems) { reportUnusedFragments(expander) }
+            val documentChecker = DocumentChecker(logger::warn)
+            templates.forEach { template -> collect(problems) { documentChecker.check(template.nodes) } }
+            if (problems.isNotEmpty()) {
+                problems.forEach(logger::error)
                 completed = true
                 return emptyList()
             }
-            if (failOnUnusedMessages) catalog.requireAllUsed()
-            if (strictModels) reportUnusedProperties(templates, generator)
-            reportUnusedFragments(expander)
-            val documentChecker = DocumentChecker(logger::warn)
-            templates.forEach { documentChecker.check(it.nodes) }
             generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {
@@ -109,6 +111,20 @@ private class ThimProcessor(
             completed = true
         }
         return emptyList()
+    }
+
+    /**
+     * Runs one validation phase and stores its failure instead of aborting, so a single
+     * build reports the findings of every phase together.
+     */
+    private inline fun collect(problems: MutableList<String>, block: () -> Unit) {
+        try {
+            block()
+        } catch (exception: IllegalArgumentException) {
+            problems += exception.message ?: "Thim compilation failed"
+        } catch (exception: IllegalStateException) {
+            problems += exception.message ?: "Thim compilation failed"
+        }
     }
 
     private fun reportUnusedFragments(expander: FragmentExpander) {
