@@ -34,6 +34,8 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
         extension.getStrictTemplates().convention(false);
         extension.getFailOnUnusedMessages().convention(false);
+        extension.getValidateRoutes().convention(true);
+        extension.getExternalPaths().convention(java.util.List.of());
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -60,6 +62,8 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.modelPackages", extension.getModelPackages().map(packages -> String.join(",", packages)));
         ksp.arg("thim.strictTemplates", extension.getStrictTemplates().map(String::valueOf));
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
+        ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
+        ksp.arg("thim.externalPaths", extension.getExternalPaths().map(paths -> String.join(",", paths)));
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
@@ -146,6 +150,8 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getModelPackages().set(extension.getModelPackages());
         task.getStrictTemplates().set(extension.getStrictTemplates());
         task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
+        task.getValidateRoutes().set(extension.getValidateRoutes());
+        task.getExternalPaths().set(extension.getExternalPaths());
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));
         task.getProjectBase().set(project.getLayout().getProjectDirectory());

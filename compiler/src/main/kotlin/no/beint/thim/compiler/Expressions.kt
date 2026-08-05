@@ -6,6 +6,24 @@ internal data class PathExpression(val segments: List<PathSegment>)
 
 internal data class MessageExpression(val key: String, val arguments: List<PathExpression>)
 
+internal sealed interface UrlArgument
+
+internal data class UrlLiteral(val value: String) : UrlArgument
+
+internal data class UrlProperty(val path: PathExpression) : UrlArgument
+
+internal data class UrlParameter(val name: String, val value: UrlArgument)
+
+internal data class UrlExpression(
+    val path: String,
+    val pathVariables: List<String>,
+    val parameters: List<UrlParameter>,
+) {
+    val queryParameters: List<UrlParameter> get() = parameters.filter { it.name !in pathVariables }
+
+    fun parameter(name: String): UrlParameter = parameters.first { it.name == name }
+}
+
 internal object Expressions {
     fun path(value: String, context: String): PathExpression {
         val trimmed = value.trim()
@@ -57,6 +75,54 @@ internal object Expressions {
         return MessageExpression(key, arguments)
     }
 
+    fun url(value: String, context: String): UrlExpression {
+        val trimmed = value.trim()
+        require(trimmed.startsWith("@{") && trimmed.endsWith('}')) { "$context: expected a @{/...} URL" }
+        val body = trimmed.substring(2, trimmed.length - 1).trim()
+        val opening = body.indexOf('(')
+        val path: String
+        val parameters: List<UrlParameter>
+        if (opening == -1) {
+            path = body
+            parameters = emptyList()
+        } else {
+            require(body.endsWith(')')) { "$context: invalid URL expression '$value'" }
+            path = body.substring(0, opening).trim()
+            parameters = splitArguments(body.substring(opening + 1, body.length - 1), context)
+                .map { parameter(it, context) }
+        }
+        require((path.startsWith('/') || path.startsWith("https://")) && !path.contains("\${")) {
+            "$context: only application-relative or HTTPS URLs are supported"
+        }
+        val withoutVariables = pathVariablePattern.replace(path, "")
+        require('{' !in withoutVariables && '}' !in withoutVariables) { "$context: invalid URL path '$path'" }
+        val variables = pathVariablePattern.findAll(path).map { it.groupValues[1] }.toList()
+        require(variables.size == variables.distinct().size) { "$context: duplicate path variable in '$path'" }
+        val names = parameters.map { it.name }
+        require(names.size == names.distinct().size) { "$context: duplicate URL parameter" }
+        variables.forEach { variable ->
+            require(parameters.any { it.name == variable }) {
+                "$context: path variable '{$variable}' needs a matching parameter"
+            }
+        }
+        return UrlExpression(path, variables, parameters)
+    }
+
+    private fun parameter(value: String, context: String): UrlParameter {
+        val equals = value.indexOf('=')
+        require(equals > 0) { "$context: expected name=value URL parameters" }
+        val name = value.substring(0, equals).trim()
+        require(name.matches(keyPattern)) { "$context: invalid URL parameter name '$name'" }
+        val argument = value.substring(equals + 1).trim()
+        return when {
+            argument.startsWith("\${") -> UrlParameter(name, UrlProperty(path(argument, context)))
+            argument.length >= 2 && argument.first() == '\'' && argument.last() == '\'' ->
+                UrlParameter(name, UrlLiteral(argument.substring(1, argument.length - 1)))
+            argument.matches(numberPattern) -> UrlParameter(name, UrlLiteral(argument))
+            else -> error("$context: URL parameter '$name' must be a \${property}, 'literal', or number")
+        }
+    }
+
     private fun splitArguments(value: String, context: String): List<String> {
         if (value.isBlank()) return emptyList()
         val result = mutableListOf<String>()
@@ -79,4 +145,6 @@ internal object Expressions {
     }
 
     private val keyPattern = Regex("[A-Za-z0-9_][A-Za-z0-9_.-]*")
+    private val numberPattern = Regex("-?\\d+")
+    private val pathVariablePattern = Regex("\\{([A-Za-z_][A-Za-z0-9_]*)}")
 }

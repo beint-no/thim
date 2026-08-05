@@ -18,4 +18,8 @@ public abstract class ThimExtension {
     public abstract Property<Boolean> getStrictTemplates();
 
     public abstract Property<Boolean> getFailOnUnusedMessages();
+
+    public abstract Property<Boolean> getValidateRoutes();
+
+    public abstract ListProperty<String> getExternalPaths();
 }
