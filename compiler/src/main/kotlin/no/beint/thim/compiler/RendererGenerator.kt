@@ -28,6 +28,7 @@ internal class StaticContent {
 
 internal class RendererGenerator(
     private val catalog: MessageCatalog,
+    private val routes: RouteCatalog,
     private val staticContent: StaticContent,
     private val registryName: String,
 ) {
@@ -167,6 +168,9 @@ internal class RendererGenerator(
             element.attributes.forEach { (name, value) ->
                 if (name.startsWith("th:") || name == "xmlns:th") return@forEach
                 if ("th:$name" in element.attributes) return@forEach
+                if (name in htmxMethodAttributes && value != null && value.startsWith('/')) {
+                    routes.check(value, htmxMethodAttributes.getValue(name), attributeLocation(element, name), name)
+                }
                 code.static(" $name")
                 if (value != null) code.static("=\"$value\"")
             }
@@ -254,7 +258,6 @@ internal class RendererGenerator(
         context: String,
     ) {
         val attributeLocation = attributeLocation(element, "th:$name")
-        val location = diagnosticContext(attributeLocation, "THIM-ATTRIBUTE", "th:$name")
         requireDiagnostic(!name.startsWith("on"), "THIM-CONTEXT-UNSUPPORTED", attributeLocation) {
             "th:$name is an event-handler JavaScript context; dynamic output is not supported, use a static attribute and data-* values"
         }
@@ -287,13 +290,10 @@ internal class RendererGenerator(
                 code.static("\"")
             }
             expression.trim().startsWith("@{") -> {
-                val path = parseUrl(expression, location)
+                val expressionUrl = Expressions.url(expression, diagnosticContext(attributeLocation, "THIM-URL-SYNTAX", "th:$name"))
+                checkRoute(expressionUrl.path, name, element, attributeLocation)
                 code.static(" $name=\"")
-                val url = if (path.startsWith('/')) {
-                    "context.contextPath() + \"${javaString(path)}\""
-                } else {
-                    "\"${javaString(path)}\""
-                }
+                val url = urlCode(expressionUrl, scope, attributeLocation, name)
                 when (name) {
                     "action" -> {
                         val method = formMethod(element)
@@ -306,7 +306,7 @@ internal class RendererGenerator(
             }
             expression.trim().startsWith("#{") -> {
                 val message = Expressions.message(expression, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:$name"))
-                requireDiagnostic(name !in urlAttributes || message.arguments.isEmpty(), "THIM-URL-MESSAGE-ARGUMENTS", attributeLocation) {
+                requireDiagnostic(!isUrlAttribute(name) || message.arguments.isEmpty(), "THIM-URL-MESSAGE-ARGUMENTS", attributeLocation) {
                     "th:$name is a URL context; messages with dynamic arguments are not supported"
                 }
                 code.static(" $name=\"")
@@ -332,7 +332,7 @@ internal class RendererGenerator(
                     attributeLocation,
                 )
                 val typeName = value.type.declaration.qualifiedName?.asString()
-                if (name in urlAttributes) {
+                if (isUrlAttribute(name)) {
                     requireDiagnostic(typeName == "no.beint.thim.TrustedUrl", "THIM-URL-TYPE", attributeLocation) {
                         "th:$name is a URL context; use a static @{...} URL or a no.beint.thim.TrustedUrl property"
                     }
@@ -365,7 +365,7 @@ internal class RendererGenerator(
     }
 
     private fun attributeWrite(name: String, element: ElementNode, value: String): String = when {
-        name !in urlAttributes -> "output.text($value);"
+        !isUrlAttribute(name) -> "output.text($value);"
         name == "action" -> "output.text(context.requestDataValues().processAction(context.resolveUrl($value.value()), \"${javaString(formMethod(element))}\"));"
         name == "href" || name == "src" -> "output.text(context.requestDataValues().processUrl(context.resolveUrl($value.value())));"
         else -> "output.text(context.resolveUrl($value.value()));"
@@ -447,14 +447,75 @@ internal class RendererGenerator(
         code.static(if (raw) pattern.substring(start) else escapeHtml(pattern.substring(start)))
     }
 
-    private fun parseUrl(value: String, context: String): String {
-        val trimmed = value.trim()
-        require(trimmed.startsWith("@{") && trimmed.endsWith('}')) { "$context: expected a @{/...} URL" }
-        val path = trimmed.substring(2, trimmed.length - 1)
-        require((path.startsWith('/') || path.startsWith("https://")) && !path.contains("\${") && !path.contains('(')) {
-            "$context: only static absolute application or HTTPS URLs are supported"
+    private fun urlCode(url: UrlExpression, scope: Scope, location: SourceLocation?, name: String): String {
+        val pieces = mutableListOf<String>()
+        val static = StringBuilder()
+        fun flush() {
+            if (static.isNotEmpty()) {
+                pieces.add("\"${javaString(static.toString())}\"")
+                static.clear()
+            }
         }
-        return path
+        if (url.path.startsWith('/')) pieces.add("context.contextPath()")
+        var start = 0
+        urlVariablePattern.findAll(url.path).forEach { match ->
+            static.append(url.path.substring(start, match.range.first))
+            when (val value = url.parameter(match.groupValues[1]).value) {
+                is UrlLiteral -> static.append(encodeUrl(value.value))
+                is UrlProperty -> {
+                    flush()
+                    pieces.add(urlArgument(value, match.groupValues[1], scope, location, name, path = true))
+                }
+            }
+            start = match.range.last + 1
+        }
+        static.append(url.path.substring(start))
+        url.queryParameters.forEachIndexed { index, parameter ->
+            static.append(if (index == 0) '?' else '&').append(parameter.name).append('=')
+            when (val value = parameter.value) {
+                is UrlLiteral -> static.append(encodeUrl(value.value))
+                is UrlProperty -> {
+                    flush()
+                    pieces.add(urlArgument(value, parameter.name, scope, location, name, path = false))
+                }
+            }
+        }
+        flush()
+        return pieces.joinToString(" + ").ifEmpty { "\"\"" }
+    }
+
+    private fun urlArgument(
+        value: UrlProperty,
+        parameterName: String,
+        scope: Scope,
+        location: SourceLocation?,
+        name: String,
+        path: Boolean,
+    ): String {
+        val resolved = scope.resolve(
+            value.path,
+            diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "th:$name"),
+            location,
+        )
+        requireDiagnostic(!resolved.nullable, "THIM-URL-ARGUMENT-NULLABLE", location) {
+            "URL parameter '$parameterName' cannot be nullable"
+        }
+        val typeName = resolved.type.declaration.qualifiedName?.asString()
+        requireDiagnostic(typeName !in setOf("no.beint.thim.SafeHtml", "no.beint.thim.TrustedUrl"), "THIM-URL-ARGUMENT-TYPE", location) {
+            "URL parameter '$parameterName' cannot be a ${typeName?.substringAfterLast('.')}"
+        }
+        val encoder = if (path) "pathSegment" else "query"
+        return "no.beint.thim.UrlEncoding.$encoder(${resolved.code})"
+    }
+
+    private fun checkRoute(path: String, name: String, element: ElementNode, location: SourceLocation?) {
+        val method = when {
+            name == "href" -> "GET"
+            name == "action" -> formMethod(element).uppercase()
+            name in htmxMethodAttributes -> htmxMethodAttributes.getValue(name)
+            else -> return
+        }
+        routes.check(path, method, location, "th:$name")
     }
 
     private fun attributeLocation(element: ElementNode, name: String): SourceLocation =
@@ -686,6 +747,30 @@ internal class RendererGenerator(
         )
         val controlAttributes = setOf("th:text", "th:utext", "th:each", "th:if", "th:unless", "th:fragment")
         val urlAttributes = setOf("action", "cite", "data", "formaction", "href", "poster", "src", "srcset")
+        val htmxMethodAttributes = mapOf(
+            "hx-get" to "GET",
+            "hx-post" to "POST",
+            "hx-put" to "PUT",
+            "hx-patch" to "PATCH",
+            "hx-delete" to "DELETE",
+        )
+        val urlVariablePattern = Regex("\\{([A-Za-z_][A-Za-z0-9_]*)}")
+
+        fun isUrlAttribute(name: String): Boolean = name in urlAttributes || name in htmxMethodAttributes
+
+        fun encodeUrl(value: String): String = buildString {
+            value.toByteArray(Charsets.UTF_8).forEach { byte ->
+                val code = byte.toInt() and 0xff
+                val character = code.toChar()
+                if (character in 'a'..'z' || character in 'A'..'Z' || character in '0'..'9' ||
+                    character == '-' || character == '.' || character == '_' || character == '~'
+                ) {
+                    append(character)
+                } else {
+                    append('%').append("%02X".format(code))
+                }
+            }
+        }
         val rawTextElements = setOf("script", "style")
         val unsupportedAttributes = setOf(
             "th:attr", "th:case", "th:classappend", "th:errors", "th:field", "th:inline", "th:insert",

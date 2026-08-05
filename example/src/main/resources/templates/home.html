@@ -12,10 +12,12 @@
         <ul>
             <li th:each="feature : ${features}">
                 <th:block th:replace="~{fragments/feature :: feature(${feature})}"></th:block>
+                <a href="/feature/example" th:href="@{/feature/{name}(name=${feature.name},ref='home')}" th:text="#{home.details}">Details</a>
             </li>
         </ul>
         <p th:if="${showFooter}">
             <a href="/health" th:href="@{/health}" th:text="#{home.health}">Health</a>
+            <button hx-post="/feedback" th:text="#{home.feedback}">Feedback</button>
         </p>
     </main>
 </body>

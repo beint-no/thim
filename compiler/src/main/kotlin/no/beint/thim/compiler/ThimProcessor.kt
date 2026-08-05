@@ -39,6 +39,12 @@ private class ThimProcessor(
         .filter(String::isNotEmpty)
     private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
     private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
+    private val validateRoutes = environment.options["thim.validateRoutes"]?.toBoolean() ?: true
+    private val externalPaths = environment.options["thim.externalPaths"]
+        .orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
     private var completed = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -60,8 +66,13 @@ private class ThimProcessor(
             }
 
             val catalog = MessageCatalog.load(messagesDirectory)
+            val routeCatalog = if (validateRoutes) {
+                RouteCatalog.load(resolver, externalPaths)
+            } else {
+                RouteCatalog(emptyList(), emptyList())
+            }
             val staticContent = StaticContent()
-            val generator = RendererGenerator(catalog, staticContent, registryName)
+            val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName)
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }

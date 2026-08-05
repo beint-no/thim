@@ -5,6 +5,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.ResponseBody
 
 @SpringBootApplication
@@ -36,4 +38,12 @@ class HomeCtrl {
     @ResponseBody
     @GetMapping("/health")
     fun health() = "ok"
+
+    @ResponseBody
+    @GetMapping("/feature/{name}")
+    fun feature(@PathVariable name: String) = "Feature: $name"
+
+    @ResponseBody
+    @PostMapping("/feedback")
+    fun feedback() = "Thanks!"
 }
