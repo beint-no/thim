@@ -20,6 +20,7 @@
             <button hx-post="/feedback" th:text="#{home.feedback}">Feedback</button>
         </p>
         <form th:action="@{/feedback}" method="post" th:object="${feedbackForm}">
+            <label for="author" th:text="#{home.author}">Author</label>
             <input type="text" th:field="*{author}">
             <span th:errors="*{author}"></span>
             <textarea th:field="*{message}"></textarea>

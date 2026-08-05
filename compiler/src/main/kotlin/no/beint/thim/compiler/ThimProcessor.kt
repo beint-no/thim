@@ -90,6 +90,8 @@ private class ThimProcessor(
             }
             if (failOnUnusedMessages) catalog.requireAllUsed()
             if (strictModels) reportUnusedProperties(templates, generator)
+            val documentChecker = DocumentChecker(logger::warn)
+            templates.forEach { documentChecker.check(it.nodes) }
             generate(compiled, staticContent.bytes())
             completed = true
         } catch (exception: IllegalArgumentException) {

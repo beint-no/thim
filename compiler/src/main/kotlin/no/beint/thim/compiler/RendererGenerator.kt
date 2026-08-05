@@ -1048,7 +1048,7 @@ internal class RendererGenerator(
         }
         val rawTextElements = setOf("script", "style")
         val unsupportedAttributes = setOf(
-            "th:attr", "th:case", "th:classappend", "th:inline", "th:insert",
+            "th:attr", "th:case", "th:classappend", "th:id", "th:inline", "th:insert",
             "th:remove", "th:replace", "th:switch", "th:with",
         )
         val textFieldTypes = setOf("text", "hidden", "email", "password", "search", "tel", "url")
