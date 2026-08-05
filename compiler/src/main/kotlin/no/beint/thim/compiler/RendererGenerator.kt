@@ -366,9 +366,9 @@ internal class RendererGenerator(
 
     private fun attributeWrite(name: String, element: ElementNode, value: String): String = when {
         name !in urlAttributes -> "output.text($value);"
-        name == "action" -> "output.text(context.requestDataValues().processAction($value.value(), \"${javaString(formMethod(element))}\"));"
-        name == "href" || name == "src" -> "output.text(context.requestDataValues().processUrl($value.value()));"
-        else -> "output.url($value);"
+        name == "action" -> "output.text(context.requestDataValues().processAction(context.resolveUrl($value.value()), \"${javaString(formMethod(element))}\"));"
+        name == "href" || name == "src" -> "output.text(context.requestDataValues().processUrl(context.resolveUrl($value.value())));"
+        else -> "output.text(context.resolveUrl($value.value()));"
     }
 
     private fun renderExtraHiddenFields(code: CodeWriter) {
