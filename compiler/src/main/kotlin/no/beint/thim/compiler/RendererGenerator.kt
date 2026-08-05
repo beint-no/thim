@@ -90,6 +90,14 @@ internal class RendererGenerator(
         requireDiagnostic(!(attributes.containsKey("th:text") && attributes.containsKey("th:utext")), "THIM-TEXT-CONFLICT", element.location) {
             "<${element.name}> cannot combine th:text and th:utext"
         }
+        requireDiagnostic(
+            element.name !in rawTextElements || !(attributes.containsKey("th:text") || attributes.containsKey("th:utext")),
+            "THIM-CONTEXT-UNSUPPORTED",
+            element.location,
+        ) {
+            val language = if (element.name == "script") "JavaScript" else "CSS"
+            "<${element.name}> content is a $language context; dynamic output is not supported"
+        }
 
         var scope = parentScope
         var blocks = 0
@@ -223,6 +231,13 @@ internal class RendererGenerator(
                 diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:text"),
                 attributeLocation,
             )
+            val typeName = value.type.declaration.qualifiedName?.asString()
+            requireDiagnostic(typeName != "no.beint.thim.SafeHtml", "THIM-TEXT-TYPE", attributeLocation) {
+                "th:text escapes its value; render SafeHtml with th:utext"
+            }
+            requireDiagnostic(typeName != "no.beint.thim.TrustedUrl", "THIM-TEXT-TYPE", attributeLocation) {
+                "TrustedUrl is only supported in URL attributes"
+            }
             code.statement("output.text(${value.code});")
         }
 
@@ -240,6 +255,12 @@ internal class RendererGenerator(
     ) {
         val attributeLocation = attributeLocation(element, "th:$name")
         val location = diagnosticContext(attributeLocation, "THIM-ATTRIBUTE", "th:$name")
+        requireDiagnostic(!name.startsWith("on"), "THIM-CONTEXT-UNSUPPORTED", attributeLocation) {
+            "th:$name is an event-handler JavaScript context; dynamic output is not supported, use a static attribute and data-* values"
+        }
+        requireDiagnostic(name != "style", "THIM-CONTEXT-UNSUPPORTED", attributeLocation) {
+            "th:style is a CSS context; dynamic output is not supported, use a static style attribute or conditional classes"
+        }
         if (name in booleanAttributes) {
             expression.trim().toBooleanStrictOrNull()?.let { literal ->
                 if (literal) code.static(" $name")
@@ -284,9 +305,13 @@ internal class RendererGenerator(
                 code.static("\"")
             }
             expression.trim().startsWith("#{") -> {
+                val message = Expressions.message(expression, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:$name"))
+                requireDiagnostic(name !in urlAttributes || message.arguments.isEmpty(), "THIM-URL-MESSAGE-ARGUMENTS", attributeLocation) {
+                    "th:$name is a URL context; messages with dynamic arguments are not supported"
+                }
                 code.static(" $name=\"")
                 renderMessage(
-                    Expressions.message(expression, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:$name")),
+                    message,
                     scope,
                     code,
                     diagnosticContext(attributeLocation, "THIM-MESSAGE", "th:$name"),
@@ -306,17 +331,30 @@ internal class RendererGenerator(
                     diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:$name"),
                     attributeLocation,
                 )
+                val typeName = value.type.declaration.qualifiedName?.asString()
+                if (name in urlAttributes) {
+                    requireDiagnostic(typeName == "no.beint.thim.TrustedUrl", "THIM-URL-TYPE", attributeLocation) {
+                        "th:$name is a URL context; use a static @{...} URL or a no.beint.thim.TrustedUrl property"
+                    }
+                } else {
+                    requireDiagnostic(typeName != "no.beint.thim.SafeHtml", "THIM-ATTRIBUTE-TYPE", attributeLocation) {
+                        "SafeHtml is not supported in attribute values"
+                    }
+                    requireDiagnostic(typeName != "no.beint.thim.TrustedUrl", "THIM-ATTRIBUTE-TYPE", attributeLocation) {
+                        "TrustedUrl is only supported in URL attributes"
+                    }
+                }
                 if (value.nullable) {
                     val variable = "attribute${generatedVariable++}"
                     code.statement("var $variable = ${value.code};")
                     code.open("if ($variable != null)")
                     code.static(" $name=\"")
-                    code.statement("output.text($variable);")
+                    code.statement(attributeWrite(name, element, variable))
                     code.static("\"")
                     code.close()
                 } else {
                     code.static(" $name=\"")
-                    code.statement("output.text(${value.code});")
+                    code.statement(attributeWrite(name, element, value.code))
                     code.static("\"")
                 }
             }
@@ -324,6 +362,13 @@ internal class RendererGenerator(
                 code.static(" $name=\"${escapeHtml(expression.substring(1, expression.length - 1))}\"")
             else -> diagnostic("THIM-ATTRIBUTE-EXPRESSION", attributeLocation, "expected a property, message, URL, or quoted literal")
         }
+    }
+
+    private fun attributeWrite(name: String, element: ElementNode, value: String): String = when {
+        name !in urlAttributes -> "output.text($value);"
+        name == "action" -> "output.text(context.requestDataValues().processAction($value.value(), \"${javaString(formMethod(element))}\"));"
+        name == "href" || name == "src" -> "output.text(context.requestDataValues().processUrl($value.value()));"
+        else -> "output.url($value);"
     }
 
     private fun renderExtraHiddenFields(code: CodeWriter) {
@@ -640,6 +685,8 @@ internal class RendererGenerator(
             "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected",
         )
         val controlAttributes = setOf("th:text", "th:utext", "th:each", "th:if", "th:unless", "th:fragment")
+        val urlAttributes = setOf("action", "cite", "data", "formaction", "href", "poster", "src", "srcset")
+        val rawTextElements = setOf("script", "style")
         val unsupportedAttributes = setOf(
             "th:attr", "th:case", "th:classappend", "th:errors", "th:field", "th:inline", "th:insert",
             "th:object", "th:remove", "th:replace", "th:switch", "th:with",

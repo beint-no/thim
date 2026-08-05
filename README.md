@@ -99,11 +99,14 @@ Thim accepts:
 - `th:if` and `th:unless`
 - fixed, build-time `th:fragment` and `th:replace` composition
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
+- `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action`
 - conditional HTML boolean attributes
 - literal `#{message}` expressions with typed arguments
 - `${#locale.language}` for a language attribute
 
-Missing models, properties and messages; unused template-owned messages; unsafe nullable access; locale drift; duplicate messages; invalid message arguments; malformed HTML; and unsupported expressions fail compilation.
+Every dynamic output position is classified during compilation and rendered with the encoder for its context. Dynamic output in JavaScript, CSS and event-handler contexts — `th:on*`, `th:style` and `th:text` on `<script>` or `<style>` — is rejected. Dynamic URL values must be a static `@{...}` URL or an explicit `TrustedUrl` property; `SafeHtml` opts into raw HTML through `th:utext` only and is rejected everywhere else.
+
+Missing models, properties and messages; unused template-owned messages; unsafe nullable access; locale drift; duplicate messages; invalid message arguments; malformed HTML; unsupported output contexts; and unsupported expressions fail compilation.
 
 There is no SpEL or OGNL. Computation belongs in the page model.
 
