@@ -77,6 +77,9 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract Property<Boolean> getFailOnUnusedMessages();
 
     @Input
+    public abstract Property<Boolean> getFailOnUnusedFragments();
+
+    @Input
     public abstract Property<Boolean> getValidateRoutes();
 
     @Input
@@ -154,6 +157,7 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.modelPackages=" + String.join(",", getModelPackages().get()),
                 "thim.strictTemplates=" + getStrictTemplates().get(),
                 "thim.failOnUnusedMessages=" + getFailOnUnusedMessages().get(),
+                "thim.failOnUnusedFragments=" + getFailOnUnusedFragments().get(),
                 "thim.validateRoutes=" + getValidateRoutes().get(),
                 "thim.externalPaths=" + String.join(",", getExternalPaths().get()),
                 "thim.strictModels=" + getStrictModels().get(),

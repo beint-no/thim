@@ -39,6 +39,7 @@ private class ThimProcessor(
         .filter(String::isNotEmpty)
     private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
     private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
+    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"].toBoolean()
     private val strictModels = environment.options["thim.strictModels"].toBoolean()
     private val failOnUnusedProperties = environment.options["thim.failOnUnusedProperties"].toBoolean()
     private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
@@ -90,6 +91,7 @@ private class ThimProcessor(
             }
             if (failOnUnusedMessages) catalog.requireAllUsed()
             if (strictModels) reportUnusedProperties(templates, generator)
+            reportUnusedFragments(expander)
             val documentChecker = DocumentChecker(logger::warn)
             templates.forEach { documentChecker.check(it.nodes) }
             generate(compiled, staticContent.bytes())
@@ -102,6 +104,20 @@ private class ThimProcessor(
             completed = true
         }
         return emptyList()
+    }
+
+    private fun reportUnusedFragments(expander: FragmentExpander) {
+        val unused = expander.unusedFragments()
+        if (unused.isNotEmpty()) {
+            if (failOnUnusedFragments) {
+                diagnostic("THIM-FRAGMENT-UNUSED", null, "fragments never used by a compiled page: ${unused.joinToString(", ")}")
+            } else {
+                unused.forEach { logger.warn("THIM-FRAGMENT-UNUSED fragment '$it' is never used by a compiled page") }
+            }
+        }
+        expander.unusedParameters().forEach {
+            logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
+        }
     }
 
     private fun reportUnusedProperties(templates: List<TemplateSource>, generator: RendererGenerator) {

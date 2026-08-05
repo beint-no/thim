@@ -19,6 +19,8 @@ public abstract class ThimExtension {
 
     public abstract Property<Boolean> getFailOnUnusedMessages();
 
+    public abstract Property<Boolean> getFailOnUnusedFragments();
+
     public abstract Property<Boolean> getValidateRoutes();
 
     public abstract ListProperty<String> getExternalPaths();

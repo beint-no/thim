@@ -34,6 +34,7 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
         extension.getStrictTemplates().convention(false);
         extension.getFailOnUnusedMessages().convention(false);
+        extension.getFailOnUnusedFragments().convention(false);
         extension.getValidateRoutes().convention(true);
         extension.getExternalPaths().convention(java.util.List.of());
         extension.getStrictModels().convention(false);
@@ -67,6 +68,7 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.modelPackages", extension.getModelPackages().map(packages -> String.join(",", packages)));
         ksp.arg("thim.strictTemplates", extension.getStrictTemplates().map(String::valueOf));
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
+        ksp.arg("thim.failOnUnusedFragments", extension.getFailOnUnusedFragments().map(String::valueOf));
         ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
         ksp.arg("thim.externalPaths", extension.getExternalPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
@@ -158,6 +160,7 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getModelPackages().set(extension.getModelPackages());
         task.getStrictTemplates().set(extension.getStrictTemplates());
         task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
+        task.getFailOnUnusedFragments().set(extension.getFailOnUnusedFragments());
         task.getValidateRoutes().set(extension.getValidateRoutes());
         task.getExternalPaths().set(extension.getExternalPaths());
         task.getStrictModels().set(extension.getStrictModels());

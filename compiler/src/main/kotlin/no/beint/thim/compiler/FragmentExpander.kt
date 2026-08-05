@@ -15,8 +15,37 @@ internal class FragmentExpander(
             .toMap()
     }
 
+    private val used = mutableSetOf<String>()
+
     fun expand(template: String, nodes: List<Node>): List<Node> =
         nodes.flatMap { expand(it, template, emptyMap(), emptySet()) }
+
+    fun unusedFragments(): List<String> = fragments.flatMap { (template, defined) ->
+        defined.keys.filterNot { "$template::$it" in used }.map { "$template :: $it" }
+    }
+
+    /**
+     * Parameters of used fragments that never appear in an expression of the fragment
+     * body. Checked syntactically on the definition, so a parameter shadowed by a loop
+     * variable of the same name still counts as used; that inaccuracy only suppresses a
+     * warning. Unused fragments are skipped to keep one finding per fragment.
+     */
+    fun unusedParameters(): List<String> = fragments.flatMap { (template, defined) ->
+        defined.filterKeys { "$template::$it" in used }.flatMap { (name, fragment) ->
+            fragment.parameters
+                .filterNot { parameter -> uses(fragment.element, parameter) }
+                .map { "$template :: $name($it)" }
+        }
+    }
+
+    private fun uses(element: ElementNode, parameter: String): Boolean {
+        val pattern = identifier(parameter)
+        return element.elements().any { node ->
+            node.attributes.any { (attribute, value) ->
+                attribute != "th:fragment" && value != null && pattern.containsMatchIn(value)
+            }
+        }
+    }
 
     private fun expand(
         node: Node,
@@ -46,6 +75,7 @@ internal class FragmentExpander(
         require(key !in stack) { "Recursive fragment composition: ${(stack + key).joinToString(" -> ")}" }
         val fragment = fragments[reference.template]?.get(reference.name)
             ?: error("Fragment '$key' does not exist")
+        used += key
         val arguments = reference.arguments.mapValues { (_, value) -> binding(value, reference.origin, parentBindings) }
         val positional = reference.positional.map { value -> binding(value, reference.origin, parentBindings) }
         require(arguments.isEmpty() || positional.isEmpty()) { "$key: cannot mix named and positional arguments" }
