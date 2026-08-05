@@ -38,6 +38,7 @@ internal class RendererGenerator(
     private var regionalLocales = emptyMap<String, Int>()
     private var languages = emptyMap<String, Int>()
     private var formErrors: ResolvedPath? = null
+    val errors = mutableListOf<String>()
     private val usedRootProperties = mutableMapOf<String, MutableSet<String>>()
 
     fun usedRootProperties(model: KSClassDeclaration): Set<String> =
@@ -73,7 +74,7 @@ internal class RendererGenerator(
                     usedRootProperties.getOrPut(modelName, ::mutableSetOf).add(property)
                 })
                 formErrors = scope.errorsProperty()
-                nodes.forEach { renderNode(it, scope, code, templateName) }
+                nodes.forEach { renderNodeCollecting(it, scope, code, templateName) }
             }
             code.line("}")
         }
@@ -85,6 +86,21 @@ internal class RendererGenerator(
         when (node) {
             is RawNode -> code.static(node.value)
             is ElementNode -> renderElement(node, scope, code, context)
+        }
+    }
+
+    /**
+     * Collects a failing element's diagnostic and keeps compiling its siblings, so one
+     * run reports every error. The partially written renderer is safe to abandon because
+     * generation is skipped whenever any error was collected.
+     */
+    private fun renderNodeCollecting(node: Node, scope: Scope, code: CodeWriter, context: String) {
+        try {
+            renderNode(node, scope, code, context)
+        } catch (exception: IllegalArgumentException) {
+            errors.add(exception.message ?: "Thim compilation failed")
+        } catch (exception: IllegalStateException) {
+            errors.add(exception.message ?: "Thim compilation failed")
         }
     }
 
@@ -257,7 +273,7 @@ internal class RendererGenerator(
         } else if (fieldExpansion?.content != null) {
             code.statement("output.text(${fieldExpansion?.content});")
         } else if (text == null && safeHtml == null) {
-            element.children.forEach { renderNode(it, scope, code, context) }
+            element.children.forEach { renderNodeCollecting(it, scope, code, context) }
         } else if (safeHtml != null) {
             val attributeLocation = attributeLocation(element, "th:utext")
             if (safeHtml.trim().startsWith("#{")) {

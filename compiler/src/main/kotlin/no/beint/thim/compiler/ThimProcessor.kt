@@ -89,6 +89,11 @@ private class ThimProcessor(
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }
+            if (generator.errors.isNotEmpty()) {
+                generator.errors.forEach(logger::error)
+                completed = true
+                return emptyList()
+            }
             if (failOnUnusedMessages) catalog.requireAllUsed()
             if (strictModels) reportUnusedProperties(templates, generator)
             reportUnusedFragments(expander)
