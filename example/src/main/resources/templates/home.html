@@ -19,6 +19,21 @@
             <a href="/health" th:href="@{/health}" th:text="#{home.health}">Health</a>
             <button hx-post="/feedback" th:text="#{home.feedback}">Feedback</button>
         </p>
+        <form th:action="@{/feedback}" method="post" th:object="${feedbackForm}">
+            <input type="text" th:field="*{author}">
+            <span th:errors="*{author}"></span>
+            <textarea th:field="*{message}"></textarea>
+            <input type="number" th:field="*{rating}">
+            <input type="checkbox" th:field="*{subscribe}">
+            <input type="radio" th:field="*{priority}" value="normal">
+            <input type="radio" th:field="*{priority}" value="high">
+            <select th:field="*{category}">
+                <option value="general">General</option>
+                <option value="bug">Bug</option>
+                <option value="idea">Idea</option>
+            </select>
+            <button type="submit" th:text="#{home.send}">Send</button>
+        </form>
     </main>
 </body>
 </html>

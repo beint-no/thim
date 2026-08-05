@@ -2,6 +2,7 @@ package no.beint.thim.compiler
 
 import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.getDeclaredFunctions
+import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Nullability
@@ -35,6 +36,7 @@ internal class RendererGenerator(
     private var generatedVariable = 0
     private var regionalLocales = emptyMap<String, Int>()
     private var languages = emptyMap<String, Int>()
+    private var formErrors: ResolvedPath? = null
 
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
@@ -63,6 +65,7 @@ internal class RendererGenerator(
                     code.statement("var language = switch (context.locale().getLanguage()) { $cases default -> 0; };")
                 }
                 val scope = Scope(model)
+                formErrors = scope.errorsProperty()
                 nodes.forEach { renderNode(it, scope, code, templateName) }
             }
             code.line("}")
@@ -162,7 +165,40 @@ internal class RendererGenerator(
             }
         }
 
+        attributes["th:object"]?.let { objectExpression ->
+            val attributeLocation = attributeLocation(element, "th:object")
+            requireDiagnostic(element.name == "form", "THIM-OBJECT-ELEMENT", attributeLocation) {
+                "th:object is only supported on <form> elements"
+            }
+            requireDiagnostic(!scope.hasSelection(), "THIM-OBJECT-NESTED", attributeLocation) {
+                "th:object cannot be nested inside another th:object form"
+            }
+            val resolved = scope.resolve(
+                Expressions.path(objectExpression, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:object")),
+                diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:object"),
+                attributeLocation,
+            )
+            requireDiagnostic(!resolved.nullable, "THIM-OBJECT-NULLABLE", attributeLocation) {
+                "th:object cannot bind a nullable form object"
+            }
+            requireDiagnostic(resolved.type.declaration is KSClassDeclaration, "THIM-OBJECT-TYPE", attributeLocation) {
+                "th:object must bind a class with properties"
+            }
+            scope = scope.withSelection(Binding(resolved.code, resolved.type, false))
+        }
+
+        if (element.name == "select" && "th:field" in attributes) {
+            val attributeLocation = attributeLocation(element, "th:field")
+            val path = Expressions.selection(
+                requireNotNull(attributes["th:field"]),
+                diagnosticContext(attributeLocation, "THIM-FIELD-SYNTAX", "th:field"),
+            )
+            val resolved = scope.resolveField(path, attributeLocation)
+            scope = scope.withSelectValue(Binding(resolved.code, resolved.type, resolved.nullable))
+        }
+
         val transparent = element.name == "th:block"
+        var fieldExpansion: FieldExpansion? = null
         if (!transparent) {
             code.static("<${element.name}")
             element.attributes.forEach { (name, value) ->
@@ -186,15 +222,29 @@ internal class RendererGenerator(
                     )
                 }
             }
+            if (element.name == "option") renderOptionSelected(element, scope, code)
+            attributes["th:field"]?.let { fieldExpansion = renderField(element, it, scope, code) }
             code.static(">")
+            fieldExpansion?.trailing?.let(code::static)
             if (element.name == "form" && "th:action" in attributes) {
                 renderExtraHiddenFields(code)
             }
         }
+        requireDiagnostic(!transparent || "th:field" !in attributes, "THIM-FIELD-ELEMENT", element.location) {
+            "th:field is only supported on <input> and <textarea> elements"
+        }
 
         val text = attributes["th:text"]
         val safeHtml = attributes["th:utext"]
-        if (text == null && safeHtml == null) {
+        val errorsAttribute = attributes["th:errors"]
+        if (errorsAttribute != null) {
+            requireDiagnostic(text == null && safeHtml == null && "th:field" !in attributes, "THIM-ERRORS-CONFLICT", element.location) {
+                "th:errors replaces the element content; remove th:text, th:utext, and th:field"
+            }
+            renderErrors(errorsAttribute, element, scope, code)
+        } else if (fieldExpansion?.content != null) {
+            code.statement("output.text(${fieldExpansion?.content});")
+        } else if (text == null && safeHtml == null) {
             element.children.forEach { renderNode(it, scope, code, context) }
         } else if (safeHtml != null) {
             val attributeLocation = attributeLocation(element, "th:utext")
@@ -369,6 +419,161 @@ internal class RendererGenerator(
         name == "action" -> "output.text(context.requestDataValues().processAction(context.resolveUrl($value.value()), \"${javaString(formMethod(element))}\"));"
         name == "href" || name == "src" -> "output.text(context.requestDataValues().processUrl(context.resolveUrl($value.value())));"
         else -> "output.text(context.resolveUrl($value.value()));"
+    }
+
+    private data class FieldExpansion(val content: String? = null, val trailing: String? = null)
+
+    /**
+     * Expands th:field="*{path}" into generated id, name, and the bound value. Text-like
+     * inputs get a value attribute (through FormErrors redisplay when the page model has
+     * an errors property), textarea gets its value as content, checkbox and radio get
+     * checked-state, and select gets id/name with option selection handled per option.
+     */
+    private fun renderField(element: ElementNode, expression: String, scope: Scope, code: CodeWriter): FieldExpansion? {
+        val attributeLocation = attributeLocation(element, "th:field")
+        requireDiagnostic(element.name in setOf("input", "textarea", "select"), "THIM-FIELD-ELEMENT", attributeLocation) {
+            "th:field is only supported on <input>, <textarea>, and <select> elements"
+        }
+        val control = when (element.name) {
+            "textarea" -> "textarea"
+            "select" -> "select"
+            else -> {
+                requireDiagnostic("th:type" !in element.attributes, "THIM-FIELD-CONTROL", attributeLocation) {
+                    "th:field requires a static type attribute"
+                }
+                element.attributes["type"]?.trim()?.lowercase() ?: "text"
+            }
+        }
+        val conflicts = buildList {
+            addAll(listOf("id", "name", "th:id", "th:name", "th:value", "th:text", "th:utext"))
+            if (control != "radio") add("value")
+        }.filter { it in element.attributes }
+        requireDiagnostic(conflicts.isEmpty(), "THIM-FIELD-CONFLICT", attributeLocation) {
+            "th:field generates id, name, and the value; remove $conflicts"
+        }
+        requireDiagnostic(control !in unsupportedFieldTypes, "THIM-FIELD-CONTROL", attributeLocation) {
+            "th:field does not support type=\"$control\" yet; supported: ${supportedFieldControls.sorted()}"
+        }
+        requireDiagnostic(control in supportedFieldControls, "THIM-FIELD-CONTROL", attributeLocation) {
+            "th:field does not support type=\"$control\"; supported: ${supportedFieldControls.sorted()}"
+        }
+        requireDiagnostic(control != "select" || "multiple" !in element.attributes, "THIM-FIELD-CONTROL", attributeLocation) {
+            "th:field does not support multiple selects"
+        }
+        val path = Expressions.selection(expression, diagnosticContext(attributeLocation, "THIM-FIELD-SYNTAX", "th:field"))
+        requireDiagnostic(path.segments.none { it.safe }, "THIM-FIELD-NULLABLE", attributeLocation) {
+            "th:field cannot use ?.; form properties must be non-null"
+        }
+        val resolved = scope.resolveField(path, attributeLocation)
+        requireDiagnostic(!resolved.nullable, "THIM-FIELD-NULLABLE", attributeLocation) {
+            "th:field cannot bind a nullable property"
+        }
+        val typeName = resolved.type.declaration.qualifiedName?.asString()
+        val enum = (resolved.type.declaration as? KSClassDeclaration)?.classKind == ClassKind.ENUM_CLASS
+        val shortType = typeName?.substringAfterLast('.')
+        when (control) {
+            "number" -> requireDiagnostic(typeName in numericTypes, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "type=\"number\" requires a numeric property, found $shortType"
+            }
+            "textarea" -> requireDiagnostic(typeName in stringTypes, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "textarea requires a String property, found $shortType"
+            }
+            "checkbox" -> requireDiagnostic(typeName in booleanFieldTypes, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "type=\"checkbox\" requires a Boolean property, found $shortType"
+            }
+            "radio", "select" -> requireDiagnostic(typeName in stringTypes || typeName in numericTypes || enum, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "$control requires a String, numeric, or enum property, found $shortType"
+            }
+            in temporalFieldTypes.keys -> requireDiagnostic(typeName == temporalFieldTypes.getValue(control), "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "type=\"$control\" requires a ${temporalFieldTypes.getValue(control)} property, found $typeName"
+            }
+            else -> requireDiagnostic(typeName in stringTypes || typeName in numericTypes, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
+                "type=\"$control\" requires a String or numeric property, found $shortType"
+            }
+        }
+        val fieldName = path.segments.joinToString(".") { it.name }
+        when (control) {
+            "checkbox" -> {
+                code.static(" id=\"${escapeHtml(fieldName)}\" name=\"${escapeHtml(fieldName)}\" value=\"true\"")
+                code.open("if (${resolved.code})")
+                code.static(" checked")
+                code.close()
+                // Spring resets unchecked checkboxes through the _field marker convention.
+                return FieldExpansion(trailing = "<input type=\"hidden\" name=\"_${escapeHtml(fieldName)}\" value=\"on\">")
+            }
+            "radio" -> {
+                val optionValue = element.attributes["value"]
+                    ?: diagnostic("THIM-FIELD-CONTROL", attributeLocation, "type=\"radio\" with th:field needs a static value attribute")
+                code.static(" id=\"${escapeHtml("$fieldName.$optionValue")}\" name=\"${escapeHtml(fieldName)}\"")
+                code.open("if (\"${javaString(optionValue)}\".equals(String.valueOf(${resolved.code})))")
+                code.static(" checked")
+                code.close()
+                return null
+            }
+            "select" -> {
+                code.static(" id=\"${escapeHtml(fieldName)}\" name=\"${escapeHtml(fieldName)}\"")
+                return null
+            }
+        }
+        // BigDecimal.toString() can produce scientific notation, which type="number" rejects.
+        val fallback = when {
+            typeName == "java.math.BigDecimal" -> "${resolved.code}.toPlainString()"
+            typeName in stringTypes -> resolved.code
+            else -> "String.valueOf(${resolved.code})"
+        }
+        val value = formErrors?.let { "${it.code}.value(\"${javaString(fieldName)}\", $fallback)" } ?: fallback
+        code.static(" id=\"${escapeHtml(fieldName)}\" name=\"${escapeHtml(fieldName)}\"")
+        if (element.name == "textarea") {
+            return FieldExpansion(content = value)
+        }
+        code.static(" value=\"")
+        code.statement("output.text($value);")
+        code.static("\"")
+        return null
+    }
+
+    private fun renderErrors(expression: String, element: ElementNode, scope: Scope, code: CodeWriter) {
+        val attributeLocation = attributeLocation(element, "th:errors")
+        val errors = formErrors
+            ?: diagnostic(
+                "THIM-ERRORS-MODEL",
+                attributeLocation,
+                "th:errors needs a non-null 'errors' property of type no.beint.thim.FormErrors on the page model",
+            )
+        val path = Expressions.selection(expression, diagnosticContext(attributeLocation, "THIM-ERRORS-SYNTAX", "th:errors"))
+        scope.resolveField(path, attributeLocation)
+        val fieldName = path.segments.joinToString(".") { it.name }
+        val messages = "messages${generatedVariable++}"
+        val index = "index${generatedVariable++}"
+        code.statement("var $messages = ${errors.code}.messages(\"${javaString(fieldName)}\");")
+        code.open("for (var $index = 0; $index < $messages.size(); $index++)")
+        code.open("if ($index > 0)")
+        code.static("<br>")
+        code.close()
+        code.statement("output.text($messages.get($index));")
+        code.close()
+    }
+
+    private fun renderOptionSelected(element: ElementNode, scope: Scope, code: CodeWriter) {
+        val bound = scope.selectValue() ?: return
+        val static = element.attributes["value"]
+        val dynamic = element.attributes["th:value"]
+        val comparison = when {
+            dynamic != null -> {
+                val attributeLocation = attributeLocation(element, "th:value")
+                val resolved = scope.resolve(
+                    Expressions.path(dynamic, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:value")),
+                    diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:value"),
+                    attributeLocation,
+                )
+                "String.valueOf(${resolved.code}).equals(String.valueOf(${bound.code}))"
+            }
+            static != null -> "\"${javaString(static)}\".equals(String.valueOf(${bound.code}))"
+            else -> diagnostic("THIM-FIELD-CONTROL", element.location, "<option> inside a th:field select needs a value or th:value attribute")
+        }
+        code.open("if ($comparison)")
+        code.static(" selected")
+        code.close()
     }
 
     private fun renderExtraHiddenFields(code: CodeWriter) {
@@ -565,8 +770,51 @@ internal class RendererGenerator(
     private class Scope(
         private val model: KSClassDeclaration,
         private val bindings: Map<String, Binding> = emptyMap(),
+        private val selection: Binding? = null,
+        private val select: Binding? = null,
     ) {
-        fun withBinding(name: String, binding: Binding) = Scope(model, bindings + (name to binding))
+        fun withBinding(name: String, binding: Binding) = Scope(model, bindings + (name to binding), selection, select)
+
+        fun withSelection(binding: Binding) = Scope(model, bindings, binding, select)
+
+        fun withSelectValue(binding: Binding) = Scope(model, bindings, selection, binding)
+
+        fun hasSelection(): Boolean = selection != null
+
+        fun selectValue(): Binding? = select
+
+        fun errorsProperty(): ResolvedPath? {
+            val property = model.property("errors") ?: return null
+            val typeName = property.type.declaration.qualifiedName?.asString()
+            if (typeName != "no.beint.thim.FormErrors" || property.type.nullability == Nullability.NULLABLE) return null
+            return ResolvedPath("model.${property.accessor}()", property.type, false)
+        }
+
+        fun resolveField(expression: PathExpression, location: SourceLocation?): ResolvedPath {
+            val selected = selection
+                ?: diagnostic("THIM-FIELD-SCOPE", location, "*{...} requires an enclosing <form th:object=\"...\">")
+            var code = selected.code
+            var type = selected.type
+            var nullable = selected.nullable
+            expression.segments.forEach { segment ->
+                requireDiagnostic(!nullable || segment.safe, "THIM-PROPERTY-NULLABLE-DEREFERENCE", location) {
+                    "'${segment.name}' dereferences a nullable value; use ?."
+                }
+                val declaration = type.declaration as? KSClassDeclaration
+                    ?: diagnostic("THIM-PROPERTY-NOT-OBJECT", location, "${type.declaration.qualifiedName?.asString()} has no properties")
+                val property = declaration.property(segment.name)
+                    ?: diagnostic(
+                        "THIM-PROPERTY-UNKNOWN",
+                        location,
+                        "'${segment.name}' is not a property of ${declaration.qualifiedName?.asString()}${declaration.suggestion(segment.name)}",
+                    )
+                val access = "$code.${property.accessor}()"
+                code = if (segment.safe) "($code == null ? null : $access)" else access
+                type = property.type
+                nullable = segment.safe || property.type.nullability == Nullability.NULLABLE
+            }
+            return ResolvedPath(code, type, nullable)
+        }
 
         fun resolve(expression: PathExpression, context: String, location: SourceLocation?): ResolvedPath {
             val first = expression.segments.first()
@@ -745,7 +993,7 @@ internal class RendererGenerator(
             "disabled", "formnovalidate", "hidden", "inert", "ismap", "itemscope", "loop", "multiple",
             "muted", "nomodule", "novalidate", "open", "playsinline", "readonly", "required", "reversed", "selected",
         )
-        val controlAttributes = setOf("th:text", "th:utext", "th:each", "th:if", "th:unless", "th:fragment")
+        val controlAttributes = setOf("th:text", "th:utext", "th:each", "th:if", "th:unless", "th:fragment", "th:object", "th:field", "th:errors")
         val urlAttributes = setOf("action", "cite", "data", "formaction", "href", "poster", "src", "srcset")
         val htmxMethodAttributes = mapOf(
             "hx-get" to "GET",
@@ -773,8 +1021,25 @@ internal class RendererGenerator(
         }
         val rawTextElements = setOf("script", "style")
         val unsupportedAttributes = setOf(
-            "th:attr", "th:case", "th:classappend", "th:errors", "th:field", "th:inline", "th:insert",
-            "th:object", "th:remove", "th:replace", "th:switch", "th:with",
+            "th:attr", "th:case", "th:classappend", "th:inline", "th:insert",
+            "th:remove", "th:replace", "th:switch", "th:with",
+        )
+        val textFieldTypes = setOf("text", "hidden", "email", "password", "search", "tel", "url")
+        val unsupportedFieldTypes = setOf("file", "color", "range", "month", "week")
+        val temporalFieldTypes = mapOf(
+            "date" to "java.time.LocalDate",
+            "time" to "java.time.LocalTime",
+            "datetime-local" to "java.time.LocalDateTime",
+        )
+        val supportedFieldControls =
+            textFieldTypes + temporalFieldTypes.keys + setOf("number", "textarea", "select", "checkbox", "radio")
+        val booleanFieldTypes = setOf("kotlin.Boolean", "java.lang.Boolean", "boolean")
+        val stringTypes = setOf("kotlin.String", "java.lang.String")
+        val numericTypes = setOf(
+            "kotlin.Int", "kotlin.Long", "kotlin.Short", "kotlin.Byte", "kotlin.Double", "kotlin.Float",
+            "java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte", "java.lang.Double",
+            "java.lang.Float", "int", "long", "short", "byte", "double", "float",
+            "java.math.BigDecimal", "java.math.BigInteger",
         )
 
         fun javaString(value: String): String = buildString(value.length) {

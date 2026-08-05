@@ -30,7 +30,18 @@ internal object Expressions {
         require(trimmed.startsWith("\${") && trimmed.endsWith('}')) {
             "$context: expected one \${property} expression; move interpolation and logic to the page model"
         }
-        val body = trimmed.substring(2, trimmed.length - 1).trim()
+        return segments(trimmed.substring(2, trimmed.length - 1).trim(), value, context)
+    }
+
+    fun selection(value: String, context: String): PathExpression {
+        val trimmed = value.trim()
+        require(trimmed.startsWith("*{") && trimmed.endsWith('}')) {
+            "$context: expected one *{property} field expression"
+        }
+        return segments(trimmed.substring(2, trimmed.length - 1).trim(), value, context)
+    }
+
+    private fun segments(body: String, value: String, context: String): PathExpression {
         require(body.isNotEmpty()) { "$context: empty expression" }
 
         val segments = mutableListOf<PathSegment>()

@@ -1,5 +1,7 @@
 package no.beint.thim.example
 
+import no.beint.thim.FieldError
+import no.beint.thim.FormErrors
 import no.beint.thim.example.page.HomePage
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
@@ -21,6 +23,21 @@ data class Feature(
     val description: String,
 )
 
+data class FeedbackForm(
+    val author: String,
+    val message: String,
+    val rating: Int,
+    // Only the checkbox may be absent from a post; a default on every parameter would
+    // make Kotlin emit a no-arg constructor, which Spring would pick over value binding.
+    val subscribe: Boolean = false,
+    val priority: String,
+    val category: String,
+) {
+    companion object {
+        fun empty() = FeedbackForm(author = "", message = "", rating = 5, priority = "normal", category = "general")
+    }
+}
+
 @Controller
 class HomeCtrl {
     @GetMapping("/")
@@ -33,6 +50,7 @@ class HomeCtrl {
             Feature("Fast", "Generated code writes directly to the HTTP response."),
         ),
         showFooter = true,
+        feedbackForm = FeedbackForm.empty(),
     )
 
     @ResponseBody
@@ -43,7 +61,16 @@ class HomeCtrl {
     @GetMapping("/feature/{name}")
     fun feature(@PathVariable name: String) = "Feature: $name"
 
-    @ResponseBody
     @PostMapping("/feedback")
-    fun feedback() = "Thanks!"
+    fun feedback(form: FeedbackForm): HomePage {
+        val errors = if (form.author.isBlank()) {
+            FormErrors(listOf(FieldError("author", "Author is required", form.author)))
+        } else {
+            FormErrors.NONE
+        }
+        return home().copy(
+            feedbackForm = if (errors.isEmpty()) FeedbackForm.empty() else form,
+            errors = errors,
+        )
+    }
 }

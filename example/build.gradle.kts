@@ -20,6 +20,7 @@ tasks.withType<KotlinJvmCompile>().configureEach {
 }
 
 dependencies {
+    implementation(kotlin("reflect"))
     implementation(project(":spring"))
     implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.0")
     ksp(project(":compiler"))
