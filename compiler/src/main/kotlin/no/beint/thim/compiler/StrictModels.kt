@@ -64,8 +64,15 @@ internal fun modelProperties(declaration: KSClassDeclaration): List<ModelPropert
 internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>) {
     private val visited = mutableSetOf<String>()
 
+    /** Findings across all checked models, collected so one run reports every violation. */
+    val problems = mutableListOf<String>()
+
     fun check(model: KSClassDeclaration) {
         checkClass(model, "page model '${model.qualifiedName?.asString()}'")
+    }
+
+    private fun report(code: String, message: String) {
+        problems += "$code $message"
     }
 
     private fun checkClass(declaration: KSClassDeclaration, root: String) {
@@ -73,46 +80,43 @@ internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>)
         if (!visited.add(name)) return
         declaration.annotations.forEach { annotation ->
             val annotationName = annotation.annotationType.resolve().declaration.qualifiedName?.asString()
-            requireDiagnostic(annotationName !in forbiddenAnnotations, "THIM-MODEL-FORBIDDEN-TYPE", null) {
-                "$root: $name is annotated with @$annotationName; strict page models cannot reference persistence-managed types"
+            if (annotationName in forbiddenAnnotations) {
+                report("THIM-MODEL-FORBIDDEN-TYPE", "$root: $name is annotated with @$annotationName; strict page models cannot reference persistence-managed types")
             }
         }
         modelProperties(declaration).forEach { property ->
-            requireDiagnostic(!property.mutable, "THIM-MODEL-MUTABLE", null) {
-                "$root: $name.${property.name} is mutable; strict page models must be immutable"
+            if (property.mutable) {
+                report("THIM-MODEL-MUTABLE", "$root: $name.${property.name} is mutable; strict page models must be immutable")
             }
             checkType(name, property.name, property.type, root)
         }
         declaration.getDeclaredFunctions().filterNot { it.isPrivate() }.forEach { function ->
             val functionName = function.simpleName.asString()
-            requireDiagnostic(
-                !(functionName.startsWith("set") && functionName.length > 3 && functionName[3].isUpperCase() && function.parameters.size == 1),
-                "THIM-MODEL-MUTABLE",
-                null,
-            ) {
-                "$root: $name.$functionName() makes the model mutable; strict page models must be immutable"
+            if (functionName.startsWith("set") && functionName.length > 3 && functionName[3].isUpperCase() && function.parameters.size == 1) {
+                report("THIM-MODEL-MUTABLE", "$root: $name.$functionName() makes the model mutable; strict page models must be immutable")
             }
         }
     }
 
     private fun checkType(owner: String, property: String, type: KSType, root: String) {
         val typeName = type.declaration.qualifiedName?.asString() ?: return
-        requireDiagnostic(typeName !in dynamicTypes, "THIM-MODEL-DYNAMIC-TYPE", null) {
-            "$root: $owner.$property is typed $typeName; strict page models need concrete types"
+        if (typeName in dynamicTypes) {
+            report("THIM-MODEL-DYNAMIC-TYPE", "$root: $owner.$property is typed $typeName; strict page models need concrete types")
+            return
         }
         val supertypes = sequenceOf(type) + ((type.declaration as? KSClassDeclaration)?.getAllSuperTypes() ?: emptySequence())
         val names = supertypes.mapNotNull { it.declaration.qualifiedName?.asString() }.toSet()
-        requireDiagnostic(names.none { it in mapTypes }, "THIM-MODEL-DYNAMIC-TYPE", null) {
-            "$root: $owner.$property is map-shaped ($typeName); strict page models need typed properties, not dynamic maps"
+        if (names.any { it in mapTypes }) {
+            report("THIM-MODEL-DYNAMIC-TYPE", "$root: $owner.$property is map-shaped ($typeName); strict page models need typed properties, not dynamic maps")
+            return
         }
         val iterable = supertypes.firstOrNull { it.declaration.qualifiedName?.asString() in iterableTypes }
         if (iterable != null) {
             val element = iterable.arguments.firstOrNull()?.type?.resolve()
-                ?: diagnostic(
-                    "THIM-MODEL-DYNAMIC-TYPE",
-                    null,
-                    "$root: $owner.$property is a raw collection; strict page models need a typed element",
-                )
+            if (element == null) {
+                report("THIM-MODEL-DYNAMIC-TYPE", "$root: $owner.$property is a raw collection; strict page models need a typed element")
+                return
+            }
             checkType(owner, "$property element", element, root)
             return
         }

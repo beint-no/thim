@@ -12,6 +12,9 @@ package no.beint.thim.compiler
 internal class DocumentChecker(private val warn: (String) -> Unit) {
     private data class DeclaredId(val location: SourceLocation, val conditional: Boolean)
 
+    /** Findings across all checked pages, collected so one run reports every violation. */
+    val problems = mutableListOf<String>()
+
     fun check(nodes: List<Node>) {
         val root = nodes.firstOrNull { it is ElementNode } as? ElementNode ?: return
         if (root.name != "html") return
@@ -19,11 +22,15 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         nodes.forEach { collectIds(it, inLoop = false, conditional = false, ids) }
         ids.forEach { (id, declarations) ->
             val unconditional = declarations.filter { !it.conditional }
-            requireDiagnostic(unconditional.size <= 1, "THIM-ID-DUPLICATE", unconditional.getOrNull(1)?.location) {
-                "id \"$id\" is already declared at ${unconditional.first().location}"
+            unconditional.drop(1).forEach { declaration ->
+                report("THIM-ID-DUPLICATE", declaration.location, "id \"$id\" is already declared at ${unconditional.first().location}")
             }
         }
         nodes.forEach { checkReferences(it, ids.keys) }
+    }
+
+    private fun report(code: String, location: SourceLocation, message: String) {
+        problems += "$location $code $message"
     }
 
     private fun collectIds(
@@ -67,12 +74,12 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         node.attributes["href"]?.let { href ->
             if ("th:href" !in node.attributes && href.startsWith("#")) {
                 val target = href.substring(1)
-                requireDiagnostic(
-                    target.isEmpty() || target == "top" || target in ids,
-                    "THIM-REFERENCE-UNKNOWN",
-                    node.attributeLocations["href"] ?: node.location,
-                ) {
-                    "href=\"#$target\" has no matching id in this page"
+                if (target.isNotEmpty() && target != "top" && target !in ids) {
+                    report(
+                        "THIM-REFERENCE-UNKNOWN",
+                        node.attributeLocations["href"] ?: node.location,
+                        "href=\"#$target\" has no matching id in this page",
+                    )
                 }
             }
         }
@@ -84,8 +91,12 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         val value = node.attributes[attribute] ?: return
         val tokens = if (list) value.split(whitespace).filter(String::isNotEmpty) else listOf(value.trim())
         tokens.forEach { token ->
-            requireDiagnostic(token in ids, "THIM-REFERENCE-UNKNOWN", node.attributeLocations[attribute] ?: node.location) {
-                "$attribute=\"$token\" has no matching id in this page"
+            if (token !in ids) {
+                report(
+                    "THIM-REFERENCE-UNKNOWN",
+                    node.attributeLocations[attribute] ?: node.location,
+                    "$attribute=\"$token\" has no matching id in this page",
+                )
             }
         }
     }

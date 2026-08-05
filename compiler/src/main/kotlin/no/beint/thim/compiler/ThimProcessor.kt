@@ -76,7 +76,8 @@ private class ThimProcessor(
             val problems = mutableListOf<String>()
             if (strictModels) {
                 val checker = StrictModelChecker(forbiddenModelAnnotations)
-                templates.forEach { template -> collect(problems) { checker.check(template.model) } }
+                templates.forEach { checker.check(it.model) }
+                problems += checker.problems
             }
 
             val catalog = MessageCatalog.load(messagesDirectory)
@@ -95,7 +96,8 @@ private class ThimProcessor(
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
             collect(problems) { reportUnusedFragments(expander) }
             val documentChecker = DocumentChecker(logger::warn)
-            templates.forEach { template -> collect(problems) { documentChecker.check(template.nodes) } }
+            templates.forEach { documentChecker.check(it.nodes) }
+            problems += documentChecker.problems
             if (problems.isNotEmpty()) {
                 problems.forEach(logger::error)
                 completed = true
@@ -128,6 +130,9 @@ private class ThimProcessor(
     }
 
     private fun reportUnusedFragments(expander: FragmentExpander) {
+        expander.unusedParameters().forEach {
+            logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
+        }
         val unused = expander.unusedFragments()
         if (unused.isNotEmpty()) {
             if (failOnUnusedFragments) {
@@ -135,9 +140,6 @@ private class ThimProcessor(
             } else {
                 unused.forEach { logger.warn("THIM-FRAGMENT-UNUSED fragment '$it' is never used by a compiled page") }
             }
-        }
-        expander.unusedParameters().forEach {
-            logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
         }
     }
 
