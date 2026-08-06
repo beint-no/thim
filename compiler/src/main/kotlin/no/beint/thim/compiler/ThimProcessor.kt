@@ -49,7 +49,7 @@ private class ThimProcessor(
         ?.toSet()
         ?: defaultForbiddenModelAnnotations
     private val validateRoutes = environment.options["thim.validateRoutes"]?.toBoolean() ?: true
-    private val externalPaths = environment.options["thim.externalPaths"]
+    private val trustedPaths = environment.options["thim.trustedPaths"]
         .orEmpty()
         .split(',')
         .map(String::trim)
@@ -82,7 +82,7 @@ private class ThimProcessor(
 
             val catalog = MessageCatalog.load(messagesDirectory)
             val routeCatalog = if (validateRoutes) {
-                RouteCatalog.load(resolver, externalPaths)
+                RouteCatalog.load(resolver, trustedPaths)
             } else {
                 RouteCatalog(emptyList(), emptyList())
             }

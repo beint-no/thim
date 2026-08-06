@@ -17,16 +17,18 @@ internal data class Route(val httpMethods: Set<String>, val pattern: String, val
 
 internal class RouteCatalog(
     private val routes: List<Route>,
-    private val externalPrefixes: List<String>,
+    trustedPaths: List<String>,
 ) {
+    private val trustedPatterns: List<List<RouteSegment>> = trustedPaths.map(::trustedPattern)
+
     fun isEmpty(): Boolean = routes.isEmpty()
 
     fun check(path: String, httpMethod: String, location: SourceLocation?, subject: String) {
         if (routes.isEmpty()) return
         val plain = path.substringBefore('?').substringBefore('#')
         if (!plain.startsWith('/')) return
-        if (externalPrefixes.any { plain == it || plain.startsWith("$it/") }) return
         val parts = pathParts(plain)
+        if (trustedPatterns.any { matches(it, parts) }) return
         if (parts.lastOrNull()?.let { !it.variable && '.' in it.value } == true) return
         val matching = routes.filter { matches(it.segments, parts) }
         requireDiagnostic(matching.isNotEmpty(), "THIM-URL-UNKNOWN-ROUTE", location) {
@@ -49,6 +51,35 @@ internal class RouteCatalog(
         }.distinct().sorted()
         val shown = patterns.take(8).joinToString(", ")
         return if (patterns.size > 8) "$shown, …" else shown
+    }
+
+    /**
+     * An trustedPaths entry is matched segment by segment: a plain path matches only
+     * itself, '*' matches exactly one segment, and a final '**' matches the path and
+     * any subtree below it. Malformed entries fail compilation instead of silently
+     * never matching.
+     */
+    private fun trustedPattern(entry: String): List<RouteSegment> {
+        val trimmed = entry.trim().trimEnd('/').ifEmpty { "/" }
+        require(trimmed.startsWith('/')) {
+            "thim.trustedPaths entry '$entry' must start with '/'"
+        }
+        val segments = trimmed.trim('/').split('/').filter(String::isNotEmpty)
+        return segments.mapIndexed { index, segment ->
+            when {
+                segment == "**" -> {
+                    require(index == segments.lastIndex) {
+                        "thim.trustedPaths entry '$entry': '**' is only supported as the final segment"
+                    }
+                    RouteSegment.TailWildcard
+                }
+                segment == "*" -> RouteSegment.Variable
+                '*' in segment -> throw IllegalArgumentException(
+                    "thim.trustedPaths entry '$entry': wildcards must be a whole segment ('*' or a final '**')",
+                )
+                else -> RouteSegment.Literal(segment)
+            }
+        }
     }
 
     private data class PathPart(val value: String, val variable: Boolean)
@@ -81,7 +112,7 @@ internal class RouteCatalog(
             "$MAPPING_PACKAGE.RequestMapping" to emptySet(),
         )
 
-        fun load(resolver: Resolver, externalPaths: List<String>): RouteCatalog {
+        fun load(resolver: Resolver, trustedPaths: List<String>): RouteCatalog {
             val routes = mutableListOf<Route>()
             mappingAnnotations.forEach { (annotationName, httpMethods) ->
                 resolver.getSymbolsWithAnnotation(annotationName)
@@ -98,7 +129,7 @@ internal class RouteCatalog(
                         }
                     }
             }
-            return RouteCatalog(routes, externalPaths.map { it.trimEnd('/') }.filter(String::isNotEmpty))
+            return RouteCatalog(routes, trustedPaths)
         }
 
         private fun KSAnnotation.matches(qualifiedName: String): Boolean =

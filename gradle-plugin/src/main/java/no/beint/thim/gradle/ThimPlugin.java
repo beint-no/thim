@@ -36,7 +36,7 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getFailOnUnusedMessages().convention(false);
         extension.getFailOnUnusedFragments().convention(false);
         extension.getValidateRoutes().convention(true);
-        extension.getExternalPaths().convention(java.util.List.of());
+        extension.getTrustedPaths().convention(java.util.List.of());
         extension.getStrictModels().convention(false);
         extension.getFailOnUnusedProperties().convention(false);
         extension.getForbiddenModelAnnotations().convention(java.util.List.of(
@@ -70,7 +70,7 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
         ksp.arg("thim.failOnUnusedFragments", extension.getFailOnUnusedFragments().map(String::valueOf));
         ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
-        ksp.arg("thim.externalPaths", extension.getExternalPaths().map(paths -> String.join(",", paths)));
+        ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.failOnUnusedProperties", extension.getFailOnUnusedProperties().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
@@ -162,7 +162,7 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
         task.getFailOnUnusedFragments().set(extension.getFailOnUnusedFragments());
         task.getValidateRoutes().set(extension.getValidateRoutes());
-        task.getExternalPaths().set(extension.getExternalPaths());
+        task.getTrustedPaths().set(extension.getTrustedPaths());
         task.getStrictModels().set(extension.getStrictModels());
         task.getFailOnUnusedProperties().set(extension.getFailOnUnusedProperties());
         task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());

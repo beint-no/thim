@@ -23,7 +23,7 @@ public abstract class ThimExtension {
 
     public abstract Property<Boolean> getValidateRoutes();
 
-    public abstract ListProperty<String> getExternalPaths();
+    public abstract ListProperty<String> getTrustedPaths();
 
     public abstract Property<Boolean> getStrictModels();
 
