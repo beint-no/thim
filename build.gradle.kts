@@ -15,7 +15,7 @@ plugins {
 
 allprojects {
     group = "no.beint.thim"
-    version = "0.4.14"
+    version = "0.4.15"
 }
 
 subprojects {
