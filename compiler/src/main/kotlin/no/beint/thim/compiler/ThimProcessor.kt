@@ -9,6 +9,7 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFile
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -103,7 +104,7 @@ private class ThimProcessor(
                 completed = true
                 return emptyList()
             }
-            generate(compiled, staticContent.bytes())
+            generate(compiled, staticContent.bytes(), routeCatalog.files)
             completed = true
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Thim compilation failed")
@@ -154,8 +155,8 @@ private class ThimProcessor(
         }
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray) {
-        val files = compiled.mapNotNull { it.model.containingFile }.distinct().toTypedArray()
+    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeFiles: List<KSFile>) {
+        val files = (compiled.mapNotNull { it.model.containingFile } + routeFiles).distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
         codeGenerator.createNewFile(
             dependencies = dependencies,

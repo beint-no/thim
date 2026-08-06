@@ -4,6 +4,7 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
+import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 
@@ -18,12 +19,24 @@ internal data class Route(val httpMethods: Set<String>, val pattern: String, val
 internal class RouteCatalog(
     private val routes: List<Route>,
     trustedPaths: List<String>,
+    /**
+     * Source files the routes were extracted from. They must be declared as dependencies
+     * of the generated output, or incremental KSP runs rebuild the route table from only
+     * the dirty files and report spurious unknown routes.
+     */
+    val files: List<KSFile> = emptyList(),
 ) {
     private val trustedPatterns: List<List<RouteSegment>> = trustedPaths.map(::trustedPattern)
 
     fun isEmpty(): Boolean = routes.isEmpty()
 
-    fun check(path: String, httpMethod: String, location: SourceLocation?, subject: String) {
+    fun check(
+        path: String,
+        httpMethod: String,
+        location: SourceLocation?,
+        subject: String,
+        enumVariables: Map<String, List<String>> = emptyMap(),
+    ) {
         if (routes.isEmpty()) return
         val plain = path.substringBefore('?').substringBefore('#')
         if (!plain.startsWith('/')) return
@@ -31,6 +44,10 @@ internal class RouteCatalog(
         if (trustedPatterns.any { matches(it, parts) }) return
         if (parts.lastOrNull()?.let { !it.variable && '.' in it.value } == true) return
         val matching = routes.filter { matches(it.segments, parts) }
+        if (matching.isEmpty() && enumVariables.isNotEmpty()) {
+            checkEnumExpansion(parts, enumVariables, httpMethod, location, subject)
+            return
+        }
         requireDiagnostic(matching.isNotEmpty(), "THIM-URL-UNKNOWN-ROUTE", location) {
             "$subject: no controller mapping matches '$plain'; known routes: ${known()}"
         }
@@ -44,6 +61,46 @@ internal class RouteCatalog(
         }
     }
 
+    /**
+     * Fallback for applications that map one literal route per enum constant instead of
+     * a parameterized route. The closed enum set proves coverage: a constant without a
+     * matching route fails compilation.
+     */
+    private fun checkEnumExpansion(
+        parts: List<PathPart>,
+        enumVariables: Map<String, List<String>>,
+        httpMethod: String,
+        location: SourceLocation?,
+        subject: String,
+    ) {
+        var combinations: List<Map<String, String>> = listOf(emptyMap())
+        enumVariables.forEach { (variable, constants) ->
+            combinations = combinations.flatMap { combination ->
+                constants.map { constant -> combination + (variable to constant) }
+            }
+        }
+        val missing = combinations.mapNotNull { combination ->
+            val concrete = parts.map { part ->
+                combination[variableName(part)]?.let { PathPart(it, variable = false) } ?: part
+            }
+            val served = routes.any {
+                matches(it.segments, concrete) && (it.httpMethods.isEmpty() || httpMethod in it.httpMethods)
+            }
+            if (served) {
+                null
+            } else {
+                val values = combination.entries.joinToString(", ") { "${it.key}=${it.value}" }
+                "$values ('/${concrete.joinToString("/") { it.value }}')"
+            }
+        }
+        requireDiagnostic(missing.isEmpty(), "THIM-URL-ENUM-ROUTE", location) {
+            "$subject: no $httpMethod controller mapping for ${missing.joinToString("; ")}"
+        }
+    }
+
+    private fun variableName(part: PathPart): String? =
+        if (part.variable) part.value.removeSurrounding("{", "}") else null
+
     private fun known(): String {
         val patterns = routes.map { route ->
             val methods = route.httpMethods.sorted().joinToString(",").ifEmpty { "any" }
@@ -54,7 +111,7 @@ internal class RouteCatalog(
     }
 
     /**
-     * An trustedPaths entry is matched segment by segment: a plain path matches only
+     * A trustedPaths entry is matched segment by segment: a plain path matches only
      * itself, '*' matches exactly one segment, and a final '**' matches the path and
      * any subtree below it. Malformed entries fail compilation instead of silently
      * never matching.
@@ -114,6 +171,7 @@ internal class RouteCatalog(
 
         fun load(resolver: Resolver, trustedPaths: List<String>): RouteCatalog {
             val routes = mutableListOf<Route>()
+            val files = mutableListOf<KSFile>()
             mappingAnnotations.forEach { (annotationName, httpMethods) ->
                 resolver.getSymbolsWithAnnotation(annotationName)
                     .filterIsInstance<KSFunctionDeclaration>()
@@ -121,6 +179,7 @@ internal class RouteCatalog(
                         val annotation = function.annotations.first { it.matches(annotationName) }
                         val methods = httpMethods.ifEmpty { requestMethods(annotation) }
                         val prefixes = classPrefixes(function)
+                        function.containingFile?.let(files::add)
                         paths(annotation).forEach { path ->
                             prefixes.forEach { prefix ->
                                 val pattern = combine(prefix, path)
@@ -129,7 +188,7 @@ internal class RouteCatalog(
                         }
                     }
             }
-            return RouteCatalog(routes, trustedPaths)
+            return RouteCatalog(routes, trustedPaths, files.distinct())
         }
 
         private fun KSAnnotation.matches(qualifiedName: String): Boolean =

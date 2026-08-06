@@ -368,7 +368,7 @@ internal class RendererGenerator(
             }
             expression.trim().startsWith("@{") -> {
                 val expressionUrl = Expressions.url(expression, diagnosticContext(attributeLocation, "THIM-URL-SYNTAX", "th:$name"))
-                checkRoute(expressionUrl.path, name, element, attributeLocation)
+                checkRoute(expressionUrl, name, element, scope, attributeLocation)
                 code.static(" $name=\"")
                 val url = urlCode(expressionUrl, scope, attributeLocation, name)
                 when (name) {
@@ -496,7 +496,7 @@ internal class RendererGenerator(
             "th:field cannot bind a nullable property"
         }
         val typeName = resolved.type.declaration.qualifiedName?.asString()
-        val enum = (resolved.type.declaration as? KSClassDeclaration)?.classKind == ClassKind.ENUM_CLASS
+        val enum = resolved.type.isEnum()
         val shortType = typeName?.substringAfterLast('.')
         when (control) {
             "number" -> requireDiagnostic(typeName in numericTypes, "THIM-FIELD-VALUE-TYPE", attributeLocation) {
@@ -737,18 +737,42 @@ internal class RendererGenerator(
             "URL parameter '$parameterName' cannot be a ${typeName?.substringAfterLast('.')}"
         }
         val encoder = if (path) "pathSegment" else "query"
-        return "no.beint.thim.UrlEncoding.$encoder(${resolved.code})"
+        // Enum values render through their stable name, not a possibly overridden toString().
+        val access = if (resolved.type.isEnum()) "${resolved.code}.name()" else resolved.code
+        return "no.beint.thim.UrlEncoding.$encoder($access)"
     }
 
-    private fun checkRoute(path: String, name: String, element: ElementNode, location: SourceLocation?) {
+    private fun checkRoute(url: UrlExpression, name: String, element: ElementNode, scope: Scope, location: SourceLocation?) {
         val method = when {
             name == "href" -> "GET"
             name == "action" -> formMethod(element).uppercase()
             name in htmxMethodAttributes -> htmxMethodAttributes.getValue(name)
             else -> return
         }
-        routes.check(path, method, location, "th:$name")
+        routes.check(url.path, method, location, "th:$name", enumPathVariables(url, scope, location, name))
     }
+
+    /** Path variables bound to an enum property, mapped to the enum's constant names. */
+    private fun enumPathVariables(
+        url: UrlExpression,
+        scope: Scope,
+        location: SourceLocation?,
+        name: String,
+    ): Map<String, List<String>> = url.pathVariables.mapNotNull { variable ->
+        val property = url.parameter(variable).value as? UrlProperty ?: return@mapNotNull null
+        val resolved = scope.resolve(
+            property.path,
+            diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "th:$name"),
+            location,
+        )
+        val declaration = resolved.type.declaration as? KSClassDeclaration ?: return@mapNotNull null
+        if (declaration.classKind != ClassKind.ENUM_CLASS) return@mapNotNull null
+        variable to declaration.declarations
+            .filterIsInstance<KSClassDeclaration>()
+            .filter { it.classKind == ClassKind.ENUM_ENTRY }
+            .map { it.simpleName.asString() }
+            .toList()
+    }.toMap()
 
     private fun attributeLocation(element: ElementNode, name: String): SourceLocation =
         element.attributeLocations[name] ?: element.location
@@ -1103,3 +1127,6 @@ internal class RendererGenerator(
 
 private fun KSType.isBoolean(): Boolean =
     declaration.qualifiedName?.asString() in setOf("kotlin.Boolean", "java.lang.Boolean", "boolean")
+
+private fun KSType.isEnum(): Boolean =
+    (declaration as? KSClassDeclaration)?.classKind == ClassKind.ENUM_CLASS
