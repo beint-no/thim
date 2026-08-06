@@ -115,10 +115,6 @@ private class ThimProcessor(
         return emptyList()
     }
 
-    /**
-     * Runs one validation phase and stores its failure instead of aborting, so a single
-     * build reports the findings of every phase together.
-     */
     private inline fun collect(problems: MutableList<String>, block: () -> Unit) {
         try {
             block()

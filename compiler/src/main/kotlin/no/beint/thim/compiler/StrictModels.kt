@@ -58,13 +58,11 @@ internal fun modelProperties(declaration: KSClassDeclaration): List<ModelPropert
 
 /**
  * Enforces the strict closed-world contract on a page model and every user type reachable
- * from it through properties: immutable data, concrete types, no persistence-managed
- * classes, and typed materialized collections.
+ * from it through properties.
  */
 internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>) {
     private val visited = mutableSetOf<String>()
 
-    /** Findings across all checked models, collected so one run reports every violation. */
     val problems = mutableListOf<String>()
 
     fun check(model: KSClassDeclaration) {

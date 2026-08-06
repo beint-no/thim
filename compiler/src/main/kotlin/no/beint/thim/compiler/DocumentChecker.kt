@@ -7,12 +7,13 @@ package no.beint.thim.compiler
  * already validated and their generated ids can be derived syntactically. Ids declared
  * under th:if, th:unless, or th:each count as declared for references but never as
  * provable duplicates; a static id repeated by a loop is only likely to duplicate, so it
- * warns instead of failing.
+ * warns instead of failing. Dynamic th:id values are unknowable at compile time and
+ * contribute nothing here: a static reference must resolve to a static or generated id,
+ * and duplication among static ids is an error regardless of what th:id renders.
  */
 internal class DocumentChecker(private val warn: (String) -> Unit) {
     private data class DeclaredId(val location: SourceLocation, val conditional: Boolean)
 
-    /** Findings across all checked pages, collected so one run reports every violation. */
     val problems = mutableListOf<String>()
 
     fun check(nodes: List<Node>) {
@@ -42,12 +43,16 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         if (node !is ElementNode) return
         val loop = inLoop || "th:each" in node.attributes
         val branch = conditional || "th:if" in node.attributes || "th:unless" in node.attributes
-        node.attributes["id"]?.takeIf(String::isNotEmpty)?.let { id ->
-            val location = node.attributeLocations["id"] ?: node.location
-            if (loop) {
-                warn("$location THIM-EACH-STATIC-ID id \"$id\" inside th:each repeats every iteration; use data-* attributes or move the id outside the loop")
+        // A th:id override replaces the static id at render time, so the static value
+        // neither declares an id nor repeats in a loop.
+        if ("th:id" !in node.attributes) {
+            node.attributes["id"]?.takeIf(String::isNotEmpty)?.let { id ->
+                val location = node.attributeLocations["id"] ?: node.location
+                if (loop) {
+                    warn("$location THIM-EACH-STATIC-ID id \"$id\" inside th:each repeats every iteration; use data-* attributes or move the id outside the loop")
+                }
+                ids.getOrPut(id, ::mutableListOf).add(DeclaredId(location, branch || loop))
             }
-            ids.getOrPut(id, ::mutableListOf).add(DeclaredId(location, branch || loop))
         }
         node.attributes["th:field"]?.let { field ->
             generatedFieldId(node, field)?.let { id ->

@@ -90,9 +90,8 @@ internal class RendererGenerator(
     }
 
     /**
-     * Collects a failing element's diagnostic and keeps compiling its siblings, so one
-     * run reports every error. The partially written renderer is safe to abandon because
-     * generation is skipped whenever any error was collected.
+     * The partially written renderer is safe to abandon because generation is skipped
+     * whenever any error was collected.
      */
     private fun renderNodeCollecting(node: Node, scope: Scope, code: CodeWriter, context: String) {
         try {
@@ -1064,7 +1063,7 @@ internal class RendererGenerator(
         }
         val rawTextElements = setOf("script", "style")
         val unsupportedAttributes = setOf(
-            "th:attr", "th:case", "th:classappend", "th:id", "th:inline", "th:insert",
+            "th:attr", "th:case", "th:classappend", "th:inline", "th:insert",
             "th:remove", "th:replace", "th:switch", "th:with",
         )
         val textFieldTypes = setOf("text", "hidden", "email", "password", "search", "tel", "url")
