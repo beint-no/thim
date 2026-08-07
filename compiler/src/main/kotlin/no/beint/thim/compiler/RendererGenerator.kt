@@ -370,7 +370,7 @@ internal class RendererGenerator(
                 val expressionUrl = Expressions.url(expression, diagnosticContext(attributeLocation, "THIM-URL-SYNTAX", "th:$name"))
                 checkRoute(expressionUrl, name, element, scope, attributeLocation)
                 code.static(" $name=\"")
-                val url = urlCode(expressionUrl, scope, attributeLocation, name)
+                val url = urlCode(expressionUrl, scope, attributeLocation, name, code)
                 when (name) {
                     "action" -> {
                         val method = formMethod(element)
@@ -679,7 +679,13 @@ internal class RendererGenerator(
         code.static(if (raw) pattern.substring(start) else escapeHtml(pattern.substring(start)))
     }
 
-    private fun urlCode(url: UrlExpression, scope: Scope, location: SourceLocation?, name: String): String {
+    private fun urlCode(
+        url: UrlExpression,
+        scope: Scope,
+        location: SourceLocation?,
+        name: String,
+        code: CodeWriter,
+    ): String {
         val pieces = mutableListOf<String>()
         val static = StringBuilder()
         fun flush() {
@@ -696,25 +702,47 @@ internal class RendererGenerator(
                 is UrlLiteral -> static.append(encodeUrl(value.value))
                 is UrlProperty -> {
                     flush()
-                    pieces.add(urlArgument(value, match.groupValues[1], scope, location, name, path = true))
+                    val argument = urlArgument(value, match.groupValues[1], scope, location, name, path = true)
+                    pieces.add("no.beint.thim.UrlEncoding.pathSegment(${argument.access})")
                 }
             }
             start = match.range.last + 1
         }
         static.append(url.path.substring(start))
-        url.queryParameters.forEachIndexed { index, parameter ->
+
+        val query = url.queryParameters.map { parameter ->
+            parameter to (parameter.value as? UrlProperty)
+                ?.let { urlArgument(it, parameter.name, scope, location, name, path = false) }
+        }
+        if (query.any { (_, argument) -> argument?.nullable == true }) {
+            // An optional parameter decides at render time whether the ones after it start
+            // with '?' or '&', so the URL is assembled instead of concatenated.
+            flush()
+            val builder = "url${generatedVariable++}"
+            code.statement("var $builder = new StringBuilder();")
+            pieces.forEach { code.statement("$builder.append($it);") }
+            query.forEach { (parameter, argument) ->
+                val value = argument?.access ?: "\"${javaString((parameter.value as UrlLiteral).value)}\""
+                code.statement(
+                    "no.beint.thim.UrlEncoding.appendQuery($builder, \"${javaString(parameter.name)}\", $value);",
+                )
+            }
+            return "$builder.toString()"
+        }
+        query.forEachIndexed { index, (parameter, argument) ->
             static.append(if (index == 0) '?' else '&').append(parameter.name).append('=')
-            when (val value = parameter.value) {
-                is UrlLiteral -> static.append(encodeUrl(value.value))
-                is UrlProperty -> {
-                    flush()
-                    pieces.add(urlArgument(value, parameter.name, scope, location, name, path = false))
-                }
+            if (argument == null) {
+                static.append(encodeUrl((parameter.value as UrlLiteral).value))
+            } else {
+                flush()
+                pieces.add("no.beint.thim.UrlEncoding.query(${argument.access})")
             }
         }
         flush()
         return pieces.joinToString(" + ").ifEmpty { "\"\"" }
     }
+
+    private data class UrlArgument(val access: String, val nullable: Boolean)
 
     private fun urlArgument(
         value: UrlProperty,
@@ -723,23 +751,26 @@ internal class RendererGenerator(
         location: SourceLocation?,
         name: String,
         path: Boolean,
-    ): String {
+    ): UrlArgument {
         val resolved = scope.resolve(
             value.path,
             diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "th:$name"),
             location,
         )
-        requireDiagnostic(!resolved.nullable, "THIM-URL-ARGUMENT-NULLABLE", location) {
-            "URL parameter '$parameterName' cannot be nullable"
+        requireDiagnostic(path.not() || !resolved.nullable, "THIM-URL-ARGUMENT-NULLABLE", location) {
+            "URL path variable '$parameterName' cannot be nullable"
         }
         val typeName = resolved.type.declaration.qualifiedName?.asString()
         requireDiagnostic(typeName !in setOf("no.beint.thim.SafeHtml", "no.beint.thim.TrustedUrl"), "THIM-URL-ARGUMENT-TYPE", location) {
             "URL parameter '$parameterName' cannot be a ${typeName?.substringAfterLast('.')}"
         }
-        val encoder = if (path) "pathSegment" else "query"
         // Enum values render through their stable name, not a possibly overridden toString().
-        val access = if (resolved.type.isEnum()) "${resolved.code}.name()" else resolved.code
-        return "no.beint.thim.UrlEncoding.$encoder($access)"
+        val access = when {
+            !resolved.type.isEnum() -> resolved.code
+            resolved.nullable -> "(${resolved.code} == null ? null : ${resolved.code}.name())"
+            else -> "${resolved.code}.name()"
+        }
+        return UrlArgument(access, resolved.nullable)
     }
 
     private fun checkRoute(url: UrlExpression, name: String, element: ElementNode, scope: Scope, location: SourceLocation?) {

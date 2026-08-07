@@ -20,6 +20,22 @@ public final class UrlEncoding {
         return encode(Objects.requireNonNull(value).toString());
     }
 
+    /**
+     * Appends one query parameter to a URL being assembled, choosing {@code ?} or
+     * {@code &} for the separator. A null value appends nothing at all, so an optional
+     * parameter leaves no trace in the rendered URL. Parameter names come from the
+     * template and are already restricted to unreserved characters.
+     */
+    public static void appendQuery(StringBuilder url, String name, Object value) {
+        if (value == null) {
+            return;
+        }
+        url.append(url.indexOf("?") < 0 ? '?' : '&')
+                .append(name)
+                .append('=')
+                .append(encode(value.toString()));
+    }
+
     private static String encode(String value) {
         // Fast path: most values (ids, slugs) need no encoding and are returned unchanged.
         for (var index = 0; index < value.length(); index++) {
