@@ -2,7 +2,9 @@ package no.beint.thim.example
 
 import no.beint.thim.FieldError
 import no.beint.thim.FormErrors
+import no.beint.thim.example.generated.ExampleRoutes
 import no.beint.thim.example.page.HomePage
+import no.beint.thim.spring.ThimResult
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.stereotype.Controller
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.bind.annotation.RequestParam
 
 @SpringBootApplication
 class App
@@ -22,6 +25,8 @@ data class Feature(
     val name: String,
     val description: String,
 )
+
+enum class FeatureKind { SAFE, SMALL, FAST }
 
 data class FeedbackForm(
     val author: String,
@@ -58,8 +63,31 @@ class HomeCtrl {
     fun health() = "ok"
 
     @ResponseBody
+    @GetMapping("/feature")
+    fun features() = "Features"
+
+    @ResponseBody
     @GetMapping("/feature/{name}")
-    fun feature(@PathVariable name: String) = "Feature: $name"
+    fun feature(@PathVariable name: String, @RequestParam(required = false) highlight: String?) =
+        "Feature: $name${highlight?.let { " ($it)" }.orEmpty()}"
+
+    @ResponseBody
+    @GetMapping("/feature-kind/{kind}")
+    fun featureKind(@PathVariable kind: FeatureKind) = "Feature kind: $kind"
+
+    @GetMapping("/feature-result/{name}")
+    fun featureResult(@PathVariable name: String, @RequestParam(defaultValue = "false") redirect: Boolean): ThimResult =
+        if (redirect) {
+            ThimResult.Redirect(
+                ExampleRoutes.featureByName(
+                    name,
+                    highlight = "redirected",
+                    additionalQueryParameters = mapOf("source" to "thim example"),
+                ),
+            )
+        } else {
+            ThimResult.Page(home())
+        }
 
     @PostMapping("/feedback")
     fun feedback(form: FeedbackForm): HomePage {

@@ -23,15 +23,15 @@ public final class UrlEncoding {
     /**
      * Appends one query parameter to a URL being assembled, choosing {@code ?} or
      * {@code &} for the separator. A null value appends nothing at all, so an optional
-     * parameter leaves no trace in the rendered URL. Parameter names come from the
-     * template and are already restricted to unreserved characters.
+     * parameter leaves no trace in the rendered URL. Both names and values are encoded,
+     * since generated controller route builders also accept application-supplied names.
      */
     public static void appendQuery(StringBuilder url, String name, Object value) {
         if (value == null) {
             return;
         }
         url.append(url.indexOf("?") < 0 ? '?' : '&')
-                .append(name)
+                .append(encode(name))
                 .append('=')
                 .append(encode(value.toString()));
     }

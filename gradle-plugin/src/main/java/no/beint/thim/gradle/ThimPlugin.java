@@ -2,6 +2,7 @@ package no.beint.thim.gradle;
 
 import com.google.devtools.ksp.gradle.KspAATask;
 import com.google.devtools.ksp.gradle.KspExtension;
+import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -36,6 +37,9 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getFailOnUnusedMessages().convention(false);
         extension.getFailOnUnusedFragments().convention(false);
         extension.getValidateRoutes().convention(true);
+        extension.getGenerateRoutes().convention(false);
+        extension.getRoutesName().convention(extension.getRegistryName().map(name ->
+                name.endsWith("Templates") ? name.substring(0, name.length() - "Templates".length()) + "Routes" : name + "Routes"));
         extension.getTrustedPaths().convention(java.util.List.of());
         extension.getStrictModels().convention(false);
         extension.getFailOnUnusedProperties().convention(false);
@@ -70,6 +74,8 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
         ksp.arg("thim.failOnUnusedFragments", extension.getFailOnUnusedFragments().map(String::valueOf));
         ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
+        ksp.arg("thim.generateRoutes", extension.getGenerateRoutes().map(String::valueOf));
+        ksp.arg("thim.routesName", extension.getRoutesName());
         ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.failOnUnusedProperties", extension.getFailOnUnusedProperties().map(String::valueOf));
@@ -102,6 +108,9 @@ public final class ThimPlugin implements Plugin<Project> {
     }
 
     private void configureJavaProject(Project project, ThimExtension extension) {
+        if (extension.getGenerateRoutes().get()) {
+            throw new GradleException("Thim route builders currently require the Kotlin JVM plugin");
+        }
         var version = implementationVersion(project);
         project.getDependencies().add("implementation", "no.beint.thim:spring:" + version);
 

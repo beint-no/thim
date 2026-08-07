@@ -10,14 +10,22 @@ import com.google.devtools.ksp.symbol.KSType
 
 internal sealed interface RouteSegment {
     data class Literal(val value: String) : RouteSegment
-    data object Variable : RouteSegment
-    data object TailWildcard : RouteSegment
+    data class Variable(val name: String) : RouteSegment
+    data class TailWildcard(val name: String?) : RouteSegment
 }
 
-internal data class Route(val httpMethods: Set<String>, val pattern: String, val segments: List<RouteSegment>)
+internal data class RouteParameter(val name: String, val type: String)
+
+internal data class Route(
+    val httpMethods: Set<String>,
+    val pattern: String,
+    val segments: List<RouteSegment>,
+    val pathParameters: List<RouteParameter> = emptyList(),
+    val queryParameters: List<RouteParameter> = emptyList(),
+)
 
 internal class RouteCatalog(
-    private val routes: List<Route>,
+    internal val routes: List<Route>,
     trustedPaths: List<String>,
     /**
      * Source files the routes were extracted from. They must be declared as dependencies
@@ -128,9 +136,9 @@ internal class RouteCatalog(
                     require(index == segments.lastIndex) {
                         "thim.trustedPaths entry '$entry': '**' is only supported as the final segment"
                     }
-                    RouteSegment.TailWildcard
+                    RouteSegment.TailWildcard(null)
                 }
-                segment == "*" -> RouteSegment.Variable
+                segment == "*" -> RouteSegment.Variable("segment")
                 '*' in segment -> throw IllegalArgumentException(
                     "thim.trustedPaths entry '$entry': wildcards must be a whole segment ('*' or a final '**')",
                 )
@@ -179,11 +187,23 @@ internal class RouteCatalog(
                         val annotation = function.annotations.first { it.matches(annotationName) }
                         val methods = httpMethods.ifEmpty { requestMethods(annotation) }
                         val prefixes = classPrefixes(function)
+                        val pathParameters = parameters(function, "$MAPPING_PACKAGE.PathVariable")
+                        val queryParameters = parameters(function, "$MAPPING_PACKAGE.RequestParam")
                         function.containingFile?.let(files::add)
                         paths(annotation).forEach { path ->
                             prefixes.forEach { prefix ->
                                 val pattern = combine(prefix, path)
-                                routes.add(Route(methods, pattern, segments(pattern)))
+                                val segments = segments(pattern)
+                                val variables = segments.filterIsInstance<RouteSegment.Variable>().map { it.name }.toSet()
+                                routes.add(
+                                    Route(
+                                        methods,
+                                        pattern,
+                                        segments,
+                                        pathParameters.filter { it.name in variables },
+                                        queryParameters,
+                                    ),
+                                )
                             }
                         }
                     }
@@ -226,6 +246,31 @@ internal class RouteCatalog(
             return values.mapNotNull(::enumName).toSet()
         }
 
+        private fun parameters(function: KSFunctionDeclaration, annotationName: String): List<RouteParameter> =
+            function.parameters.mapNotNull { parameter ->
+                val annotation = parameter.annotations.firstOrNull { it.matches(annotationName) }
+                    ?: return@mapNotNull null
+                val explicitName = annotation.arguments
+                    .filter { it.name?.asString() in setOf("name", "value") }
+                    .mapNotNull { it.value as? String }
+                    .firstOrNull(String::isNotBlank)
+                val name = explicitName ?: parameter.name?.asString() ?: return@mapNotNull null
+                RouteParameter(name, kotlinType(parameter.type.resolve()))
+            }
+
+        private fun kotlinType(type: KSType): String {
+            val qualifiedName = type.declaration.qualifiedName?.asString() ?: "kotlin.Any"
+            val name = javaTypes[qualifiedName] ?: qualifiedName
+            val arguments = if (type.arguments.isEmpty()) {
+                ""
+            } else {
+                type.arguments.joinToString(", ", "<", ">") { argument ->
+                    argument.type?.resolve()?.let(::kotlinType) ?: "*"
+                }
+            }
+            return name + arguments
+        }
+
         private fun enumName(value: Any?): String? = when (value) {
             is KSType -> value.declaration.simpleName.asString()
             is KSDeclaration -> value.simpleName.asString()
@@ -241,11 +286,33 @@ internal class RouteCatalog(
         private fun segments(pattern: String): List<RouteSegment> =
             pattern.trim('/').split('/').filter(String::isNotEmpty).map { segment ->
                 when {
-                    segment == "**" || segment.startsWith("{*") -> RouteSegment.TailWildcard
-                    segment == "*" -> RouteSegment.Variable
-                    segment.startsWith('{') -> RouteSegment.Variable
+                    segment == "**" -> RouteSegment.TailWildcard(null)
+                    segment.startsWith("{*") -> RouteSegment.TailWildcard(variableName(segment).removePrefix("*"))
+                    segment == "*" -> RouteSegment.Variable("segment")
+                    segment.startsWith('{') -> RouteSegment.Variable(variableName(segment))
                     else -> RouteSegment.Literal(segment)
                 }
             }
+
+        private fun variableName(segment: String): String = segment
+            .removePrefix("{")
+            .removeSuffix("}")
+            .substringBefore(':')
+
+        private val javaTypes = mapOf(
+            "java.lang.Boolean" to "kotlin.Boolean",
+            "java.lang.Byte" to "kotlin.Byte",
+            "java.lang.Character" to "kotlin.Char",
+            "java.lang.Double" to "kotlin.Double",
+            "java.lang.Float" to "kotlin.Float",
+            "java.lang.Integer" to "kotlin.Int",
+            "java.lang.Long" to "kotlin.Long",
+            "java.lang.Short" to "kotlin.Short",
+            "java.lang.String" to "kotlin.String",
+            "java.util.Collection" to "kotlin.collections.Collection",
+            "java.util.List" to "kotlin.collections.List",
+            "java.util.Set" to "kotlin.collections.Set",
+        )
+
     }
 }

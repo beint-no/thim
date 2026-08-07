@@ -73,6 +73,7 @@ thim {
     failOnUnusedMessages.set(true)
     strictModels.set(true)
     failOnUnusedProperties.set(true)
+    generateRoutes.set(true)
 }
 ```
 
@@ -92,6 +93,50 @@ Use `thimCheck` for fast template validation during development:
 ```
 
 `thimCheck` uses the same parser, fragment expansion, type analysis, message validation and safety checks as normal compilation. Java modules run the production compiler into isolated check outputs and write a cacheable machine-readable report to `build/reports/thim/check.json`. Kotlin modules delegate to the KSP task configured by the plugin, so diagnostics match ordinary Kotlin compilation.
+
+## Typed controller routes
+
+Kotlin applications can opt into controller-side route builders with `generateRoutes.set(true)`. The generated object is placed beside the template registry and replaces a `Templates` suffix with `Routes`: `WebAppTemplates` produces `WebAppRoutes`. Set `routesName` to override it.
+
+```kotlin
+val settings = WebAppRoutes.connections(
+    additionalQueryParameters = mapOf("workspaceId" to 11, "connectWarning" to "partial"),
+)
+val campaign = WebAppRoutes.adsGoogleCampaign(campaignId = "42", customerId = "123")
+```
+
+Thim emits one function per distinct path pattern. Names come from literal path segments; path variables are omitted from the usual name and receive a `ById`-style suffix when needed to resolve a collision. A path variable is required and retains the controller parameter's scalar or enum type. Query parameters are nullable with a `null` default and are omitted when null. Values are percent-encoded with the same encoder used by `@{...}`.
+
+Spring mapping metadata does not contain arbitrary query parameters. Thim includes parameters declared with `@RequestParam` as named arguments. URL-only parameters that are consumed indirectly, such as flash-message selectors or application-wide request context, can be supplied through `additionalQueryParameters`:
+
+```kotlin
+WebAppRoutes.connections(
+    additionalQueryParameters = mapOf("workspaceId" to 11, "connectWarning" to "partial"),
+)
+```
+
+Route generation is opt-in so an upgrade within the 0.4 line cannot break an existing build because two application paths derive the same Kotlin name. The generated source is aggregating and declares every controller source in `RouteCatalog.files` as a KSP dependency, so incremental compilation always rebuilds it from the complete mapping table. Route builders are currently Kotlin-only; Java applications continue to receive the Java template registry.
+
+## Controller return values
+
+A controller that always renders should return its page model directly. A controller that can render or redirect can use `ThimResult` for an explicit return type while page models remain dependency-free:
+
+```kotlin
+fun select(): ThimResult =
+    if (failed) {
+        ThimResult.Redirect(
+            WebAppRoutes.connections(
+                additionalQueryParameters = mapOf("connectWarning" to "connectionFailed"),
+            ),
+        )
+    } else {
+        ThimResult.Page(ConnectApiPage(/* ... */))
+    }
+```
+
+`ThimResult.Page.model` deliberately has type `Any`: requiring a marker interface would add a Thim dependency to every page model without giving KSP visibility into construction sites. The Spring adapter unwraps a page result into the normal compiled renderer and handles a redirect with `HttpServletResponse.sendRedirect`.
+
+Using Kotlin `Any` or Java `Object` as the declared return type remains supported for source compatibility. Spring selects a return-value handler using a `MethodParameter` that reports the runtime value's class: a page model reaches `ThimReturnValueHandler`, while a `String` reaches Spring's view-name handler. If the value is null, Spring falls back to the declared `Object` type. Generated registries therefore deliberately reject `Object.class` in `supportsReturnType`; that guard prevents Thim from attempting to render a missing value and does not disable non-null `Any` handlers.
 
 Artifacts are published through `https://maven.pkg.github.com/beint-no/thim`. Add that repository to `pluginManagement` and dependency resolution.
 

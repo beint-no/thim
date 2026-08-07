@@ -9,7 +9,6 @@ import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSFile
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -50,6 +49,9 @@ private class ThimProcessor(
         ?.toSet()
         ?: defaultForbiddenModelAnnotations
     private val validateRoutes = environment.options["thim.validateRoutes"]?.toBoolean() ?: true
+    private val generateRoutes = environment.options["thim.generateRoutes"]?.toBoolean() ?: false
+    private val routesName = environment.options["thim.routesName"]
+        ?: registryName.removeSuffix("Templates") + "Routes"
     private val trustedPaths = environment.options["thim.trustedPaths"]
         .orEmpty()
         .split(',')
@@ -82,10 +84,15 @@ private class ThimProcessor(
             }
 
             val catalog = MessageCatalog.load(messagesDirectory)
-            val routeCatalog = if (validateRoutes) {
+            val extractedRoutes = if (validateRoutes || generateRoutes) {
                 RouteCatalog.load(resolver, trustedPaths)
             } else {
                 RouteCatalog(emptyList(), emptyList())
+            }
+            val routeCatalog = if (validateRoutes) {
+                extractedRoutes
+            } else {
+                RouteCatalog(emptyList(), emptyList(), extractedRoutes.files)
             }
             val staticContent = StaticContent()
             val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName, strictModels)
@@ -104,7 +111,7 @@ private class ThimProcessor(
                 completed = true
                 return emptyList()
             }
-            generate(compiled, staticContent.bytes(), routeCatalog.files)
+            generate(compiled, staticContent.bytes(), extractedRoutes)
             completed = true
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Thim compilation failed")
@@ -155,8 +162,8 @@ private class ThimProcessor(
         }
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeFiles: List<KSFile>) {
-        val files = (compiled.mapNotNull { it.model.containingFile } + routeFiles).distinct().toTypedArray()
+    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog) {
+        val files = (compiled.mapNotNull { it.model.containingFile } + routeCatalog.files).distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
         codeGenerator.createNewFile(
             dependencies = dependencies,
@@ -190,6 +197,7 @@ private class ThimProcessor(
             output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public boolean supportsReturnType(Class<?> returnType) {")
+            output.appendLine("        // Spring supplies the runtime type when a value exists; Object chiefly represents a null return.")
             output.appendLine("        return returnType != Object.class && (" + compiled.joinToString(" ||\n            ") {
                 "returnType.isAssignableFrom(${it.model.qualifiedName!!.asString()}.class)"
             } + ");")
@@ -214,6 +222,16 @@ private class ThimProcessor(
             extensionName = "",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
             output.appendLine("$generatedPackage.$registryName")
+        }
+        if (generateRoutes) {
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = routesName,
+                extensionName = "kt",
+            ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+                output.append(RouteGenerator(routeCatalog).generate(generatedPackage, routesName))
+            }
         }
     }
 
@@ -262,6 +280,7 @@ private class ThimProcessor(
             "Invalid generated package '$generatedPackage'"
         }
         require(registryName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid registry name '$registryName'" }
+        require(routesName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid routes name '$routesName'" }
         modelPackages.forEach { modelPackage ->
             require(modelPackage.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
                 "Invalid model package '$modelPackage'"

@@ -17,7 +17,8 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
 
     @Override
     public boolean supportsReturnType(MethodParameter returnType) {
-        return renderer.supportsReturnType(returnType.getParameterType());
+        var type = returnType.getParameterType();
+        return ThimResult.class.isAssignableFrom(type) || renderer.supportsReturnType(type);
     }
 
     @Override
@@ -31,9 +32,14 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
             modelAndViewContainer.setRequestHandled(true);
             return;
         }
-        var request = Objects.requireNonNull(webRequest.getNativeRequest(HttpServletRequest.class));
         var response = Objects.requireNonNull(webRequest.getNativeResponse(HttpServletResponse.class));
         modelAndViewContainer.setRequestHandled(true);
-        renderer.render(returnValue, request, response);
+        if (returnValue instanceof ThimResult.Redirect redirect) {
+            response.sendRedirect(redirect.path());
+            return;
+        }
+        var model = returnValue instanceof ThimResult.Page page ? page.model() : returnValue;
+        var request = Objects.requireNonNull(webRequest.getNativeRequest(HttpServletRequest.class));
+        renderer.render(model, request, response);
     }
 }
