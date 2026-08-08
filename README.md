@@ -45,7 +45,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.4.20"
+    id("no.beint.thim") version "0.5.0"
 }
 ```
 
@@ -54,7 +54,7 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.4.20"
+    id("no.beint.thim") version "0.5.0"
 }
 ```
 
@@ -182,7 +182,7 @@ fun select(): ThimResult =
 
 Existing handlers declared as Kotlin `Any` or Java `Object` remain supported, but `ThimResult` documents mixed page/redirect outcomes more clearly.
 
-Artifacts are published through `https://maven.pkg.github.com/beint-no/thim`. Add that repository to `pluginManagement` and dependency resolution.
+Artifacts and the Gradle plugin marker are published to Maven Central. Add `mavenCentral()` to `pluginManagement` and dependency resolution.
 
 ## Template syntax
 
