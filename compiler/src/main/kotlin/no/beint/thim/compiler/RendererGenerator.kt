@@ -17,11 +17,12 @@ internal data class CompiledTemplate(
 
 internal class StaticContent {
     private val output = ByteArrayOutputStream()
+    private val ranges = hashMapOf<String, IntRange>()
 
-    fun append(value: String): IntRange {
+    fun append(value: String): IntRange = ranges.getOrPut(value) {
         val start = output.size()
         output.writeBytes(value.toByteArray(StandardCharsets.UTF_8))
-        return start until output.size()
+        start until output.size()
     }
 
     fun bytes(): ByteArray = output.toByteArray()
@@ -289,7 +290,7 @@ internal class RendererGenerator(
             }
             renderErrors(errorsAttribute, element, scope, code)
         } else if (fieldExpansion?.content != null) {
-            code.statement("output.text(${fieldExpansion?.content});")
+            code.statement("output.text(${fieldExpansion.content});")
         } else if (text == null && safeHtml == null) {
             element.children.forEach { renderNodeCollecting(it, scope, code, context) }
         } else if (safeHtml != null) {

@@ -110,23 +110,27 @@ internal class MessageCatalog private constructor(
             }
             if (!Files.exists(directory)) return MessageCatalog(emptyMap(), canonicalDefault, canonicalSupported)
             require(Files.isDirectory(directory)) { "Message catalog directory does not exist: $directory" }
-            val shortExtensions = Files.walk(directory).use { paths ->
-                paths.filter { Files.isRegularFile(it) && it.extension == "yml" }
-                    .map(Path::toString)
+            val catalogFiles = Files.walk(directory).use { paths ->
+                paths.filter {
+                    Files.isRegularFile(it) && it.extension.lowercase(Locale.ROOT) in setOf("yaml", "yml")
+                }
                     .sorted()
                     .toList()
             }
-            require(shortExtensions.isEmpty()) {
-                "Message catalogs must use the .yaml extension, found $shortExtensions"
+            val invalidExtensions = catalogFiles.filter { it.extension != "yaml" }
+            require(invalidExtensions.isEmpty()) {
+                "Message catalogs must use the .yaml extension, found $invalidExtensions"
+            }
+            val yamlFiles = catalogFiles.filter { it.extension == "yaml" }
+            val misplaced = yamlFiles.filter { directory.relativize(it).nameCount < 2 }
+            require(misplaced.isEmpty()) {
+                "Message catalogs must be stored inside a locale directory, found $misplaced"
             }
 
-            val discovered = Files.list(directory).use { paths ->
-                paths.filter { Files.isDirectory(it) }
-                    .filter { localeDirectory -> containsYaml(localeDirectory) }
-                    .map { it.name }
-                    .sorted()
-                    .toList()
-            }
+            val discovered = yamlFiles
+                .map { directory.relativize(it).getName(0).toString() }
+                .distinct()
+                .sorted()
             val unexpected = discovered - canonicalSupported.toSet()
             require(unexpected.isEmpty()) { "Message catalog has unsupported locale directories $unexpected" }
 
@@ -402,10 +406,6 @@ internal class MessageCatalog private constructor(
                 "Locale '$value' is not a canonical BCP 47 tag; use '$canonical'"
             }
             return canonical
-        }
-
-        private fun containsYaml(directory: Path): Boolean = Files.walk(directory).use { paths ->
-            paths.anyMatch { Files.isRegularFile(it) && it.extension == "yaml" }
         }
 
         private fun suggestion(value: String, candidates: Collection<String>): String {
