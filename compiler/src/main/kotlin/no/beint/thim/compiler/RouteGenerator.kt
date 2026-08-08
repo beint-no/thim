@@ -86,10 +86,10 @@ internal class RouteGenerator(private val catalog: RouteCatalog) {
     }
 
     private fun StringBuilder.appendFunction(name: String, route: Route) {
-        val additionalQueryName = additionalQueryName(route)
-        val parameters = route.pathParameters.map { "${identifier(it.name)}: ${it.type}" } +
-            route.queryParameters.map { "${identifier(it.name)}: ${it.type}? = null" } +
-            "$additionalQueryName: kotlin.collections.Map<kotlin.String, kotlin.Any?> = emptyMap()"
+        val names = parameterNames(route)
+        val parameters = route.pathParameters.map { "${identifier(names.path.getValue(it.name))}: ${it.type}" } +
+            route.queryParameters.map { "${identifier(names.query.getValue(it.name))}: ${it.type}? = null" } +
+            "${names.additionalQuery}: kotlin.collections.Map<kotlin.String, kotlin.Any?> = emptyMap()"
         appendLine("    public fun ${identifier(name)}(")
         parameters.forEach { appendLine("        $it,") }
         appendLine("    ): String {")
@@ -101,19 +101,21 @@ internal class RouteGenerator(private val catalog: RouteCatalog) {
                 when (segment) {
                     is RouteSegment.Literal -> appendLine("        url.append(\"/${escape(segment.value)}\")")
                     is RouteSegment.Variable -> appendLine(
-                        "        url.append('/').append(UrlEncoding.pathSegment(${identifier(segment.name)}))",
+                        "        url.append('/').append(UrlEncoding.pathSegment(${identifier(names.path.getValue(segment.name))}))",
                     )
                     is RouteSegment.TailWildcard -> {
-                        val name = identifier(segment.name ?: "tail")
+                        val name = identifier(names.path.getValue(segment.name ?: "tail"))
                         appendLine("        $name.forEach { url.append('/').append(UrlEncoding.pathSegment(it)) }")
                     }
                 }
             }
         }
         route.queryParameters.forEach {
-            appendLine("        UrlEncoding.appendQuery(url, \"${escape(it.name)}\", ${identifier(it.name)})")
+            appendLine(
+                "        UrlEncoding.appendQuery(url, \"${escape(it.name)}\", ${identifier(names.query.getValue(it.name))})",
+            )
         }
-        appendLine("        $additionalQueryName.forEach { (name, value) -> UrlEncoding.appendQuery(url, name, value) }")
+        appendLine("        ${names.additionalQuery}.forEach { (name, value) -> UrlEncoding.appendQuery(url, name, value) }")
         appendLine("        return url.toString()")
         appendLine("    }")
         appendLine()
@@ -128,13 +130,34 @@ internal class RouteGenerator(private val catalog: RouteCatalog) {
 
     private fun identifier(value: String): String = "`$value`"
 
-    private fun additionalQueryName(route: Route): String {
-        val names = (route.pathParameters + route.queryParameters).map(RouteParameter::name).toSet()
-        return generateSequence("additionalQueryParameters") { "_$it" }.first { it !in names }
+    private fun parameterNames(route: Route): ParameterNames {
+        val used = mutableSetOf<String>()
+        fun unique(wireName: String): String {
+            val base = kotlinName(wireName)
+            return generateSequence(base) { candidate -> "${candidate}_" }.first(used::add)
+        }
+        val path = route.pathParameters.associate { it.name to unique(it.name) }
+        val query = route.queryParameters.associate { it.name to unique(it.name) }
+        return ParameterNames(path, query, unique("additionalQueryParameters"))
+    }
+
+    private fun kotlinName(value: String): String {
+        val sanitized = value.map { if (it == '_' || it.isLetterOrDigit()) it else '_' }.joinToString("")
+        return when {
+            sanitized.isEmpty() -> "parameter"
+            sanitized.first() == '_' || sanitized.first().isLetter() -> sanitized
+            else -> "_$sanitized"
+        }
     }
 
     private fun escape(value: String): String = value
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
         .replace("$", "\\$")
+
+    private data class ParameterNames(
+        val path: Map<String, String>,
+        val query: Map<String, String>,
+        val additionalQuery: String,
+    )
 }

@@ -1,5 +1,6 @@
 package no.beint.thim.compiler
 
+import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
@@ -188,7 +189,7 @@ internal class RouteCatalog(
                         val methods = httpMethods.ifEmpty { requestMethods(annotation) }
                         val prefixes = classPrefixes(function)
                         val pathParameters = parameters(function, "$MAPPING_PACKAGE.PathVariable")
-                        val queryParameters = parameters(function, "$MAPPING_PACKAGE.RequestParam")
+                        val queryParameters = parameters(function, "$MAPPING_PACKAGE.RequestParam", ::urlParameterType)
                         function.containingFile?.let(files::add)
                         paths(annotation).forEach { path ->
                             prefixes.forEach { prefix ->
@@ -246,7 +247,11 @@ internal class RouteCatalog(
             return values.mapNotNull(::enumName).toSet()
         }
 
-        private fun parameters(function: KSFunctionDeclaration, annotationName: String): List<RouteParameter> =
+        private fun parameters(
+            function: KSFunctionDeclaration,
+            annotationName: String,
+            acceptedType: (KSType) -> Boolean = { true },
+        ): List<RouteParameter> =
             function.parameters.mapNotNull { parameter ->
                 val annotation = parameter.annotations.firstOrNull { it.matches(annotationName) }
                     ?: return@mapNotNull null
@@ -255,8 +260,21 @@ internal class RouteCatalog(
                     .mapNotNull { it.value as? String }
                     .firstOrNull(String::isNotBlank)
                 val name = explicitName ?: parameter.name?.asString() ?: return@mapNotNull null
-                RouteParameter(name, kotlinType(parameter.type.resolve()))
+                val type = parameter.type.resolve()
+                if (!acceptedType(type)) return@mapNotNull null
+                RouteParameter(name, kotlinType(type))
             }
+
+        private fun urlParameterType(type: KSType): Boolean {
+            val declaration = type.declaration as? KSClassDeclaration
+            val names = sequenceOf(type) + (declaration?.getAllSuperTypes() ?: emptySequence())
+            if (names.mapNotNull { it.declaration.qualifiedName?.asString() }.any { it in unsupportedUrlTypes }) {
+                return false
+            }
+            return type.arguments.all { argument ->
+                argument.type?.resolve()?.let(::urlParameterType) ?: false
+            }
+        }
 
         private fun kotlinType(type: KSType): String {
             val qualifiedName = type.declaration.qualifiedName?.asString() ?: "kotlin.Any"
@@ -312,6 +330,13 @@ internal class RouteCatalog(
             "java.util.Collection" to "kotlin.collections.Collection",
             "java.util.List" to "kotlin.collections.List",
             "java.util.Set" to "kotlin.collections.Set",
+        )
+
+        private val unsupportedUrlTypes = setOf(
+            "java.util.Map",
+            "jakarta.servlet.http.Part",
+            "org.springframework.util.MultiValueMap",
+            "org.springframework.web.multipart.MultipartFile",
         )
 
     }

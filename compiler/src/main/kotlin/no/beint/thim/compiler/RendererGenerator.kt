@@ -548,7 +548,10 @@ internal class RendererGenerator(
             typeName in stringTypes -> resolved.code
             else -> "String.valueOf(${resolved.code})"
         }
-        val value = formErrors?.let { "${it.code}.value(\"${javaString(fieldName)}\", $fallback)" } ?: fallback
+        val value = formErrors?.let {
+            scope.recordRootProperty("errors")
+            "${it.code}.value(\"${javaString(fieldName)}\", $fallback)"
+        } ?: fallback
         code.static(" id=\"${escapeHtml(fieldName)}\" name=\"${escapeHtml(fieldName)}\"")
         if (element.name == "textarea") {
             return FieldExpansion(content = value)
@@ -567,6 +570,7 @@ internal class RendererGenerator(
                 attributeLocation,
                 "th:errors needs a non-null 'errors' property of type no.beint.thim.FormErrors on the page model",
             )
+        scope.recordRootProperty("errors")
         val path = Expressions.selection(expression, diagnosticContext(attributeLocation, "THIM-ERRORS-SYNTAX", "th:errors"))
         scope.resolveField(path, attributeLocation)
         val fieldName = path.segments.joinToString(".") { it.name }
@@ -882,8 +886,11 @@ internal class RendererGenerator(
             val property = model.property("errors") ?: return null
             val typeName = property.type.declaration.qualifiedName?.asString()
             if (typeName != "no.beint.thim.FormErrors" || property.type.nullability == Nullability.NULLABLE) return null
-            recordUse("errors")
             return ResolvedPath("model.${property.accessor}()", property.type, false)
+        }
+
+        fun recordRootProperty(name: String) {
+            recordUse(name)
         }
 
         fun resolveField(expression: PathExpression, location: SourceLocation?): ResolvedPath {

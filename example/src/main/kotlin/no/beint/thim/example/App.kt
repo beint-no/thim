@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.multipart.MultipartFile
 
 @SpringBootApplication
 class App
@@ -26,7 +27,11 @@ data class Feature(
     val description: String,
 )
 
-enum class FeatureKind { SAFE, SMALL, FAST }
+enum class FeatureKind {
+    SAFE, SMALL, FAST;
+
+    override fun toString(): String = name.lowercase()
+}
 
 data class FeedbackForm(
     val author: String,
@@ -68,8 +73,12 @@ class HomeCtrl {
 
     @ResponseBody
     @GetMapping("/feature/{name}")
-    fun feature(@PathVariable name: String, @RequestParam(required = false) highlight: String?) =
-        "Feature: $name${highlight?.let { " ($it)" }.orEmpty()}"
+    fun feature(
+        @PathVariable name: String,
+        @RequestParam(required = false) highlight: String?,
+        @RequestParam(name = "filter.status", required = false) filterStatus: String?,
+        @RequestParam(required = false) tags: List<String>?,
+    ) = "Feature: $name${highlight?.let { " ($it)" }.orEmpty()} ${filterStatus.orEmpty()} ${tags.orEmpty()}"
 
     @ResponseBody
     @GetMapping("/feature-kind/{kind}")
@@ -82,12 +91,21 @@ class HomeCtrl {
                 ExampleRoutes.featureByName(
                     name,
                     highlight = "redirected",
+                    filter_status = "active",
+                    tags = listOf("typed routes", "safe"),
                     additionalQueryParameters = mapOf("source" to "thim example"),
                 ),
             )
         } else {
             ThimResult.Page(home())
         }
+
+    @GetMapping("/feature-kind-redirect")
+    fun featureKindRedirect(): ThimResult.Redirect = ThimResult.Redirect(ExampleRoutes.featureKind(FeatureKind.SAFE))
+
+    @ResponseBody
+    @PostMapping("/upload")
+    fun upload(@RequestParam file: MultipartFile): String = file.originalFilename.orEmpty()
 
     @PostMapping("/feedback")
     fun feedback(form: FeedbackForm): HomePage {

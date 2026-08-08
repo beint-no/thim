@@ -28,15 +28,24 @@ internal data class ModelProperty(
  * parameters (Java records), and getter functions (Java beans). Aliases hold every
  * expression spelling that resolves to the same accessor.
  */
-internal fun modelProperties(declaration: KSClassDeclaration): List<ModelProperty> {
+internal fun modelProperties(
+    declaration: KSClassDeclaration,
+    containingType: KSType = declaration.asStarProjectedType(),
+): List<ModelProperty> {
     val properties = LinkedHashMap<String, ModelProperty>()
     declaration.getAllProperties().filterNot { it.isPrivate() }.forEach { property ->
         val name = property.simpleName.asString()
-        properties[name] = ModelProperty(name, property.type.resolve(), property.isMutable, setOf(name))
+        val type = runCatching { property.asMemberOf(containingType) }.getOrElse { property.type.resolve() }
+        properties[name] = ModelProperty(name, type, property.isMutable, setOf(name))
     }
     declaration.primaryConstructor?.parameters?.forEach { parameter ->
         val name = parameter.name?.asString() ?: return@forEach
-        properties.putIfAbsent(name, ModelProperty(name, parameter.type.resolve(), mutable = false, setOf(name)))
+        val accessor = declaration.getDeclaredFunctions().firstOrNull {
+            it.simpleName.asString() == name && it.parameters.isEmpty()
+        }
+        val type = accessor?.let { runCatching { it.asMemberOf(containingType).returnType }.getOrNull() }
+            ?: parameter.type.resolve()
+        properties.putIfAbsent(name, ModelProperty(name, type, mutable = false, setOf(name)))
     }
     declaration.getDeclaredFunctions().filterNot { it.isPrivate() }.forEach { function ->
         val name = function.simpleName.asString()
@@ -51,7 +60,9 @@ internal fun modelProperties(declaration: KSClassDeclaration): List<ModelPropert
             name.startsWith("is") -> setOf(name, name.substring(2).replaceFirstChar(Char::lowercaseChar))
             else -> setOf(property, name)
         }
-        properties.putIfAbsent(property, ModelProperty(property, function.returnType!!.resolve(), mutable = false, aliases))
+        val type = runCatching { function.asMemberOf(containingType).returnType }.getOrNull()
+            ?: function.returnType!!.resolve()
+        properties.putIfAbsent(property, ModelProperty(property, type, mutable = false, aliases))
     }
     return properties.values.toList()
 }
@@ -66,23 +77,23 @@ internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>)
     val problems = mutableListOf<String>()
 
     fun check(model: KSClassDeclaration) {
-        checkClass(model, "page model '${model.qualifiedName?.asString()}'")
+        checkClass(model, model.asStarProjectedType(), "page model '${model.qualifiedName?.asString()}'")
     }
 
     private fun report(code: String, message: String) {
         problems += "$code $message"
     }
 
-    private fun checkClass(declaration: KSClassDeclaration, root: String) {
+    private fun checkClass(declaration: KSClassDeclaration, containingType: KSType, root: String) {
         val name = declaration.qualifiedName?.asString() ?: return
-        if (!visited.add(name)) return
+        if (!visited.add(typeKey(containingType))) return
         declaration.annotations.forEach { annotation ->
             val annotationName = annotation.annotationType.resolve().declaration.qualifiedName?.asString()
             if (annotationName in forbiddenAnnotations) {
                 report("THIM-MODEL-FORBIDDEN-TYPE", "$root: $name is annotated with @$annotationName; strict page models cannot reference persistence-managed types")
             }
         }
-        modelProperties(declaration).forEach { property ->
+        modelProperties(declaration, containingType).forEach { property ->
             if (property.mutable) {
                 report("THIM-MODEL-MUTABLE", "$root: $name.${property.name} is mutable; strict page models must be immutable")
             }
@@ -119,7 +130,15 @@ internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>)
             return
         }
         val declaration = type.declaration as? KSClassDeclaration ?: return
-        if (!isPlatformType(typeName)) checkClass(declaration, root)
+        if (!isPlatformType(typeName)) checkClass(declaration, type, root)
+    }
+
+    private fun typeKey(type: KSType): String {
+        val name = type.declaration.qualifiedName?.asString() ?: type.toString()
+        if (type.arguments.isEmpty()) return name
+        return type.arguments.joinToString(",", "$name<", ">") { argument ->
+            argument.type?.resolve()?.let(::typeKey) ?: "*"
+        }
     }
 
     private companion object {

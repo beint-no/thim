@@ -1,5 +1,6 @@
 package no.beint.thim;
 
+import java.lang.reflect.Array;
 import java.util.Objects;
 
 /**
@@ -13,11 +14,11 @@ public final class UrlEncoding {
     private UrlEncoding() {}
 
     public static String pathSegment(Object value) {
-        return encode(Objects.requireNonNull(value).toString());
+        return encode(stringValue(Objects.requireNonNull(value)));
     }
 
     public static String query(Object value) {
-        return encode(Objects.requireNonNull(value).toString());
+        return encode(stringValue(Objects.requireNonNull(value)));
     }
 
     /**
@@ -30,10 +31,24 @@ public final class UrlEncoding {
         if (value == null) {
             return;
         }
+        if (value instanceof Iterable<?> values) {
+            values.forEach(element -> appendQuery(url, name, element));
+            return;
+        }
+        if (value.getClass().isArray()) {
+            for (var index = 0; index < Array.getLength(value); index++) {
+                appendQuery(url, name, Array.get(value, index));
+            }
+            return;
+        }
         url.append(url.indexOf("?") < 0 ? '?' : '&')
                 .append(encode(name))
                 .append('=')
-                .append(encode(value.toString()));
+                .append(encode(stringValue(value)));
+    }
+
+    private static String stringValue(Object value) {
+        return value instanceof Enum<?> enumValue ? enumValue.name() : value.toString();
     }
 
     private static String encode(String value) {

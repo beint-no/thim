@@ -32,14 +32,16 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
             modelAndViewContainer.setRequestHandled(true);
             return;
         }
+        var request = Objects.requireNonNull(webRequest.getNativeRequest(HttpServletRequest.class));
         var response = Objects.requireNonNull(webRequest.getNativeResponse(HttpServletResponse.class));
         modelAndViewContainer.setRequestHandled(true);
         if (returnValue instanceof ThimResult.Redirect redirect) {
-            response.sendRedirect(redirect.path());
+            var path = redirect.path();
+            var location = path.startsWith("/") && !path.startsWith("//") ? request.getContextPath() + path : path;
+            response.sendRedirect(location);
             return;
         }
         var model = returnValue instanceof ThimResult.Page page ? page.model() : returnValue;
-        var request = Objects.requireNonNull(webRequest.getNativeRequest(HttpServletRequest.class));
         renderer.render(model, request, response);
     }
 }
