@@ -87,7 +87,7 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
                     .withPropertyName("thimTemplates")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
-            task.getInputs().files(extension.getMessages().map(directory -> yamlFiles(project, directory.getAsFile())))
+            task.getInputs().files(extension.getMessages().map(directory -> catalogFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
@@ -207,8 +207,8 @@ public final class ThimPlugin implements Plugin<Project> {
         return project.fileTree(directory, files -> files.include("**/*.html"));
     }
 
-    private FileTree yamlFiles(Project project, java.io.File directory) {
-        return project.fileTree(directory, files -> files.include("**/*.yaml"));
+    private FileTree catalogFiles(Project project, java.io.File directory) {
+        return project.fileTree(directory, files -> files.include("**/*.yaml", "**/*.yml", "**/*.YAML", "**/*.YML"));
     }
 
     private String generatedPackage(Project project) {

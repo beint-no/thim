@@ -140,6 +140,22 @@ class MessageCatalogTest {
     }
 
     @Test
+    fun `rejects case variant extensions and catalogs outside locale directories`() {
+        write("en/home.yaml", "title: Hello")
+        write("en/extra.YAML", "subtitle: Welcome")
+
+        assertProblem("must use the .yaml extension") {
+            MessageCatalog.load(directory, "en", listOf("en"))
+        }
+
+        Files.delete(directory.resolve("en/extra.YAML"))
+        write("root.yaml", "title: Ignored")
+        assertProblem("must be stored inside a locale directory") {
+            MessageCatalog.load(directory, "en", listOf("en"))
+        }
+    }
+
+    @Test
     fun `requires the same keys and argument contract in every locale`() {
         write("en/home.yaml", "title: Hello {name}\nsubtitle: Welcome")
         write("nb/home.yaml", "title: Hei\nextra: Ekstra")
