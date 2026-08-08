@@ -1,8 +1,6 @@
 # Thim
 
-Thim is a strict AOT HTML renderer for Java and Kotlin applications. It compiles typed templates into direct Java renderers.
-
-There is no template engine, expression language, reflection, property lookup, message lookup or character encoder in the request path. Static HTML is stored once as UTF-8 bytes; generated code writes those bytes and escaped dynamic values directly to the response.
+Thim is a compile-time-safe server-side HTML renderer for Java and Kotlin applications. It validates templates against page models, messages and Spring routes, then generates direct Java renderers. Static HTML is stored as UTF-8 bytes and dynamic values are encoded for their output context.
 
 Thim requires JDK 26 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
@@ -47,7 +45,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.4.3"
+    id("no.beint.thim") version "0.4.18"
 }
 ```
 
@@ -56,7 +54,7 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.4.3"
+    id("no.beint.thim") version "0.4.18"
 }
 ```
 
@@ -79,11 +77,11 @@ thim {
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
-`strictTemplates` rejects every non-fragment template without a matching page model. Fragments never reached from any compiled page are reported as warnings, and `failOnUnusedFragments` turns them into errors once Thim owns every template; fragment parameters the fragment body never reads always warn. `failOnUnusedMessages` is suitable when the configured message bundles are owned entirely by the compiled templates. Leave it disabled for a bundle also used by backend code unless that usage is checked separately.
+`strictTemplates` requires every page template to have a matching model. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
 
-`strictModels` opts page models into a closed-world contract for render-only data. A strict model and every type reachable from its properties must be immutable data prepared for rendering: mutable properties and setters are rejected, along with `Any`/`Object` properties, map-shaped data, raw collections, and `th:each` over collections that are not materialized (`List`, `Set`, `Collection`, or an array). Types annotated with a persistence annotation are rejected so entities and lazy collections never reach a renderer; the default list covers JPA (`@Entity`, `@Embeddable`, `@MappedSuperclass` in both `jakarta.persistence` and `javax.persistence`) and can be replaced through `forbiddenModelAnnotations`. Model properties no expanded template reads are reported as warnings; `failOnUnusedProperties` turns them into errors. Keep it disabled for models whose properties are also consumed by backend code.
+`strictModels` requires immutable, render-only data. It rejects mutable properties, `Any`/`Object`, maps, raw or lazy collections, and persistence entities. Unused model properties are warnings; `failOnUnusedProperties` promotes them to errors.
 
-Expanded pages with an `<html>` root are additionally validated as complete documents. Duplicate ids are rejected, including the ids `th:field` generates, and `label for`, `aria-labelledby`, `aria-describedby`, `aria-controls`, and local `href="#..."` anchors must reference an id that exists in the page. A static id or a `th:field` inside `th:each` is reported as a warning because repeated output is likely to duplicate the id; use `data-*` attributes or an id on the container instead. Templates without an `<html>` root are HTMX partials rendered into an existing document, so their references are not validated. A dynamic `th:id` is allowed for data-driven targets, but it never satisfies these checks: a static reference must resolve to a static or `th:field`-generated id, and duplication among static ids stays an error regardless of what `th:id` renders.
+Complete documents are checked for duplicate ids and broken `label`, ARIA and local-anchor references. Repeated static ids warn. Templates without an `<html>` root are treated as partials, so document-wide references are not checked.
 
 Use `thimCheck` for fast template validation during development:
 
@@ -92,7 +90,7 @@ Use `thimCheck` for fast template validation during development:
 ./gradlew thimCheck --continuous
 ```
 
-`thimCheck` uses the same parser, fragment expansion, type analysis, message validation and safety checks as normal compilation. Java modules run the production compiler into isolated check outputs and write a cacheable machine-readable report to `build/reports/thim/check.json`. Kotlin modules delegate to the KSP task configured by the plugin, so diagnostics match ordinary Kotlin compilation.
+`thimCheck` runs the same validation as normal compilation. Java modules also write a report to `build/reports/thim/check.json`.
 
 ## Typed controller routes
 
@@ -115,7 +113,7 @@ WebAppRoutes.connections(
 )
 ```
 
-Route generation is opt-in so an upgrade within the 0.4 line cannot break an existing build because two application paths derive the same Kotlin name. The generated source is aggregating and declares every controller source in `RouteCatalog.files` as a KSP dependency, so incremental compilation always rebuilds it from the complete mapping table. Route builders are currently Kotlin-only; Java applications continue to receive the Java template registry.
+Route generation is opt-in and currently available for Kotlin applications.
 
 ## Controller return values
 
@@ -134,13 +132,13 @@ fun select(): ThimResult =
     }
 ```
 
-`ThimResult.Page.model` deliberately has type `Any`: requiring a marker interface would add a Thim dependency to every page model without giving KSP visibility into construction sites. The Spring adapter unwraps a page result into the normal compiled renderer and handles a redirect with `HttpServletResponse.sendRedirect`.
+`ThimResult.Page.model` has type `Any`, so page models remain dependency-free. The Spring adapter renders `Page` and sends the path in `Redirect` as an HTTP redirect.
 
-Using Kotlin `Any` or Java `Object` as the declared return type remains supported for source compatibility. Spring selects a return-value handler using a `MethodParameter` that reports the runtime value's class: a page model reaches `ThimReturnValueHandler`, while a `String` reaches Spring's view-name handler. If the value is null, Spring falls back to the declared `Object` type. Generated registries therefore deliberately reject `Object.class` in `supportsReturnType`; that guard prevents Thim from attempting to render a missing value and does not disable non-null `Any` handlers.
+Existing handlers declared as Kotlin `Any` or Java `Object` remain supported, but `ThimResult` documents mixed page/redirect outcomes more clearly.
 
 Artifacts are published through `https://maven.pkg.github.com/beint-no/thim`. Add that repository to `pluginManagement` and dependency resolution.
 
-## Language
+## Template syntax
 
 Thim accepts:
 
@@ -155,11 +153,9 @@ Thim accepts:
 - literal `#{message}` expressions with typed arguments
 - `${#locale.language}` for a language attribute
 
-Every dynamic output position is classified during compilation and rendered with the encoder for its context. Dynamic output in JavaScript, CSS and event-handler contexts — `th:on*`, `th:style` and `th:text` on `<script>` or `<style>` — is rejected. Dynamic URL values must be a static `@{...}` URL or an explicit `TrustedUrl` property; `SafeHtml` opts into raw HTML through `th:utext` only and is rejected everywhere else.
+Every dynamic value is encoded for its output context. Use static `@{...}` expressions or `TrustedUrl` for URLs, and use `SafeHtml` only with `th:utext`. Dynamic JavaScript, CSS and event-handler content is rejected.
 
-Missing models, properties and messages; unused template-owned messages; unsafe nullable access; locale drift; duplicate messages; invalid message arguments; malformed HTML; unsupported output contexts; and unsupported expressions fail compilation.
-
-There is no SpEL or OGNL. Computation belongs in the page model.
+Missing models, properties, messages and routes; unsafe nullable access; malformed HTML; and unsupported output contexts fail compilation. Prepare computed display values in the page model.
 
 ## Modules
 
