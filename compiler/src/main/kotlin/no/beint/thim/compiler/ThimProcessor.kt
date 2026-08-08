@@ -30,6 +30,11 @@ private class ThimProcessor(
     private val logger: KSPLogger = environment.logger
     private val templatesDirectory = requiredPath(environment, "thim.templates")
     private val messagesDirectory = requiredPath(environment, "thim.messages")
+    private val defaultLocale = environment.options["thim.defaultLocale"] ?: "en"
+    private val supportedLocales = environment.options["thim.supportedLocales"]
+        ?.split(',')
+        ?.map(String::trim)
+        ?: listOf(defaultLocale)
     private val generatedPackage = environment.options["thim.package"] ?: "thim.generated"
     private val registryName = environment.options["thim.registry"] ?: "ThimTemplates"
     private val modelPackages = environment.options["thim.modelPackages"]
@@ -82,7 +87,7 @@ private class ThimProcessor(
                 problems += checker.problems
             }
 
-            val catalog = MessageCatalog.load(messagesDirectory)
+            val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
             val extractedRoutes = if (validateRoutes || generateRoutes) {
                 RouteCatalog.load(resolver, trustedPaths)
             } else {

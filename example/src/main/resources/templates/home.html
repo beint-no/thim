@@ -3,12 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title th:text="#{home.title(${version})}">Thim</title>
+    <title th:text="#{home.title(version=${version})}">Thim</title>
 </head>
 <body>
     <main>
-        <h1 th:text="#{home.title(${version})}">Thim</h1>
+        <h1 th:text="#{home.title(version=${version})}">Thim</h1>
         <p th:text="${greeting}">Greeting</p>
+        <p th:text="#{home.inbox(unreadCount=${unreadCount})}">Unread messages</p>
         <ul>
             <li th:each="feature : ${features}">
                 <th:block th:replace="~{fragments/feature :: feature(${feature})}"></th:block>

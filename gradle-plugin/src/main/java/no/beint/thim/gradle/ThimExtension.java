@@ -9,6 +9,10 @@ public abstract class ThimExtension {
 
     public abstract DirectoryProperty getMessages();
 
+    public abstract Property<String> getDefaultLocale();
+
+    public abstract ListProperty<String> getSupportedLocales();
+
     public abstract Property<String> getGeneratedPackage();
 
     public abstract Property<String> getRegistryName();

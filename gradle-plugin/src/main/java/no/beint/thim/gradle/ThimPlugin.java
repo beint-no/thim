@@ -29,7 +29,9 @@ public final class ThimPlugin implements Plugin<Project> {
     public void apply(Project project) {
         var extension = project.getExtensions().create("thim", ThimExtension.class);
         extension.getTemplates().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/templates"));
-        extension.getMessages().convention(project.getLayout().getProjectDirectory().dir("src/main/resources"));
+        extension.getMessages().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/i18n"));
+        extension.getDefaultLocale().convention("en");
+        extension.getSupportedLocales().convention(extension.getDefaultLocale().map(locale -> java.util.List.of(locale)));
         extension.getGeneratedPackage().convention(project.provider(() -> generatedPackage(project)));
         extension.getRegistryName().convention("ThimTemplates");
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
@@ -66,6 +68,8 @@ public final class ThimPlugin implements Plugin<Project> {
         var ksp = project.getExtensions().getByType(KspExtension.class);
         ksp.arg("thim.templates", extension.getTemplates().map(directory -> directory.getAsFile().getAbsolutePath()));
         ksp.arg("thim.messages", extension.getMessages().map(directory -> directory.getAsFile().getAbsolutePath()));
+        ksp.arg("thim.defaultLocale", extension.getDefaultLocale());
+        ksp.arg("thim.supportedLocales", extension.getSupportedLocales().map(locales -> String.join(",", locales)));
         ksp.arg("thim.package", extension.getGeneratedPackage());
         ksp.arg("thim.registry", extension.getRegistryName());
         ksp.arg("thim.modelPackages", extension.getModelPackages().map(packages -> String.join(",", packages)));
@@ -83,7 +87,7 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
                     .withPropertyName("thimTemplates")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
-            task.getInputs().files(extension.getMessages().map(directory -> propertyFiles(project, directory.getAsFile())))
+            task.getInputs().files(extension.getMessages().map(directory -> yamlFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
@@ -159,6 +163,8 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getModelSources().from(modelSourceDirectories);
         task.getTemplates().set(extension.getTemplates());
         task.getMessages().set(extension.getMessages());
+        task.getDefaultLocale().set(extension.getDefaultLocale());
+        task.getSupportedLocales().set(extension.getSupportedLocales());
         task.getRunnerClasspath().from(runner);
         task.getProcessorClasspath().from(processor);
         task.getLibraries().from(main.getCompileClasspath());
@@ -201,8 +207,8 @@ public final class ThimPlugin implements Plugin<Project> {
         return project.fileTree(directory, files -> files.include("**/*.html"));
     }
 
-    private FileTree propertyFiles(Project project, java.io.File directory) {
-        return project.fileTree(directory, files -> files.include("**/*.properties"));
+    private FileTree yamlFiles(Project project, java.io.File directory) {
+        return project.fileTree(directory, files -> files.include("**/*.yaml"));
     }
 
     private String generatedPackage(Project project) {

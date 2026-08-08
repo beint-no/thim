@@ -17,6 +17,7 @@ import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.OutputFile;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
@@ -49,8 +50,15 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract DirectoryProperty getTemplates();
 
     @InputDirectory
+    @Optional
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract DirectoryProperty getMessages();
+
+    @Input
+    public abstract Property<String> getDefaultLocale();
+
+    @Input
+    public abstract ListProperty<String> getSupportedLocales();
 
     @Classpath
     public abstract ConfigurableFileCollection getRunnerClasspath();
@@ -149,6 +157,8 @@ public abstract class ThimCompile extends DefaultTask {
         var processorOptions = String.join(separator,
                 "thim.templates=" + getTemplates().get().getAsFile().getAbsolutePath(),
                 "thim.messages=" + getMessages().get().getAsFile().getAbsolutePath(),
+                "thim.defaultLocale=" + getDefaultLocale().get(),
+                "thim.supportedLocales=" + String.join(",", getSupportedLocales().get()),
                 "thim.package=" + getGeneratedPackage().get(),
                 "thim.registry=" + getRegistryName().get(),
                 "thim.modelPackages=" + String.join(",", getModelPackages().get()),

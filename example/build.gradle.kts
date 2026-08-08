@@ -28,7 +28,9 @@ dependencies {
 
 ksp {
     arg("thim.templates", layout.projectDirectory.dir("src/main/resources/templates").asFile.absolutePath)
-    arg("thim.messages", layout.projectDirectory.dir("src/main/resources").asFile.absolutePath)
+    arg("thim.messages", layout.projectDirectory.dir("src/main/resources/i18n").asFile.absolutePath)
+    arg("thim.defaultLocale", "en")
+    arg("thim.supportedLocales", "en,nb")
     arg("thim.package", "no.beint.thim.example.generated")
     arg("thim.registry", "ExampleTemplates")
     arg("thim.generateRoutes", "true")
@@ -45,8 +47,8 @@ tasks.withType<KspAATask>().configureEach {
     })
         .withPropertyName("thimTemplates")
         .withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.files(fileTree(layout.projectDirectory.dir("src/main/resources")) {
-        include("**/*.properties")
+    inputs.files(fileTree(layout.projectDirectory.dir("src/main/resources/i18n")) {
+        include("**/*.yaml")
     })
         .withPropertyName("thimMessages")
         .withPathSensitivity(PathSensitivity.RELATIVE)

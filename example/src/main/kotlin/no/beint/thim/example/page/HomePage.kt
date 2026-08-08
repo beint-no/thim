@@ -9,6 +9,7 @@ data class HomePage(
     val greeting: String,
     val features: List<Feature>,
     val showFooter: Boolean,
+    val unreadCount: Int,
     val feedbackForm: FeedbackForm,
     val errors: FormErrors = FormErrors.NONE,
 )
