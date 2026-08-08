@@ -41,7 +41,6 @@ private class ThimProcessor(
     private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
     private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"].toBoolean()
     private val strictModels = environment.options["thim.strictModels"].toBoolean()
-    private val failOnUnusedProperties = environment.options["thim.failOnUnusedProperties"].toBoolean()
     private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
         ?.split(',')
         ?.map(String::trim)
@@ -155,11 +154,7 @@ private class ThimProcessor(
                 .map { "${template.model.qualifiedName?.asString()}.${it.name} is not used by template '${template.name}'" }
         }
         if (unused.isEmpty()) return
-        if (failOnUnusedProperties) {
-            diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
-        } else {
-            unused.forEach { logger.warn("THIM-MODEL-UNUSED-PROPERTY $it") }
-        }
+        diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
     }
 
     private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog) {

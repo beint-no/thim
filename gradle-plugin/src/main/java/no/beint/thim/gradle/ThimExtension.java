@@ -31,7 +31,5 @@ public abstract class ThimExtension {
 
     public abstract Property<Boolean> getStrictModels();
 
-    public abstract Property<Boolean> getFailOnUnusedProperties();
-
     public abstract ListProperty<String> getForbiddenModelAnnotations();
 }

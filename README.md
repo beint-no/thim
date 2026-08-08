@@ -45,7 +45,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.4.18"
+    id("no.beint.thim") version "0.4.19"
 }
 ```
 
@@ -54,7 +54,7 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.4.18"
+    id("no.beint.thim") version "0.4.19"
 }
 ```
 
@@ -70,7 +70,6 @@ thim {
     strictTemplates.set(true)
     failOnUnusedMessages.set(true)
     strictModels.set(true)
-    failOnUnusedProperties.set(true)
     generateRoutes.set(true)
 }
 ```
@@ -79,7 +78,7 @@ The default model package is `<project group>.page`. Nested template names are p
 
 `strictTemplates` requires every page template to have a matching model. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
 
-`strictModels` requires immutable, render-only data. It rejects mutable properties, `Any`/`Object`, maps, raw or lazy collections, and persistence entities. Unused model properties are warnings; `failOnUnusedProperties` promotes them to errors.
+`strictModels` requires immutable, render-only data. It rejects mutable or unused properties, `Any`/`Object`, maps, raw or lazy collections, and persistence entities.
 
 Complete documents are checked for duplicate ids and broken `label`, ARIA and local-anchor references. Repeated static ids warn. Templates without an `<html>` root are treated as partials, so document-wide references are not checked.
 

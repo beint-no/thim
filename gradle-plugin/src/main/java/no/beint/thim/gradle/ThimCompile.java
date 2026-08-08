@@ -89,9 +89,6 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract Property<Boolean> getStrictModels();
 
     @Input
-    public abstract Property<Boolean> getFailOnUnusedProperties();
-
-    @Input
     public abstract ListProperty<String> getForbiddenModelAnnotations();
 
     @Input
@@ -161,7 +158,6 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.validateRoutes=" + getValidateRoutes().get(),
                 "thim.trustedPaths=" + String.join(",", getTrustedPaths().get()),
                 "thim.strictModels=" + getStrictModels().get(),
-                "thim.failOnUnusedProperties=" + getFailOnUnusedProperties().get(),
                 "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get())
         );
         var arguments = List.of(

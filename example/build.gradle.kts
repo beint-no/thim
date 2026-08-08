@@ -37,7 +37,6 @@ ksp {
     arg("thim.failOnUnusedMessages", "true")
     arg("thim.failOnUnusedFragments", "true")
     arg("thim.strictModels", "true")
-    arg("thim.failOnUnusedProperties", "true")
 }
 
 tasks.withType<KspAATask>().configureEach {

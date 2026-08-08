@@ -42,7 +42,6 @@ public final class ThimPlugin implements Plugin<Project> {
                 name.endsWith("Templates") ? name.substring(0, name.length() - "Templates".length()) + "Routes" : name + "Routes"));
         extension.getTrustedPaths().convention(java.util.List.of());
         extension.getStrictModels().convention(false);
-        extension.getFailOnUnusedProperties().convention(false);
         extension.getForbiddenModelAnnotations().convention(java.util.List.of(
                 "jakarta.persistence.Entity", "jakarta.persistence.Embeddable", "jakarta.persistence.MappedSuperclass",
                 "javax.persistence.Entity", "javax.persistence.Embeddable", "javax.persistence.MappedSuperclass"));
@@ -78,7 +77,6 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.routesName", extension.getRoutesName());
         ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
-        ksp.arg("thim.failOnUnusedProperties", extension.getFailOnUnusedProperties().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> {
@@ -173,7 +171,6 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getValidateRoutes().set(extension.getValidateRoutes());
         task.getTrustedPaths().set(extension.getTrustedPaths());
         task.getStrictModels().set(extension.getStrictModels());
-        task.getFailOnUnusedProperties().set(extension.getFailOnUnusedProperties());
         task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));
