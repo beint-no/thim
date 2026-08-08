@@ -4,7 +4,7 @@ internal data class PathSegment(val name: String, val safe: Boolean)
 
 internal data class PathExpression(val segments: List<PathSegment>)
 
-internal data class MessageExpression(val key: String, val arguments: List<PathExpression>)
+internal data class MessageExpression(val key: String, val arguments: Map<String, PathExpression>)
 
 internal sealed interface UrlArgument
 
@@ -76,13 +76,20 @@ internal object Expressions {
         val opening = body.indexOf('(')
         if (opening == -1) {
             require(body.matches(keyPattern)) { "$context: invalid message key '$body'" }
-            return MessageExpression(body, emptyList())
+            return MessageExpression(body, emptyMap())
         }
         require(body.endsWith(')')) { "$context: invalid message expression '$value'" }
         val key = body.substring(0, opening).trim()
         require(key.matches(keyPattern)) { "$context: invalid message key '$key'" }
-        val arguments = splitArguments(body.substring(opening + 1, body.length - 1), context)
-            .map { path(it, context) }
+        val arguments = linkedMapOf<String, PathExpression>()
+        splitArguments(body.substring(opening + 1, body.length - 1), context).forEach { argument ->
+            val equals = argument.indexOf('=')
+            require(equals > 0) { "$context: message arguments must use name=\${property}" }
+            val name = argument.substring(0, equals).trim()
+            require(name.matches(argumentNamePattern)) { "$context: invalid message argument name '$name'" }
+            require(name !in arguments) { "$context: duplicate message argument '$name'" }
+            arguments[name] = path(argument.substring(equals + 1).trim(), context)
+        }
         return MessageExpression(key, arguments)
     }
 
@@ -156,6 +163,7 @@ internal object Expressions {
     }
 
     private val keyPattern = Regex("[A-Za-z0-9_][A-Za-z0-9_.-]*")
+    private val argumentNamePattern = Regex("[A-Za-z_][A-Za-z0-9_]*")
     private val numberPattern = Regex("-?\\d+")
     private val pathVariablePattern = Regex("\\{([A-Za-z_][A-Za-z0-9_]*)}")
 }

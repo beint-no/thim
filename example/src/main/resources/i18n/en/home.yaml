@@ -1,0 +1,10 @@
+title: Thim {version}
+health: Health check
+details: Details
+feedback: Send feedback
+send: Send
+author: Author
+inbox:
+  _plural: unreadCount
+  one: One unread message
+  other: "{unreadCount} unread messages"

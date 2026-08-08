@@ -48,9 +48,21 @@ internal class RendererGenerator(
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
         val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
         val code = CodeWriter(staticContent, registryName)
-        val locales = if (usesMessages(nodes)) catalog.locales() else emptySet()
-        regionalLocales = locales.filter { '-' in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
-        languages = locales.filter { '-' !in it }.withIndex().associate { (index, locale) -> locale to index + 1 }
+        val locales = if (usesMessages(nodes)) {
+            catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
+        } else {
+            emptySet()
+        }
+        val localeIds = if (locales.isEmpty()) {
+            emptyMap()
+        } else {
+            buildMap {
+                put(catalog.defaultLocale, 0)
+                locales.forEachIndexed { index, locale -> put(locale, index + 1) }
+            }
+        }
+        regionalLocales = localeIds.filterKeys { '-' in it }
+        languages = localeIds.filterKeys { '-' !in it }
 
         code.line("final class $rendererName {")
         code.indent {
@@ -58,17 +70,24 @@ internal class RendererGenerator(
             code.line()
             code.line("static void render($modelName model, RenderContext context, HtmlOutput output) throws IOException {")
             code.indent {
-                if (regionalLocales.isNotEmpty()) {
-                    val cases = regionalLocales.entries.joinToString(" ") { (locale, index) ->
-                        "case \"${javaString(locale)}\" -> $index;"
+                if (regionalLocales.isNotEmpty() || languages.isNotEmpty()) {
+                    val languageFallback = if (languages.isNotEmpty()) {
+                        val cases = languages.entries.joinToString(" ") { (locale, index) ->
+                            "case \"${javaString(locale)}\" -> $index;"
+                        }
+                        "switch (context.locale().getLanguage()) { $cases default -> 0; }"
+                    } else {
+                        "0"
                     }
-                    code.statement("var locale = switch (context.locale().toLanguageTag()) { $cases default -> 0; };")
-                }
-                if (languages.isNotEmpty()) {
-                    val cases = languages.entries.joinToString(" ") { (locale, index) ->
-                        "case \"${javaString(locale)}\" -> $index;"
+                    val resolution = if (regionalLocales.isNotEmpty()) {
+                        val cases = regionalLocales.entries.joinToString(" ") { (locale, index) ->
+                            "case \"${javaString(locale)}\" -> $index;"
+                        }
+                        "switch (context.locale().toLanguageTag()) { $cases default -> $languageFallback; }"
+                    } else {
+                        languageFallback
                     }
-                    code.statement("var language = switch (context.locale().getLanguage()) { $cases default -> 0; };")
+                    code.statement("var messageLocale = $resolution;")
                 }
                 val scope = Scope(model, recordUse = { property ->
                     usedRootProperties.getOrPut(modelName, ::mutableSetOf).add(property)
@@ -276,11 +295,11 @@ internal class RendererGenerator(
         } else if (safeHtml != null) {
             val attributeLocation = attributeLocation(element, "th:utext")
             if (safeHtml.trim().startsWith("#{")) {
-                val message = Expressions.message(safeHtml, diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:utext"))
-                requireDiagnostic(message.arguments.isEmpty(), "THIM-RAW-MESSAGE-ARGUMENTS", attributeLocation) {
-                    "raw messages cannot contain arguments"
-                }
-                renderMessage(message, scope, code, diagnosticContext(attributeLocation, "THIM-MESSAGE", "th:utext"), attributeLocation, raw = true)
+                diagnostic(
+                    "THIM-RAW-MESSAGE-UNSUPPORTED",
+                    attributeLocation,
+                    "localized messages are escaped text; use a non-null SafeHtml model property for th:utext",
+                )
             } else {
                 val value = scope.resolve(
                     Expressions.path(safeHtml, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:utext")),
@@ -628,43 +647,71 @@ internal class RendererGenerator(
         code: CodeWriter,
         context: String,
         location: SourceLocation?,
-        raw: Boolean = false,
     ) {
-        val definition = catalog.use(expression.key, expression.arguments.size, context)
-        val arguments = expression.arguments.map {
-            scope.resolve(it, diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "message argument"), location).code
-        }
-        val localized = definition.localized.filterValues { it != definition.base }
-        val regional = localized.filterKeys { '-' in it }
-        val languageValues = localized.filterKeys { '-' !in it }
-
-        if (regional.isNotEmpty()) {
-            code.open("switch (locale)")
-            regional.forEach { (locale, value) ->
-                code.open("case ${regionalLocales.getValue(locale)} ->")
-                appendMessage(value, arguments, code, raw)
-                code.close()
+        val definition = catalog.use(expression.key, expression.arguments.keys, context)
+        val arguments = expression.arguments.mapValues { (name, path) ->
+            val resolved = scope.resolve(path, diagnosticContext(location, "THIM-PROPERTY-UNKNOWN", "message argument '$name'"), location)
+            requireDiagnostic(!resolved.nullable, "THIM-MESSAGE-ARGUMENT-NULLABLE", location) {
+                "message argument '$name' cannot be nullable"
             }
-            code.open("default ->")
-        }
-        if (languageValues.isNotEmpty()) {
-            code.open("switch (language)")
-            languageValues.forEach { (locale, value) ->
-                code.open("case ${languages.getValue(locale)} ->")
-                appendMessage(value, arguments, code, raw)
-                code.close()
+            when (definition.arguments.getValue(name)) {
+                MessageArgumentKind.NUMBER -> requireDiagnostic(
+                    resolved.type.declaration.qualifiedName?.asString() in integralMessageTypes,
+                    "THIM-MESSAGE-ARGUMENT-TYPE",
+                    location,
+                ) {
+                    "message argument '$name' is used for plural selection and requires an integral numeric property"
+                }
+                MessageArgumentKind.SELECT -> requireDiagnostic(
+                    resolved.type.declaration.qualifiedName?.asString() in stringTypes || resolved.type.isEnum(),
+                    "THIM-MESSAGE-ARGUMENT-TYPE",
+                    location,
+                ) {
+                    "message argument '$name' is used for selection and requires a String or enum property"
+                }
+                MessageArgumentKind.TEXT -> requireDiagnostic(
+                    resolved.type.declaration.qualifiedName?.asString() in messageTextTypes || resolved.type.isEnum(),
+                    "THIM-MESSAGE-ARGUMENT-TYPE",
+                    location,
+                ) {
+                    "message argument '$name' requires a String, number, Boolean, or enum property; prepare other display values in the page model"
+                }
             }
-            code.open("default ->")
-            appendMessage(definition.base, arguments, code, raw)
-            code.close()
-            code.close()
-        } else {
-            appendMessage(definition.base, arguments, code, raw)
+            if (definition.arguments.getValue(name) == MessageArgumentKind.SELECT && resolved.type.isEnum()) {
+                val declaration = resolved.type.declaration as KSClassDeclaration
+                val constants = declaration.declarations
+                    .filterIsInstance<KSClassDeclaration>()
+                    .filter { it.classKind == ClassKind.ENUM_ENTRY }
+                    .map { it.simpleName.asString() }
+                    .toSet()
+                val variants = definition.values.values.flatMapTo(linkedSetOf()) { it.selectVariants(name) }
+                val unknown = variants - constants
+                requireDiagnostic(unknown.isEmpty(), "THIM-MESSAGE-SELECT-VARIANT", location) {
+                    "message argument '$name' has variants ${unknown.sorted()} that are not constants of " +
+                        (declaration.qualifiedName?.asString() ?: declaration.simpleName.asString())
+                }
+            }
+            resolved
         }
-        if (regional.isNotEmpty()) {
-            code.close()
+        val defaultValue = definition.values.getValue(catalog.defaultLocale)
+        val localized = definition.values
+            .filterKeys { it != catalog.defaultLocale }
+            .filterValues { it != defaultValue || it.usesPlural() }
+        if (localized.isEmpty()) {
+            renderMessageValue(defaultValue, arguments, code, catalog.defaultLocale)
+            return
+        }
+        code.open("switch (messageLocale)")
+        localized.forEach { (locale, value) ->
+            val localeId = regionalLocales[locale] ?: languages.getValue(locale)
+            code.open("case $localeId ->")
+            renderMessageValue(value, arguments, code, locale)
             code.close()
         }
+        code.open("default ->")
+        renderMessageValue(defaultValue, arguments, code, catalog.defaultLocale)
+        code.close()
+        code.close()
     }
 
     private fun usesMessages(nodes: List<Node>): Boolean = nodes.any { node ->
@@ -673,14 +720,46 @@ internal class RendererGenerator(
         )
     }
 
-    private fun appendMessage(pattern: String, arguments: List<String>, code: CodeWriter, raw: Boolean = false) {
-        var start = 0
-        placeholderPattern.findAll(pattern).forEach { match ->
-            code.static(if (raw) pattern.substring(start, match.range.first) else escapeHtml(pattern.substring(start, match.range.first)))
-            code.statement("output.text(${arguments[match.groupValues[1].toInt()]});")
-            start = match.range.last + 1
+    private fun renderMessageValue(
+        value: MessageValue,
+        arguments: Map<String, ResolvedPath>,
+        code: CodeWriter,
+        locale: String,
+    ) {
+        when (value) {
+            is MessagePattern -> value.parts.forEach { part ->
+                when (part) {
+                    is MessageText -> code.static(escapeHtml(part.value))
+                    is MessageArgument -> code.statement("output.text(${arguments.getValue(part.name).code});")
+                }
+            }
+            is MessageSelection -> {
+                val argument = arguments.getValue(value.argument)
+                when (value.kind) {
+                    MessageArgumentKind.NUMBER -> {
+                        val configured = java.util.Locale.forLanguageTag(locale)
+                        code.open(
+                            "switch (no.beint.thim.PluralRules.cardinal(" +
+                                "\"${javaString(configured.language)}\", \"${javaString(configured.country)}\", ${argument.code}))",
+                        )
+                    }
+                    MessageArgumentKind.SELECT -> {
+                        val selector = if (argument.type.isEnum()) "${argument.code}.name()" else argument.code
+                        code.open("switch ($selector)")
+                    }
+                    MessageArgumentKind.TEXT -> error("Text arguments cannot select message variants")
+                }
+                value.variants.filterKeys { it != "other" }.forEach { (variant, selected) ->
+                    code.open("case \"${javaString(variant)}\" ->")
+                    renderMessageValue(selected, arguments, code, locale)
+                    code.close()
+                }
+                code.open("default ->")
+                renderMessageValue(value.variants.getValue("other"), arguments, code, locale)
+                code.close()
+                code.close()
+            }
         }
-        code.static(if (raw) pattern.substring(start) else escapeHtml(pattern.substring(start)))
     }
 
     private fun urlCode(
@@ -1090,7 +1169,6 @@ internal class RendererGenerator(
 
     private companion object {
         val eachPattern = Regex("([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*(\\$\\{.+})")
-        val placeholderPattern = Regex("\\{(\\d+)}")
         val voidElements = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr")
         val booleanAttributes = setOf(
             "allowfullscreen", "async", "autofocus", "autoplay", "checked", "controls", "default", "defer",
@@ -1145,6 +1223,12 @@ internal class RendererGenerator(
             "java.lang.Float", "int", "long", "short", "byte", "double", "float",
             "java.math.BigDecimal", "java.math.BigInteger",
         )
+        val integralMessageTypes = setOf(
+            "kotlin.Int", "kotlin.Long", "kotlin.Short", "kotlin.Byte",
+            "java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte",
+            "int", "long", "short", "byte",
+        )
+        val messageTextTypes = stringTypes + numericTypes + booleanFieldTypes
 
         fun javaString(value: String): String = buildString(value.length) {
             value.forEach { character ->

@@ -56,10 +56,11 @@ class HomeCtrl {
         greeting = "Typed models, compiled HTML, no runtime engine.",
         features = listOf(
             Feature("Safe", "Properties and messages are checked while the application compiles."),
-            Feature("Small", "The runtime contains three dependency-free Java types."),
+            Feature("Small", "The runtime is dependency-free Java."),
             Feature("Fast", "Generated code writes directly to the HTTP response."),
         ),
         showFooter = true,
+        unreadCount = 3,
         feedbackForm = FeedbackForm.empty(),
     )
 

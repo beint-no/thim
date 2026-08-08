@@ -63,7 +63,9 @@ The plugin supplies the runtime, compiler and Spring adapter and tracks template
 ```kotlin
 thim {
     templates.set(layout.projectDirectory.dir("src/main/resources/templates"))
-    messages.set(layout.projectDirectory.dir("src/main/resources"))
+    messages.set(layout.projectDirectory.dir("src/main/resources/i18n"))
+    defaultLocale.set("en")
+    supportedLocales.set(listOf("en", "nb"))
     generatedPackage.set("your.group.your_module.thim.generated")
     registryName.set("ThimTemplates")
     modelPackages.set(listOf("no.example.page"))
@@ -90,6 +92,51 @@ Use `thimCheck` for fast template validation during development:
 ```
 
 `thimCheck` runs the same validation as normal compilation. Java modules also write a report to `build/reports/thim/check.json`.
+
+## Message catalogs
+
+Thim compiles localized YAML catalogs into the generated renderer. SnakeYAML Engine is a compiler dependency only; parsing, key lookup and pattern interpretation never happen at request time.
+
+The directory name is a canonical BCP 47 language tag. The relative YAML filename and nested mappings form the message namespace:
+
+```text
+src/main/resources/i18n/
+├── en/
+│   └── home.yaml
+└── nb/
+    └── home.yaml
+```
+
+```yaml
+# en/home.yaml
+title: Thim {version}
+introduction: |-
+  Compile templates and translations together.
+  Ship no runtime template engine.
+inbox:
+  _plural: unreadCount
+  one: One unread message
+  other: "{unreadCount} unread messages"
+salutation:
+  _select: audience
+  MEMBER: Welcome back, {name}
+  other: Welcome, {name}
+```
+
+Use named model properties in the template:
+
+```html
+<title th:text="#{home.title(version=${version})}">Thim</title>
+<p th:text="#{home.inbox(unreadCount=${unreadCount})}">Unread messages</p>
+```
+
+`_plural` accepts the locale's reachable subset of `zero`, `one`, `two`, `few`, `many` and the required `other` category. Its argument must be a non-null integral property. `_select` requires a non-null string or enum and also requires `other`; enum variants must name real enum constants. Selections can be nested. All interpolated values are HTML-escaped; catalogs cannot produce raw HTML. Write `{{` or `}}` for a literal brace.
+
+Every configured locale must contain exactly the same message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages (when enabled) fail compilation. At runtime Thim chooses an exact configured language tag, then a configured language-only tag, then the default locale.
+
+Catalogs use a deliberately small YAML 1.2 profile: mappings and string scalars only. The failsafe schema means plain `no`, `true`, `12` and `2026-08-08` remain text. Duplicate keys, tags, anchors, aliases, sequences and multiple documents are rejected. Block scalars are supported for multiline copy. Only the `.yaml` extension is accepted.
+
+Integer cardinal rules derived from [Unicode CLDR 49](https://unicode.org/cldr/charts/49/supplemental/language_plural_rules.html) are embedded for `af`, `bg`, `bs`, `ca`, `cs`, `cy`, `da`, `de`, `el`, `en`, `eo`, `es`, `et`, `eu`, `fi`, `fo`, `fr`, `ga`, `gd`, `gl`, `hr`, `hu`, `is`, `it`, `lt`, `lv`, `nb`, `nl`, `nn`, `no`, `pl`, `pt`, `ro`, `sk`, `sl`, `sq`, `sr`, `sv` and `sw`. A catalog that uses `_plural` with another language fails compilation rather than guessing.
 
 ## Typed controller routes
 
@@ -149,7 +196,7 @@ Thim accepts:
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
 - `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action`
 - conditional HTML boolean attributes
-- literal `#{message}` expressions with typed arguments
+- literal `#{message(argument=${property})}` expressions with typed, named arguments
 - `${#locale.language}` for a language attribute
 
 Every dynamic value is encoded for its output context. Use static `@{...}` expressions or `TrustedUrl` for URLs, and use `SafeHtml` only with `th:utext`. Dynamic JavaScript, CSS and event-handler content is rejected.

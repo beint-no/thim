@@ -1,0 +1,10 @@
+title: Thim {version}
+health: Helsesjekk
+details: Detaljer
+feedback: Send tilbakemelding
+send: Send inn
+author: Forfatter
+inbox:
+  _plural: unreadCount
+  one: Én ulest melding
+  other: "{unreadCount} uleste meldinger"
