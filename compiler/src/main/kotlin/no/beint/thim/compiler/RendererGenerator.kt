@@ -318,7 +318,7 @@ internal class RendererGenerator(
                     routes.check(value, htmxMethodAttributes.getValue(name), attributeLocation(element, name), name)
                 }
                 code.static(" $name")
-                if (value != null) code.static("=\"$value\"")
+                if (value != null) code.static("=\"${staticAttributeValue(value)}\"")
             }
             element.attributes.forEach { (name, expression) ->
                 if (name.startsWith("th:") && name !in controlAttributes) {
@@ -986,6 +986,10 @@ internal class RendererGenerator(
     }
 
     private fun KSClassDeclaration?.orEmptySuperTypes(): Sequence<KSType> = this?.getAllSuperTypes() ?: emptySequence()
+
+    private fun staticAttributeValue(value: String): String =
+        // Attribute entities remain source-encoded; only escape the delimiter introduced by normalized output.
+        value.replace("\"", "&quot;")
 
     private fun escapeHtml(value: String): String = buildString(value.length) {
         value.forEach { character ->

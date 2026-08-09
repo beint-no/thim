@@ -6,7 +6,7 @@
     <title th:text="#{home.title(version=${version})}">Thim</title>
 </head>
 <body>
-    <main>
+    <main data-config='{"value":"id","title":"A&amp;B","markup":"&lt;b&gt;"}'>
         <h1 th:text="#{home.title(version=${version})}">Thim</h1>
         <p th:text="${greeting}">Greeting</p>
         <p th:text="#{home.inbox(unreadCount=${unreadCount})}">Unread messages</p>
