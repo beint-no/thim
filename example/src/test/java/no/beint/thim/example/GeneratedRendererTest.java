@@ -1,9 +1,15 @@
 package no.beint.thim.example;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.attribute.CodeAttribute;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
+import no.beint.thim.HtmlOutput;
+import no.beint.thim.RenderContext;
+import no.beint.thim.example.generated.ExampleTemplates;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,5 +30,19 @@ class GeneratedRendererTest {
         methods.forEach(method -> assertTrue(
                 ((CodeAttribute) method.code().orElseThrow()).codeLength() < 8_000,
                 () -> method.methodName().stringValue() + " exceeds HotSpot's huge-method threshold"));
+    }
+
+    @Test
+    void escapesStaticAttributeValuesInGeneratedHtml() throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        var output = new HtmlOutput(bytes);
+
+        new ExampleTemplates().render(new HomeCtrl().home(), new RenderContext(Locale.ENGLISH, ""), output);
+        output.flush();
+
+        var html = bytes.toString(StandardCharsets.UTF_8);
+        assertTrue(html.contains(
+                "data-config=\"{&quot;value&quot;:&quot;id&quot;,&quot;title&quot;:&quot;A&amp;B&quot;,&quot;markup&quot;:&quot;&lt;b&gt;&quot;}\""),
+                html);
     }
 }
