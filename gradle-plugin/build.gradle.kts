@@ -5,6 +5,10 @@ plugins {
 
 dependencies {
     implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.10")
+    testImplementation(gradleTestKit())
+    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 gradlePlugin {
@@ -24,4 +28,8 @@ tasks.jar {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Xlint:deprecation")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

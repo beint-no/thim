@@ -180,6 +180,60 @@ class MessageCatalogTest {
     }
 
     @Test
+    fun `infers supported locales from canonical directory names`() {
+        write("en/home.yaml", "title: Hello")
+        write("nb/home.yaml", "title: Hei")
+
+        val catalog = MessageCatalog.load(directory, "en", emptyList())
+
+        assertEquals(listOf("en", "nb"), catalog.supportedLocales)
+        assertText(catalog, "home.title", "Hello")
+    }
+
+    @Test
+    fun `requires locale catalogs to have the same file layout`() {
+        write("en/account/profile.yaml", "title: Profile")
+        write("nb/account.yaml", "profile:\n  title: Profil")
+
+        assertProblem("must mirror the 'en' file layout; missing [account/profile.yaml]; extra [account.yaml]") {
+            MessageCatalog.load(directory, "en", emptyList())
+        }
+    }
+
+    @Test
+    fun `rejects stray and empty catalog files`() {
+        write("en/home.yaml", "title: Hello")
+        write("en/README.md", "Translations")
+
+        assertProblem("must use the .yaml extension in lowercase exclusively") {
+            MessageCatalog.load(directory, "en", emptyList())
+        }
+
+        Files.delete(directory.resolve("en/README.md"))
+        write("en/empty.yaml", "{}")
+
+        assertProblem("message catalog file contains no messages") {
+            MessageCatalog.load(directory, "en", emptyList())
+        }
+    }
+
+    @Test
+    fun `rejects empty and non-canonical locale directories`() {
+        Files.createDirectories(directory.resolve("en-us"))
+
+        assertProblem("not a canonical BCP 47 tag; use 'en-US'") {
+            MessageCatalog.load(directory, "en", emptyList())
+        }
+
+        Files.delete(directory.resolve("en-us"))
+        Files.createDirectories(directory.resolve("en"))
+
+        assertProblem("locale 'en' contains no files") {
+            MessageCatalog.load(directory, "en", emptyList())
+        }
+    }
+
+    @Test
     fun `rejects plural categories unreachable in the locale`() {
         write("en/home.yaml", """
             inbox:

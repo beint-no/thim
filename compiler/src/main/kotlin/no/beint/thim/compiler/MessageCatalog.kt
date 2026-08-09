@@ -100,45 +100,71 @@ internal class MessageCatalog private constructor(
     companion object {
         fun load(directory: Path, defaultLocale: String, supportedLocales: List<String>): MessageCatalog {
             val canonicalDefault = canonicalLocale(defaultLocale)
-            val canonicalSupported = supportedLocales.map(::canonicalLocale)
-            require(canonicalSupported.isNotEmpty()) { "Thim needs at least one supported locale" }
+            val configuredLocales = supportedLocales.map(::canonicalLocale)
+            require(configuredLocales.size == configuredLocales.distinct().size) {
+                "Supported locales contain duplicates: $configuredLocales"
+            }
+            if (!Files.exists(directory)) {
+                val locales = configuredLocales.ifEmpty { listOf(canonicalDefault) }
+                require(canonicalDefault in locales) {
+                    "Default locale '$canonicalDefault' is not in supported locales $locales"
+                }
+                return MessageCatalog(emptyMap(), canonicalDefault, locales)
+            }
+            require(Files.isDirectory(directory)) { "Message catalog directory does not exist: $directory" }
+
+            val rootEntries = Files.list(directory).use { paths -> paths.sorted().toList() }
+            require(rootEntries.isNotEmpty()) { "Message catalog directory contains no locale directories: $directory" }
+            val misplaced = rootEntries.filterNot { Files.isDirectory(it) }
+            require(misplaced.isEmpty()) {
+                "Message catalogs must be stored inside a locale directory, found $misplaced"
+            }
+            val discovered = rootEntries.map { canonicalLocale(it.name) }
+            val canonicalSupported = configuredLocales.ifEmpty {
+                listOf(canonicalDefault) + (discovered - canonicalDefault).sorted()
+            }
             require(canonicalSupported.size == canonicalSupported.distinct().size) {
                 "Supported locales contain duplicates: $canonicalSupported"
             }
             require(canonicalDefault in canonicalSupported) {
                 "Default locale '$canonicalDefault' is not in supported locales $canonicalSupported"
             }
-            if (!Files.exists(directory)) return MessageCatalog(emptyMap(), canonicalDefault, canonicalSupported)
-            require(Files.isDirectory(directory)) { "Message catalog directory does not exist: $directory" }
-            val catalogFiles = Files.walk(directory).use { paths ->
-                paths.filter {
-                    Files.isRegularFile(it) && it.extension.lowercase(Locale.ROOT) in setOf("yaml", "yml")
-                }
-                    .sorted()
-                    .toList()
-            }
-            val invalidExtensions = catalogFiles.filter { it.extension != "yaml" }
-            require(invalidExtensions.isEmpty()) {
-                "Message catalogs must use the .yaml extension, found $invalidExtensions"
-            }
-            val yamlFiles = catalogFiles.filter { it.extension == "yaml" }
-            val misplaced = yamlFiles.filter { directory.relativize(it).nameCount < 2 }
-            require(misplaced.isEmpty()) {
-                "Message catalogs must be stored inside a locale directory, found $misplaced"
-            }
-
-            val discovered = yamlFiles
-                .map { directory.relativize(it).getName(0).toString() }
-                .distinct()
-                .sorted()
             val unexpected = discovered - canonicalSupported.toSet()
             require(unexpected.isEmpty()) { "Message catalog has unsupported locale directories $unexpected" }
+
+            val localeFiles = canonicalSupported.associateWithTo(linkedMapOf()) { locale ->
+                val localeDirectory = directory.resolve(locale)
+                require(localeDirectory.isDirectory()) { "Message catalog is missing locale directory '$locale'" }
+                val files = Files.walk(localeDirectory).use { paths ->
+                    paths.filter(Files::isRegularFile).sorted().toList()
+                }
+                require(files.isNotEmpty()) { "Message catalog locale '$locale' contains no files" }
+                val invalidFiles = files.filter { it.extension != "yaml" }
+                require(invalidFiles.isEmpty()) {
+                    "Message catalogs must use the .yaml extension in lowercase exclusively, found $invalidFiles"
+                }
+                files
+            }
+            val defaultLayout = localeFiles.getValue(canonicalDefault)
+                .map { directory.resolve(canonicalDefault).relativize(it).toString() }
+                .toSet()
+            localeFiles.forEach { (locale, files) ->
+                val layout = files.map { directory.resolve(locale).relativize(it).toString() }.toSet()
+                val missing = defaultLayout - layout
+                val extra = layout - defaultLayout
+                require(missing.isEmpty() && extra.isEmpty()) {
+                    buildString {
+                        append("Message catalog locale '$locale' must mirror the '$canonicalDefault' file layout")
+                        if (missing.isNotEmpty()) append("; missing ${missing.sorted()}")
+                        if (extra.isNotEmpty()) append("; extra ${extra.sorted()}")
+                    }
+                }
+            }
 
             val localeDefinitions = linkedMapOf<String, Map<String, MessageValue>>()
             canonicalSupported.forEach { locale ->
                 val localeDirectory = directory.resolve(locale)
-                require(localeDirectory.isDirectory()) { "Message catalog is missing locale directory '$locale'" }
-                localeDefinitions[locale] = readLocale(localeDirectory, locale)
+                localeDefinitions[locale] = readLocale(localeDirectory, locale, localeFiles.getValue(locale))
             }
 
             val base = localeDefinitions.getValue(canonicalDefault)
@@ -194,13 +220,7 @@ internal class MessageCatalog private constructor(
             }
         }
 
-        private fun readLocale(directory: Path, locale: String): Map<String, MessageValue> {
-            val files = Files.walk(directory).use { paths ->
-                paths.filter { Files.isRegularFile(it) && it.extension == "yaml" }
-                    .sorted()
-                    .toList()
-            }
-            require(files.isNotEmpty()) { "Message catalog locale '$locale' contains no .yaml files" }
+        private fun readLocale(directory: Path, locale: String, files: List<Path>): Map<String, MessageValue> {
             val definitions = linkedMapOf<String, MessageValue>()
             files.forEach { file ->
                 val relative = directory.relativize(file)
@@ -210,7 +230,9 @@ internal class MessageCatalog private constructor(
                     require(part.matches(keyPartPattern)) { "$file: invalid namespace component '$part'" }
                 }
                 val namespace = namespaceParts.joinToString(".")
-                parseFile(file, namespace).forEach { (key, value) ->
+                val parsed = parseFile(file, namespace)
+                require(parsed.isNotEmpty()) { "$file: message catalog file contains no messages" }
+                parsed.forEach { (key, value) ->
                     require(definitions.putIfAbsent(key, value) == null) { "$file: duplicate message '$key'" }
                 }
             }

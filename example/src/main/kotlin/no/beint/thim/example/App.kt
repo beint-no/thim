@@ -52,7 +52,7 @@ data class FeedbackForm(
 class HomeCtrl {
     @GetMapping("/")
     fun home() = HomePage(
-        version = "0.6.0",
+        version = "0.7.0",
         greeting = "Typed models, compiled HTML, no runtime engine.",
         features = listOf(
             Feature("Safe", "Properties and messages are checked while the application compiles."),
