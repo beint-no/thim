@@ -42,9 +42,10 @@ internal fun modelProperties(
         val name = parameter.name?.asString() ?: return@forEach
         val accessor = declaration.getDeclaredFunctions().firstOrNull {
             it.simpleName.asString() == name && it.parameters.isEmpty()
-        }
-        val type = accessor?.let { runCatching { it.asMemberOf(containingType).returnType }.getOrNull() }
-            ?: parameter.type.resolve()
+        } ?: return@forEach
+        val type = runCatching { accessor.asMemberOf(containingType).returnType }.getOrNull()
+            ?: accessor.returnType?.resolve()
+            ?: return@forEach
         properties.putIfAbsent(name, ModelProperty(name, type, mutable = false, setOf(name)))
     }
     declaration.getDeclaredFunctions().filterNot { it.isPrivate() }.forEach { function ->

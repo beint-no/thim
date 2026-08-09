@@ -14,6 +14,7 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.language.jvm.tasks.ProcessResources;
 
 import javax.lang.model.SourceVersion;
 import java.io.File;
@@ -31,11 +32,11 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getTemplates().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/templates"));
         extension.getMessages().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/i18n"));
         extension.getDefaultLocale().convention("en");
-        extension.getSupportedLocales().convention(extension.getDefaultLocale().map(locale -> java.util.List.of(locale)));
+        extension.getSupportedLocales().convention(java.util.List.of());
         extension.getGeneratedPackage().convention(project.provider(() -> generatedPackage(project)));
         extension.getRegistryName().convention("ThimTemplates");
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
-        extension.getStrictTemplates().convention(false);
+        extension.getStrictTemplates().convention(true);
         extension.getFailOnUnusedMessages().convention(false);
         extension.getFailOnUnusedFragments().convention(false);
         extension.getValidateRoutes().convention(true);
@@ -43,17 +44,20 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getRoutesName().convention(extension.getRegistryName().map(name ->
                 name.endsWith("Templates") ? name.substring(0, name.length() - "Templates".length()) + "Routes" : name + "Routes"));
         extension.getTrustedPaths().convention(java.util.List.of());
-        extension.getStrictModels().convention(false);
+        extension.getStrictModels().convention(true);
         extension.getForbiddenModelAnnotations().convention(java.util.List.of(
                 "jakarta.persistence.Entity", "jakarta.persistence.Embeddable", "jakarta.persistence.MappedSuperclass",
                 "javax.persistence.Entity", "javax.persistence.Embeddable", "javax.persistence.MappedSuperclass"));
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
-        project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
-            if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
-                configureJavaProject(project, extension);
-            }
-        }));
+        project.getPluginManager().withPlugin("java", ignored -> {
+            configureResourceFiltering(project, extension);
+            project.afterEvaluate(evaluated -> {
+                if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
+                    configureJavaProject(project, extension);
+                }
+            });
+        });
     }
 
     private void configureKotlinProject(Project project, ThimExtension extension) {
@@ -87,7 +91,7 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
                     .withPropertyName("thimTemplates")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
-            task.getInputs().files(extension.getMessages().map(directory -> catalogFiles(project, directory.getAsFile())))
+            task.getInputs().files(extension.getMessages().map(directory -> allFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
@@ -207,8 +211,25 @@ public final class ThimPlugin implements Plugin<Project> {
         return project.fileTree(directory, files -> files.include("**/*.html"));
     }
 
-    private FileTree catalogFiles(Project project, java.io.File directory) {
-        return project.fileTree(directory, files -> files.include("**/*.yaml", "**/*.yml", "**/*.YAML", "**/*.YML"));
+    private FileTree allFiles(Project project, java.io.File directory) {
+        return project.fileTree(directory);
+    }
+
+    private void configureResourceFiltering(Project project, ThimExtension extension) {
+        project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME, ProcessResources.class).configure(task ->
+                task.exclude(element -> {
+                    var file = element.getFile().toPath().toAbsolutePath().normalize();
+                    var messages = extension.getMessages().get().getAsFile().toPath().toAbsolutePath().normalize();
+                    if (file.startsWith(messages)) {
+                        return true;
+                    }
+                    if (!extension.getStrictTemplates().get()) {
+                        return false;
+                    }
+                    var templates = extension.getTemplates().get().getAsFile().toPath().toAbsolutePath().normalize();
+                    return file.startsWith(templates);
+                })
+        );
     }
 
     private String generatedPackage(Project project) {

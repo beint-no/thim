@@ -1167,9 +1167,6 @@ internal class RendererGenerator(
                 val type = property.type.resolve()
                 return Property(type, getter(name, type))
             }
-            primaryConstructor?.parameters?.firstOrNull { it.name?.asString() == name }?.let { component ->
-                return Property(component.type.resolve(), name)
-            }
             val capitalized = name.replaceFirstChar(Char::uppercaseChar)
             val accessors = listOf(name, "get$capitalized", "is$capitalized")
             val functions = getDeclaredFunctions() + getAllSuperTypes().flatMap { type ->
@@ -1191,7 +1188,10 @@ internal class RendererGenerator(
         private fun KSClassDeclaration.propertyNames(): Set<String> = buildSet {
             getAllProperties().forEach { add(it.simpleName.asString()) }
             primaryConstructor?.parameters?.forEach { parameter ->
-                parameter.name?.asString()?.let(::add)
+                val name = parameter.name?.asString() ?: return@forEach
+                if (getDeclaredFunctions().any { it.simpleName.asString() == name && it.parameters.isEmpty() }) {
+                    add(name)
+                }
             }
             getDeclaredFunctions().forEach { function ->
                 val name = function.simpleName.asString()

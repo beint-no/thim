@@ -34,7 +34,8 @@ private class ThimProcessor(
     private val supportedLocales = environment.options["thim.supportedLocales"]
         ?.split(',')
         ?.map(String::trim)
-        ?: listOf(defaultLocale)
+        ?.filter(String::isNotEmpty)
+        ?: emptyList()
     private val generatedPackage = environment.options["thim.package"] ?: "thim.generated"
     private val registryName = environment.options["thim.registry"] ?: "ThimTemplates"
     private val modelPackages = environment.options["thim.modelPackages"]
