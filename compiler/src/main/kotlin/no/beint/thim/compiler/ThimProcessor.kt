@@ -30,7 +30,10 @@ private class ThimProcessor(
     private val logger: KSPLogger = environment.logger
     private val templatesDirectory = requiredPath(environment, "thim.templates")
     private val messagesDirectory = requiredPath(environment, "thim.messages")
-    private val defaultLocale = environment.options["thim.defaultLocale"] ?: "en"
+    private val defaultLocale = environment.options["thim.defaultLocale"]
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: "en"
     private val supportedLocales = environment.options["thim.supportedLocales"]
         ?.split(',')
         ?.map(String::trim)
