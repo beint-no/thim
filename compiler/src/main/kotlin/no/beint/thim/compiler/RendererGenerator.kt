@@ -36,9 +36,12 @@ internal class RendererGenerator(
     private val strictModels: Boolean = false,
 ) {
     private var generatedVariable = 0
+    private var generatedHelper = 0
     private var regionalLocales = emptyMap<String, Int>()
     private var languages = emptyMap<String, Int>()
     private var formErrors: ResolvedPath? = null
+    private var hasMessageLocale = false
+    private val pendingHelpers = ArrayDeque<RenderHelper>()
     val errors = mutableListOf<String>()
     private val usedRootProperties = mutableMapOf<String, MutableSet<String>>()
 
@@ -64,6 +67,10 @@ internal class RendererGenerator(
         }
         regionalLocales = localeIds.filterKeys { '-' in it }
         languages = localeIds.filterKeys { '-' !in it }
+        hasMessageLocale = regionalLocales.isNotEmpty() || languages.isNotEmpty()
+        generatedVariable = 0
+        generatedHelper = 0
+        pendingHelpers.clear()
 
         code.line("final class $rendererName {")
         code.indent {
@@ -94,12 +101,64 @@ internal class RendererGenerator(
                     usedRootProperties.getOrPut(modelName, ::mutableSetOf).add(property)
                 })
                 formErrors = scope.errorsProperty()
-                nodes.forEach { renderNodeCollecting(it, scope, code, templateName) }
+                renderNodes(nodes, scope, code, templateName)
             }
             code.line("}")
+            while (pendingHelpers.isNotEmpty()) {
+                val helper = pendingHelpers.removeFirst()
+                code.line()
+                val localeParameter = if (hasMessageLocale) ", int messageLocale" else ""
+                val capturedParameters = helper.captures.joinToString("") { ", Object ${it.code}Value" }
+                code.line(
+                    "private static void ${helper.name}($modelName model, RenderContext context, " +
+                        "HtmlOutput output$localeParameter$capturedParameters) throws IOException {",
+                )
+                code.indent {
+                    helper.captures.forEach { binding ->
+                        code.statement("var ${binding.code} = (${binding.castType()}) ${binding.code}Value;")
+                    }
+                    helper.nodes.forEach { renderNodeCollecting(it, helper.scope, code, helper.context) }
+                }
+                code.line("}")
+            }
         }
         code.line("}")
         return CompiledTemplate(model, rendererName, code.toString())
+    }
+
+    private fun renderNodes(nodes: List<Node>, scope: Scope, code: CodeWriter, context: String) {
+        val chunks = partition(nodes)
+        if (chunks == null) {
+            nodes.forEach { renderNodeCollecting(it, scope, code, context) }
+            return
+        }
+        val captures = scope.capturedBindings()
+        chunks.forEach { chunk ->
+            val name = "renderPart${generatedHelper++}"
+            pendingHelpers.addLast(RenderHelper(name, chunk, scope, context, captures))
+            val localeArgument = if (hasMessageLocale) ", messageLocale" else ""
+            val capturedArguments = captures.joinToString("") { ", ${it.code}" }
+            code.statement("$name(model, context, output$localeArgument$capturedArguments);")
+        }
+    }
+
+    private fun partition(nodes: List<Node>): List<List<Node>>? {
+        if (nodes.sumOf { it.renderWeight() } <= MAX_RENDER_PART_WEIGHT) return null
+        val result = mutableListOf<List<Node>>()
+        var current = mutableListOf<Node>()
+        var currentWeight = 0
+        nodes.forEach { node ->
+            val weight = node.renderWeight()
+            if (weight > 0 && currentWeight > 0 && currentWeight + weight > MAX_RENDER_PART_WEIGHT) {
+                result += current
+                current = mutableListOf()
+                currentWeight = 0
+            }
+            current += node
+            currentWeight += weight
+        }
+        if (current.isNotEmpty()) result += current
+        return result.takeIf { it.size > 1 }
     }
 
     private fun renderNode(node: Node, scope: Scope, code: CodeWriter, context: String) {
@@ -231,7 +290,9 @@ internal class RendererGenerator(
             requireDiagnostic(resolved.type.declaration is KSClassDeclaration, "THIM-OBJECT-TYPE", attributeLocation) {
                 "th:object must bind a class with properties"
             }
-            scope = scope.withSelection(Binding(resolved.code, resolved.type, false))
+            val generatedName = "object${generatedVariable++}"
+            code.statement("var $generatedName = ${resolved.code};")
+            scope = scope.withSelection(Binding(generatedName, resolved.type, false))
         }
 
         if (element.name == "select" && "th:field" in attributes) {
@@ -241,7 +302,9 @@ internal class RendererGenerator(
                 diagnosticContext(attributeLocation, "THIM-FIELD-SYNTAX", "th:field"),
             )
             val resolved = scope.resolveField(path, attributeLocation)
-            scope = scope.withSelectValue(Binding(resolved.code, resolved.type, resolved.nullable))
+            val generatedName = "select${generatedVariable++}"
+            code.statement("var $generatedName = ${resolved.code};")
+            scope = scope.withSelectValue(Binding(generatedName, resolved.type, resolved.nullable))
         }
 
         val transparent = element.name == "th:block"
@@ -292,7 +355,7 @@ internal class RendererGenerator(
         } else if (fieldExpansion?.content != null) {
             code.statement("output.text(${fieldExpansion.content});")
         } else if (text == null && safeHtml == null) {
-            element.children.forEach { renderNodeCollecting(it, scope, code, context) }
+            renderNodes(element.children, scope, code, context)
         } else if (safeHtml != null) {
             val attributeLocation = attributeLocation(element, "th:utext")
             if (safeHtml.trim().startsWith("#{")) {
@@ -941,9 +1004,63 @@ internal class RendererGenerator(
 
     private data class Binding(val code: String, val type: KSType, val nullable: Boolean)
 
+    private fun Binding.castType(): String = javaType(type, nullable)
+
+    private fun javaType(type: KSType, boxed: Boolean = false): String {
+        val name = type.declaration.qualifiedName?.asString() ?: return "java.lang.Object"
+        val primitive = when (name) {
+            "kotlin.Boolean" -> "boolean" to "java.lang.Boolean"
+            "kotlin.Byte" -> "byte" to "java.lang.Byte"
+            "kotlin.Short" -> "short" to "java.lang.Short"
+            "kotlin.Int" -> "int" to "java.lang.Integer"
+            "kotlin.Long" -> "long" to "java.lang.Long"
+            "kotlin.Char" -> "char" to "java.lang.Character"
+            "kotlin.Float" -> "float" to "java.lang.Float"
+            "kotlin.Double" -> "double" to "java.lang.Double"
+            else -> null
+        }
+        if (primitive != null) return if (boxed || type.nullability == Nullability.NULLABLE) primitive.second else primitive.first
+        val primitiveArray = when (name) {
+            "kotlin.BooleanArray" -> "boolean[]"
+            "kotlin.ByteArray" -> "byte[]"
+            "kotlin.ShortArray" -> "short[]"
+            "kotlin.IntArray" -> "int[]"
+            "kotlin.LongArray" -> "long[]"
+            "kotlin.CharArray" -> "char[]"
+            "kotlin.FloatArray" -> "float[]"
+            "kotlin.DoubleArray" -> "double[]"
+            else -> null
+        }
+        if (primitiveArray != null) return primitiveArray
+        if (name == "kotlin.Array") {
+            val element = type.arguments.firstOrNull()?.type?.resolve()
+            return (element?.let { javaType(it) } ?: "java.lang.Object") + "[]"
+        }
+        val javaName = when (name) {
+            "kotlin.String" -> "java.lang.String"
+            "kotlin.Any" -> "java.lang.Object"
+            "kotlin.collections.Iterable" -> "java.lang.Iterable"
+            "kotlin.collections.Collection", "kotlin.collections.MutableCollection" -> "java.util.Collection"
+            "kotlin.collections.List", "kotlin.collections.MutableList" -> "java.util.List"
+            "kotlin.collections.Set", "kotlin.collections.MutableSet" -> "java.util.Set"
+            "kotlin.collections.Map", "kotlin.collections.MutableMap" -> "java.util.Map"
+            else -> name
+        }
+        val arguments = type.arguments.mapNotNull { it.type?.resolve() }
+        return if (arguments.isEmpty()) javaName else arguments.joinToString(", ", "$javaName<", ">") { javaType(it, boxed = true) }
+    }
+
     private data class ResolvedPath(val code: String, val type: KSType, val nullable: Boolean)
 
     private data class Property(val type: KSType, val accessor: String)
+
+    private data class RenderHelper(
+        val name: String,
+        val nodes: List<Node>,
+        val scope: Scope,
+        val context: String,
+        val captures: List<Binding>,
+    )
 
     private class Scope(
         private val model: KSClassDeclaration,
@@ -959,6 +1076,8 @@ internal class RendererGenerator(
         fun withSelectValue(binding: Binding) = Scope(model, recordUse, bindings, selection, binding)
 
         fun hasSelection(): Boolean = selection != null
+
+        fun capturedBindings(): List<Binding> = (bindings.values + listOfNotNull(selection, select)).distinctBy(Binding::code)
 
         fun selectValue(): Binding? = select
 
@@ -1169,6 +1288,20 @@ internal class RendererGenerator(
     }
 
     private companion object {
+        const val MAX_RENDER_PART_WEIGHT = 1200
+
+        fun Node.renderWeight(): Int = when (this) {
+            is RawNode -> 0
+            is ElementNode -> 1 + attributes.values.sumOf { expression ->
+                when {
+                    expression == null -> 0
+                    expression.trim().startsWith("#{") -> 12
+                    expression.trim().startsWith("@{") -> 8
+                    else -> 4
+                }
+            } + children.sumOf { it.renderWeight() }
+        }
+
         val eachPattern = Regex("([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*(\\$\\{.+})")
         val voidElements = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr")
         val booleanAttributes = setOf(
