@@ -29,7 +29,7 @@ The generated code consists of ordinary named classes, methods and branches. Gen
 
 ## Language
 
-The template language is intentionally limited to statically resolvable property paths, conditions, iteration, attributes, URLs and messages. It has no runtime evaluator, reflective dispatch, coercion rules or dynamic template selection.
+The template language is intentionally limited to statically resolvable property paths, conditions, iteration, attributes, URLs and messages. It has no runtime evaluator, reflective dispatch, OGNL utility objects, coercion rules or dynamic template selection. An `<html>` element without `lang` or `th:lang` receives the request locale's language at render time.
 
 Layouts and fragments link fixed templates and typed values during compilation. Composition is erased from the request path and cannot introduce runtime template lookup or a general expression language.
 

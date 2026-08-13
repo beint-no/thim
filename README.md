@@ -207,7 +207,7 @@ Thim accepts:
 - `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action`
 - conditional HTML boolean attributes
 - literal `#{message(argument=${property})}` expressions with typed, named arguments
-- `${#locale.language}` for a language attribute
+- `lang` on `<html>` from the request locale when the attribute is omitted
 
 Every dynamic value is encoded for its output context. Use static `@{...}` expressions or `TrustedUrl` for URLs, and use `SafeHtml` only with `th:utext`. Dynamic JavaScript, CSS and event-handler content is rejected.
 

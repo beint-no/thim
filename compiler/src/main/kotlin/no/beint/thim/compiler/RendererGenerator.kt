@@ -311,6 +311,11 @@ internal class RendererGenerator(
         var fieldExpansion: FieldExpansion? = null
         if (!transparent) {
             code.static("<${element.name}")
+            if (element.name == "html" && "lang" !in attributes && "th:lang" !in attributes) {
+                code.static(" lang=\"")
+                code.statement("output.text(context.locale().getLanguage());")
+                code.static("\"")
+            }
             element.attributes.forEach { (name, value) ->
                 if (name.startsWith("th:") || name == "xmlns:th") return@forEach
                 if ("th:$name" in element.attributes) return@forEach
@@ -480,12 +485,6 @@ internal class RendererGenerator(
                 code.static("\"")
             }
             expression.trim().startsWith("\${") -> {
-                if (expression.trim() == "\${#locale.language}") {
-                    code.static(" $name=\"")
-                    code.statement("output.text(context.locale().getLanguage());")
-                    code.static("\"")
-                    return
-                }
                 val value = scope.resolve(
                     Expressions.path(expression, diagnosticContext(attributeLocation, "THIM-EXPRESSION-SYNTAX", "th:$name")),
                     diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:$name"),
