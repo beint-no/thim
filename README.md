@@ -204,14 +204,14 @@ Thim accepts:
 - `th:if` and `th:unless`
 - fixed, build-time `th:fragment` and `th:replace` composition
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
-- `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action`
+- `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action` (not `javascript:` or blank values)
 - conditional HTML boolean attributes
 - literal `#{message(argument=${property})}` expressions with typed, named arguments
 - `lang` on `<html>` from the request locale when the attribute is omitted
 
 Every dynamic value is encoded for its output context. Use static `@{...}` expressions or `TrustedUrl` for URLs, and use `SafeHtml` only with `th:utext`. Dynamic JavaScript, CSS and event-handler content is rejected.
 
-Missing models, properties, messages and routes; unsafe nullable access; malformed HTML; and unsupported output contexts fail compilation. Prepare computed display values in the page model.
+Missing models, properties, messages and routes; unsafe nullable access; malformed HTML; nested forms; duplicate fragments; and unsupported output contexts fail compilation. Prepare computed display values in the page model.
 
 ## Modules
 

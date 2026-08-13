@@ -4,15 +4,16 @@ internal class FragmentExpander(
     templates: Map<String, List<Node>>,
 ) {
     private val fragments = templates.mapValues { (template, nodes) ->
-        nodes.asSequence()
-            .flatMap(Node::elements)
-            .mapNotNull { element ->
-                element.attributes["th:fragment"]?.let { declaration ->
-                    val (name, parameters) = parseCall(declaration, "$template th:fragment")
-                    name to Fragment(template, parameters, element)
+        val defined = linkedMapOf<String, Fragment>()
+        nodes.asSequence().flatMap(Node::elements).forEach { element ->
+            element.attributes["th:fragment"]?.let { declaration ->
+                val (name, parameters) = parseCall(declaration, "$template th:fragment")
+                require(defined.put(name, Fragment(template, parameters, element)) == null) {
+                    "${element.location} THIM-FRAGMENT-DUPLICATE fragment '$name' is already defined"
                 }
             }
-            .toMap()
+        }
+        defined
     }
 
     private val used = mutableSetOf<String>()

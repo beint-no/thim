@@ -28,6 +28,7 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
             }
         }
         nodes.forEach { checkReferences(it, ids.keys) }
+        nodes.forEach { checkNestedForms(it, inForm = false) }
     }
 
     private fun report(code: String, location: SourceLocation, message: String) {
@@ -74,7 +75,11 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
 
     private fun checkReferences(node: Node, ids: Set<String>) {
         if (node !is ElementNode) return
-        if (node.name == "label") checkTokens(node, "for", ids, list = false)
+        singleIdAttributes.forEach { attribute ->
+            if (attribute != "for" || node.name == "label") {
+                checkTokens(node, attribute, ids, list = false)
+            }
+        }
         ariaAttributes.forEach { checkTokens(node, it, ids, list = true) }
         node.attributes["href"]?.let { href ->
             if ("th:href" !in node.attributes && href.startsWith("#")) {
@@ -89,6 +94,15 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
             }
         }
         node.children.forEach { checkReferences(it, ids) }
+    }
+
+    private fun checkNestedForms(node: Node, inForm: Boolean) {
+        if (node !is ElementNode) return
+        val form = node.name == "form"
+        if (form && inForm) {
+            report("THIM-FORM-NESTED", node.location, "nested <form> is invalid HTML")
+        }
+        node.children.forEach { checkNestedForms(it, inForm || form) }
     }
 
     private fun checkTokens(node: ElementNode, attribute: String, ids: Set<String>, list: Boolean) {
@@ -107,7 +121,14 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
     }
 
     private companion object {
-        val ariaAttributes = listOf("aria-labelledby", "aria-describedby", "aria-controls")
+        val singleIdAttributes = listOf("for", "form", "list")
+        val ariaAttributes = listOf(
+            "aria-labelledby",
+            "aria-describedby",
+            "aria-controls",
+            "aria-owns",
+            "aria-activedescendant",
+        )
         val whitespace = Regex("\\s+")
     }
 }
