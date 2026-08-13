@@ -114,6 +114,14 @@ internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>)
             report("THIM-MODEL-DYNAMIC-TYPE", "$root: $owner.$property is typed $typeName; strict page models need concrete types")
             return
         }
+        if (typeName in lazyTypes) {
+            report("THIM-MODEL-DYNAMIC-TYPE", "$root: $owner.$property is typed $typeName; strict page models need a materialized collection")
+            return
+        }
+        if (typeName in mutableCollectionTypes) {
+            report("THIM-MODEL-MUTABLE", "$root: $owner.$property is typed $typeName; strict page models need an immutable collection")
+            return
+        }
         val supertypes = sequenceOf(type) + ((type.declaration as? KSClassDeclaration)?.getAllSuperTypes() ?: emptySequence())
         val names = supertypes.mapNotNull { it.declaration.qualifiedName?.asString() }.toSet()
         if (names.any { it in mapTypes }) {
@@ -144,6 +152,21 @@ internal class StrictModelChecker(private val forbiddenAnnotations: Set<String>)
 
     private companion object {
         val dynamicTypes = setOf("kotlin.Any", "java.lang.Object")
+        val lazyTypes = setOf("kotlin.sequences.Sequence", "java.util.stream.Stream")
+        val mutableCollectionTypes = setOf(
+            "kotlin.collections.MutableList",
+            "kotlin.collections.MutableSet",
+            "kotlin.collections.MutableCollection",
+            "kotlin.collections.MutableMap",
+            "java.util.ArrayList",
+            "java.util.LinkedList",
+            "java.util.HashSet",
+            "java.util.TreeSet",
+            "java.util.HashMap",
+            "java.util.LinkedHashMap",
+            "java.util.TreeMap",
+            "java.util.ArrayDeque",
+        )
         val mapTypes = setOf("kotlin.collections.Map", "kotlin.collections.MutableMap", "java.util.Map")
         val iterableTypes = setOf(
             "kotlin.collections.Iterable", "kotlin.collections.Collection", "kotlin.collections.MutableCollection",

@@ -30,6 +30,7 @@ class ThimRendererTest {
         assertSame(RequestDataValues.NONE, templates.context.requestDataValues());
         assertEquals("/app", templates.context.contextPath());
         assertEquals("rendered", response.getContentAsString(StandardCharsets.UTF_8));
+        assertEquals("text/html;charset=UTF-8", response.getContentType());
     }
 
     private static final class RecordingTemplateSet implements TemplateSet {
