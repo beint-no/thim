@@ -59,7 +59,7 @@ public final class ThimRenderer {
     public void render(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
         var templateSet = templateSetFor(model);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType("text/html");
+        response.setContentType("text/html;charset=UTF-8");
         var output = new HtmlOutput(response.getOutputStream(), OUTPUT_BUFFER_SIZE);
         var locale = RequestContextUtils.getLocale(request);
         var contextPath = request.getContextPath();

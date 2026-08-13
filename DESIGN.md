@@ -6,7 +6,7 @@ Thim optimizes for four properties:
 
 1. template mistakes fail the application build;
 2. request-time work is explicit generated Java code;
-3. Java and Kotlin page models keep their source-level types;
+3. Java and Kotlin page models keep their source-level types, and templates can only print scalars;
 4. the runtime and language remain small enough to audit completely.
 
 ## Compilation

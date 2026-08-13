@@ -201,8 +201,16 @@ internal class TemplateParser(
             "tbody" -> next == "tbody" || next == "tfoot"
             "tr" -> next == "tr"
             "th", "td" -> next == "th" || next == "td"
+            "p" -> next in paragraphClosers
             else -> false
         }
+
+        val paragraphClosers = setOf(
+            "address", "article", "aside", "blockquote", "details", "div", "dl", "fieldset",
+            "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6",
+            "header", "hgroup", "hr", "main", "menu", "nav", "ol", "p", "pre", "search",
+            "section", "table", "ul",
+        )
 
         val namePattern = Regex("[a-z][a-z0-9:._-]*")
         val attributePattern = Regex("[^\\s=<>]+")

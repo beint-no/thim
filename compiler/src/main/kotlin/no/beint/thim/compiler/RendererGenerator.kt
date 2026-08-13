@@ -400,13 +400,7 @@ internal class RendererGenerator(
                 diagnosticContext(attributeLocation, "THIM-PROPERTY-UNKNOWN", "th:text"),
                 attributeLocation,
             )
-            val typeName = value.type.declaration.qualifiedName?.asString()
-            requireDiagnostic(typeName != "no.beint.thim.SafeHtml", "THIM-TEXT-TYPE", attributeLocation) {
-                "th:text escapes its value; render SafeHtml with th:utext"
-            }
-            requireDiagnostic(typeName != "no.beint.thim.TrustedUrl", "THIM-TEXT-TYPE", attributeLocation) {
-                "TrustedUrl is only supported in URL attributes"
-            }
+            requireRenderableText(value.type, attributeLocation, "th:text")
             code.statement("output.text(${value.code});")
         }
 
@@ -496,12 +490,7 @@ internal class RendererGenerator(
                         "th:$name is a URL context; use a static @{...} URL or a no.beint.thim.TrustedUrl property"
                     }
                 } else {
-                    requireDiagnostic(typeName != "no.beint.thim.SafeHtml", "THIM-ATTRIBUTE-TYPE", attributeLocation) {
-                        "SafeHtml is not supported in attribute values"
-                    }
-                    requireDiagnostic(typeName != "no.beint.thim.TrustedUrl", "THIM-ATTRIBUTE-TYPE", attributeLocation) {
-                        "TrustedUrl is only supported in URL attributes"
-                    }
+                    requireRenderableText(value.type, attributeLocation, "th:$name")
                 }
                 if (value.nullable) {
                     val variable = "attribute${generatedVariable++}"
@@ -634,12 +623,14 @@ internal class RendererGenerator(
             scope.recordRootProperty("errors")
             "${it.code}.value(\"${javaString(fieldName)}\", $fallback)"
         } ?: fallback
+        val processed =
+            "context.requestDataValues().processFormFieldValue(\"${javaString(fieldName)}\", $value, \"${javaString(control)}\")"
         code.static(" id=\"${escapeHtml(fieldName)}\" name=\"${escapeHtml(fieldName)}\"")
         if (element.name == "textarea") {
-            return FieldExpansion(content = value)
+            return FieldExpansion(content = processed)
         }
         code.static(" value=\"")
-        code.statement("output.text($value);")
+        code.statement("output.text($processed);")
         code.static("\"")
         return null
     }
@@ -972,6 +963,30 @@ internal class RendererGenerator(
         }?.arguments?.firstOrNull()?.type?.resolve()
     }
 
+    private fun requireRenderableText(type: KSType, location: SourceLocation?, subject: String) {
+        val typeName = type.declaration.qualifiedName?.asString()
+        requireDiagnostic(typeName != "no.beint.thim.SafeHtml", "THIM-TEXT-TYPE", location) {
+            "$subject escapes its value; render SafeHtml with th:utext"
+        }
+        requireDiagnostic(typeName != "no.beint.thim.TrustedUrl", "THIM-TEXT-TYPE", location) {
+            "TrustedUrl is only supported in URL attributes"
+        }
+        if (type.isEnum() || typeName in renderableTextTypes) return
+        val names = (sequenceOf(type) + (type.declaration as? KSClassDeclaration).orEmptySuperTypes())
+            .mapNotNull { it.declaration.qualifiedName?.asString() }
+            .toSet()
+        requireDiagnostic(names.none { it in nonTextTypes }, "THIM-TEXT-TYPE", location) {
+            "$subject cannot render ${typeName?.substringAfterLast('.')}; prepare a String, number, Boolean, or enum on the page model"
+        }
+        requireDiagnostic(
+            typeName != null && typeName !in setOf("kotlin.Any", "java.lang.Object") && isPlatformScalar(typeName),
+            "THIM-TEXT-TYPE",
+            location,
+        ) {
+            "$subject cannot render ${typeName?.substringAfterLast('.')}; prepare a String, number, Boolean, or enum on the page model"
+        }
+    }
+
     private fun isMaterialized(type: KSType): Boolean {
         val candidates = sequenceOf(type) + (type.declaration as? KSClassDeclaration).orEmptySuperTypes()
         return candidates.any {
@@ -1166,6 +1181,7 @@ internal class RendererGenerator(
         }
 
         private fun KSClassDeclaration.property(name: String): Property? {
+            if (name in objectMethods) return null
             getAllProperties().firstOrNull { it.simpleName.asString() == name }?.let { property ->
                 val type = property.type.resolve()
                 return Property(type, getter(name, type))
@@ -1203,7 +1219,7 @@ internal class RendererGenerator(
                     name.startsWith("is") && name.length > 2 -> add(name)
                 }
             }
-        }
+        }.minus(objectMethods)
 
         private fun distance(left: String, right: String): Int {
             var previous = IntArray(right.length + 1) { it }
@@ -1305,6 +1321,14 @@ internal class RendererGenerator(
             } + children.sumOf { it.renderWeight() }
         }
 
+        val objectMethods = setOf("class", "equals", "hashCode", "toString")
+        val nonTextTypes = setOf(
+            "kotlin.collections.Iterable", "kotlin.collections.Collection", "kotlin.collections.MutableCollection",
+            "kotlin.collections.List", "kotlin.collections.MutableList", "kotlin.collections.Set",
+            "kotlin.collections.MutableSet", "kotlin.collections.Map", "kotlin.collections.MutableMap",
+            "kotlin.Array", "java.lang.Iterable", "java.util.Collection", "java.util.List", "java.util.Set",
+            "java.util.Map",
+        )
         val eachPattern = Regex("([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*(\\$\\{.+})")
         val voidElements = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr")
         val booleanAttributes = setOf(
@@ -1366,6 +1390,24 @@ internal class RendererGenerator(
             "int", "long", "short", "byte",
         )
         val messageTextTypes = stringTypes + numericTypes + booleanFieldTypes
+        val renderableTextTypes = messageTextTypes + setOf(
+            "java.util.UUID",
+            "kotlin.uuid.Uuid",
+            "java.time.LocalDate",
+            "java.time.LocalTime",
+            "java.time.LocalDateTime",
+            "java.time.Instant",
+            "java.time.OffsetDateTime",
+            "java.time.ZonedDateTime",
+            "java.time.YearMonth",
+            "java.lang.Character",
+            "char",
+            "kotlin.Char",
+        )
+
+        fun isPlatformScalar(name: String): Boolean =
+            name.startsWith("java.") || name.startsWith("kotlin.") || name.startsWith("javax.") ||
+                name.substringBeforeLast('.') == "no.beint.thim"
 
         fun javaString(value: String): String = buildString(value.length) {
             value.forEach { character ->
