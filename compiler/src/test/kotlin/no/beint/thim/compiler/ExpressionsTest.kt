@@ -28,6 +28,25 @@ class ExpressionsTest {
     }
 
     @Test
+    fun `OGNL utility objects are rejected`() {
+        listOf(
+            "\${#locale.language}",
+            "\${#lists.isEmpty(items)}",
+            "\${#temporals.format(date)}",
+            "\${#numbers.formatDecimal(amount)}",
+            "\${#strings.toLowerCase(name)}",
+        ).forEach { expression ->
+            val problem = assertFailsWith<IllegalArgumentException> {
+                Expressions.path(expression, "test")
+            }
+            assertTrue(
+                problem.message.orEmpty().contains("OGNL utility objects are not supported"),
+                problem.message,
+            )
+        }
+    }
+
+    @Test
     fun `duplicate message arguments are rejected`() {
         val problem = assertFailsWith<IllegalArgumentException> {
             Expressions.message("#{home.title(version=\${first}, version=\${second})}", "test")

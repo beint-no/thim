@@ -43,6 +43,10 @@ internal object Expressions {
 
     private fun segments(body: String, value: String, context: String): PathExpression {
         require(body.isNotEmpty()) { "$context: empty expression" }
+        require(!body.startsWith("#")) {
+            "$context: OGNL utility objects are not supported; put the value on the page model. " +
+                "<html> receives lang from the request locale when lang is omitted"
+        }
 
         val segments = mutableListOf<PathSegment>()
         var position = 0

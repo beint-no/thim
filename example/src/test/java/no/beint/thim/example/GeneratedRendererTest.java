@@ -45,4 +45,21 @@ class GeneratedRendererTest {
                 "data-config=\"{&quot;value&quot;:&quot;id&quot;,&quot;title&quot;:&quot;A&amp;B&quot;,&quot;markup&quot;:&quot;&lt;b&gt;&quot;}\""),
                 html);
     }
+
+    @Test
+    void writesHtmlLangFromTheRequestLocaleWhenOmitted() throws IOException {
+        var english = renderHome(Locale.ENGLISH);
+        var norwegian = renderHome(Locale.forLanguageTag("nb"));
+
+        assertTrue(english.contains("<html lang=\"en\">"), english);
+        assertTrue(norwegian.contains("<html lang=\"nb\">"), norwegian);
+    }
+
+    private static String renderHome(Locale locale) throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        var output = new HtmlOutput(bytes);
+        new ExampleTemplates().render(new HomeCtrl().home(), new RenderContext(locale, ""), output);
+        output.flush();
+        return bytes.toString(StandardCharsets.UTF_8);
+    }
 }
