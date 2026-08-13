@@ -51,7 +51,7 @@ internal class RouteCatalog(
         if (!plain.startsWith('/')) return
         val parts = pathParts(plain)
         if (trustedPatterns.any { matches(it, parts) }) return
-        if (parts.lastOrNull()?.let { !it.variable && '.' in it.value } == true) return
+        if (parts.lastOrNull()?.let { !it.variable && isStaticAsset(it.value) } == true) return
         val matching = routes.filter { matches(it.segments, parts) }
         if (matching.isEmpty() && enumVariables.isNotEmpty()) {
             checkEnumExpansion(parts, enumVariables, httpMethod, location, subject)
@@ -260,6 +260,7 @@ internal class RouteCatalog(
                     .mapNotNull { it.value as? String }
                     .firstOrNull(String::isNotBlank)
                 val name = explicitName ?: parameter.name?.asString() ?: return@mapNotNull null
+                if (annotationName.endsWith("RequestParam") && secretQueryName(name)) return@mapNotNull null
                 val type = parameter.type.resolve()
                 if (!acceptedType(type)) return@mapNotNull null
                 RouteParameter(name, kotlinType(type))
@@ -334,10 +335,28 @@ internal class RouteCatalog(
 
         private val unsupportedUrlTypes = setOf(
             "java.util.Map",
+            "kotlin.collections.Map",
+            "kotlin.collections.MutableMap",
             "jakarta.servlet.http.Part",
             "org.springframework.util.MultiValueMap",
             "org.springframework.web.multipart.MultipartFile",
         )
+
+        private val staticAssetExtensions = setOf(
+            "avif", "css", "eot", "gif", "ico", "jpeg", "jpg", "js", "map", "mjs",
+            "otf", "png", "svg", "ttf", "webp", "woff", "woff2",
+        )
+
+        private fun isStaticAsset(segment: String): Boolean {
+            val extension = segment.substringAfterLast('.', "")
+            return extension.isNotEmpty() && extension != segment && extension.lowercase() in staticAssetExtensions
+        }
+
+        private fun secretQueryName(name: String): Boolean {
+            val normalized = name.lowercase()
+            return normalized == "password" || normalized == "passwd" || normalized == "pwd" ||
+                normalized == "secret" || normalized.endsWith("password")
+        }
 
     }
 }

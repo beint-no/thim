@@ -58,19 +58,19 @@ public final class ThimRenderer {
 
     public void render(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
         var templateSet = templateSetFor(model);
-        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.setContentType("text/html;charset=UTF-8");
-        var output = new HtmlOutput(response.getOutputStream(), OUTPUT_BUFFER_SIZE);
         var locale = RequestContextUtils.getLocale(request);
         var contextPath = request.getContextPath();
         var context = requestDataValueProcessor == null
                 ? new RenderContext(locale, contextPath)
                 : new RenderContext(locale, contextPath, new SpringRequestDataValues(request, requestDataValueProcessor));
-        templateSet.render(
-                model,
-                context,
-                output);
+        var body = new ByteArrayOutputStream(8 * 1024);
+        var output = new HtmlOutput(body, OUTPUT_BUFFER_SIZE);
+        templateSet.render(model, context, output);
         output.flush();
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("text/html;charset=UTF-8");
+        response.setContentLength(body.size());
+        body.writeTo(response.getOutputStream());
     }
 
     public String renderToString(Object model, Locale locale) throws IOException {
