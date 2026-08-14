@@ -51,6 +51,7 @@ public final class ThimPlugin implements Plugin<Project> {
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> {
+            configureRuntimeDependencies(project);
             configureResourceFiltering(project, extension);
             project.afterEvaluate(evaluated -> {
                 if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
@@ -62,11 +63,7 @@ public final class ThimPlugin implements Plugin<Project> {
 
     private void configureKotlinProject(Project project, ThimExtension extension) {
         project.getPluginManager().apply("com.google.devtools.ksp");
-        var version = ThimPlugin.class.getPackage().getImplementationVersion();
-        if (version == null) {
-            version = project.getVersion().toString();
-        }
-        project.getDependencies().add("implementation", "no.beint.thim:spring:" + version);
+        var version = implementationVersion(project);
         project.getDependencies().add("ksp", "no.beint.thim:compiler:" + version);
 
         var ksp = project.getExtensions().getByType(KspExtension.class);
@@ -118,7 +115,6 @@ public final class ThimPlugin implements Plugin<Project> {
             throw new GradleException("Thim route builders currently require the Kotlin JVM plugin");
         }
         var version = implementationVersion(project);
-        project.getDependencies().add("implementation", "no.beint.thim:spring:" + version);
 
         var runner = dependencyConfiguration(project, "thimCompilerRuntime");
         project.getDependencies().add(runner.getName(), "com.google.devtools.ksp:symbol-processing-aa-embeddable:" + KSP_VERSION);
@@ -200,6 +196,13 @@ public final class ThimPlugin implements Plugin<Project> {
         configuration.setCanBeConsumed(false);
         configuration.setCanBeResolved(true);
         return configuration;
+    }
+
+    private void configureRuntimeDependencies(Project project) {
+        var version = implementationVersion(project);
+        project.getDependencies().add("implementation", "no.beint.thim:runtime:" + version);
+        project.getPluginManager().withPlugin("org.springframework.boot", ignored ->
+                project.getDependencies().add("implementation", "no.beint.thim:spring:" + version));
     }
 
     private String implementationVersion(Project project) {
