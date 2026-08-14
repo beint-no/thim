@@ -68,7 +68,30 @@ class CssDeadCodeTest {
     @Test
     fun `short interpolations are not treated as prefixes`() {
         assertTrue(!CssUsage.isDynamicPrefix("r-h-"))
+        assertTrue(CssUsage.isDynamicPrefix("r-is-"))
+        assertTrue(CssUsage.isDynamicPrefix("r-mchart-"))
         assertTrue(CssUsage.isDynamicPrefix("r-analytics-sparkline-bar-"))
+    }
+
+    @Test
+    fun `reads class tokens from javascript template literals`() {
+        write(
+            "css/base.css",
+            ".r-message-row { }\n.r-is-google { }\n.r-message-row-in { }\n.r-message-row-out { }\n",
+        )
+        write(
+            "src/app.js",
+            "item.className = `r-message-row \${tone}`;\n" +
+                "mark.className = `r-ads-provider-mark r-is-\${provider}`;\n" +
+                "row.className = `r-message-row \${outbound ? \"r-message-row-out\" : \"r-message-row-in\"}`;\n",
+        )
+
+        val report = CssDeadCode.analyze(directory.resolve("css"), listOf(directory.resolve("src")))
+
+        assertEquals(emptyList(), report.unused)
+        assertTrue("r-message-row" in report.used)
+        assertTrue("r-message-row-in" in report.used)
+        assertEquals(listOf("r-is-google"), report.prefixUsed)
     }
 
     @Test

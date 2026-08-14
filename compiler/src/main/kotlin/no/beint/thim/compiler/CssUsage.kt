@@ -67,23 +67,42 @@ internal class CssUsage(
             var index = 0
             while (index < source.length) {
                 val character = source[index]
-                if (character != '"' && character != '\'') {
+                if (character != '"' && character != '\'' && character != '`') {
                     index++
                     continue
                 }
                 val quote = character
                 val start = index + 1
                 index = start
+                val content = StringBuilder()
                 while (index < source.length) {
-                    when (source[index]) {
-                        '\\' -> index = (index + 2).coerceAtMost(source.length)
-                        quote -> break
-                        else -> index++
+                    when {
+                        source[index] == '\\' -> {
+                            content.append(source[index])
+                            if (index + 1 < source.length) {
+                                content.append(source[index + 1])
+                                index += 2
+                            } else {
+                                index++
+                            }
+                        }
+                        source[index] == quote -> break
+                        quote == '`' && source.startsWith("\${", index) -> {
+                            val interpolationEnd = skipInterpolation(source, index)
+                            literals.addAll(extractStrings(source.substring(index + 2, interpolationEnd)))
+                            index = if (interpolationEnd < source.length && source[interpolationEnd] == '}') {
+                                interpolationEnd + 1
+                            } else {
+                                interpolationEnd
+                            }
+                        }
+                        else -> {
+                            content.append(source[index])
+                            index++
+                        }
                     }
                 }
-                if (index <= source.length) {
-                    literals += source.substring(start, index.coerceAtMost(source.length))
-                }
+                literals += content.toString()
                 if (index < source.length && source[index] == quote) {
                     index++
                 }
@@ -100,15 +119,38 @@ internal class CssUsage(
         ) {
             if (literal.isEmpty()) return
             interpolationSegments(literal).forEach { segment ->
-                if (isDynamicPrefix(segment)) {
-                    prefixes += segment
-                    hits += CssUsageHit(segment, file)
+                val prefix = lastClassToken(segment)
+                if (isDynamicPrefix(prefix)) {
+                    prefixes += prefix
+                    hits += CssUsageHit(prefix, file)
                 }
                 classTokens(segment).forEach { token ->
                     tokens += token
                     hits += CssUsageHit(token, file)
                 }
             }
+        }
+
+        private fun lastClassToken(segment: String): String {
+            val trimmed = segment.trimEnd()
+            val start = trimmed.indexOfLast { it.isWhitespace() } + 1
+            return trimmed.substring(start)
+        }
+
+        private fun skipInterpolation(source: String, start: Int): Int {
+            var index = start + 2
+            var depth = 1
+            while (index < source.length && depth > 0) {
+                when (source[index]) {
+                    '{' -> depth++
+                    '}' -> depth--
+                }
+                if (depth == 0) {
+                    return index
+                }
+                index++
+            }
+            return index
         }
 
         internal fun interpolationSegments(literal: String): List<String> {
@@ -169,7 +211,7 @@ internal class CssUsage(
                 character == '.' || character == '+' || character == '/' || character == ','
 
         internal fun isDynamicPrefix(prefix: String): Boolean =
-            prefix.length >= 10 && prefix.endsWith('-') && prefix.count { it == '-' } >= 2
+            prefix.length >= 5 && prefix.endsWith('-') && prefix.count { it == '-' } >= 2
 
         private fun vendorPath(path: Path, root: Path): Boolean =
             path.relativeTo(root).pathString.replace('\\', '/').split('/').any { part ->
