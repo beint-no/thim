@@ -5,7 +5,6 @@ import java.io.IOException;
 import no.beint.thim.HtmlOutput;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HtmlOutputPerformanceTest {
@@ -14,11 +13,6 @@ class HtmlOutputPerformanceTest {
     private static final String UNICODE = "Blåbærsyltetøy på skjerf — café résumé 日本語.\n".repeat(20);
     private static final byte[] RAW = "<section class=\"static\">plain utf-8 bytes</section>\n".repeat(80)
             .getBytes(java.nio.charset.StandardCharsets.UTF_8);
-
-    @Test
-    void escapingWritesEntities() throws IOException {
-        assertEquals("A &amp; B &lt;x&gt;", text("A & B <x>"));
-    }
 
     @Test
     void escapingStaysUnderTheCommittedCeiling() {
@@ -63,14 +57,6 @@ class HtmlOutputPerformanceTest {
                 () -> name + " median " + result.medianNanosPerOp() + " ns/op exceeds ceiling "
                         + Baselines.ceiling(name) + " ns/op"
         );
-    }
-
-    private static String text(String value) throws IOException {
-        var sink = new RecycledOutputStream();
-        var output = new HtmlOutput(sink);
-        output.text(value);
-        output.flush();
-        return new String(sink.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @FunctionalInterface

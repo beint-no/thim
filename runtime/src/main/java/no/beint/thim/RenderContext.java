@@ -20,9 +20,9 @@ public record RenderContext(Locale locale, String contextPath, RequestDataValues
      * {@code /}) get the context path prepended, matching {@code @{/...}} URLs.
      */
     public String resolveUrl(String url) {
-        if (url.startsWith("/") && !url.startsWith("//")) {
-            return contextPath + url;
+        if (url.isEmpty() || url.charAt(0) != '/' || url.length() > 1 && url.charAt(1) == '/') {
+            return url;
         }
-        return url;
+        return contextPath.isEmpty() ? url : contextPath.concat(url);
     }
 }

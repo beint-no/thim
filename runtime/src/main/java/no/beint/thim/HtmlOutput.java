@@ -16,9 +16,12 @@ public final class HtmlOutput {
     private static final byte[] TRUE = "true".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] FALSE = "false".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] MIN_LONG = "-9223372036854775808".getBytes(StandardCharsets.US_ASCII);
+    private static final long HTML_SPECIALS =
+            1L << '&' | 1L << '\'' | 1L << '<' | 1L << '>' | 1L << '"';
 
     private final OutputStream destination;
     private final byte[] buffer;
+    private final byte[] digits = new byte[20];
     private int position;
 
     public HtmlOutput(OutputStream destination) {
@@ -35,21 +38,29 @@ public final class HtmlOutput {
 
     public void raw(byte[] value, int offset, int length) throws IOException {
         Objects.checkFromIndexSize(offset, length, value.length);
-        if (length >= buffer.length) {
-            flushBuffer();
-            destination.write(value, offset, length);
+        if (length <= buffer.length - position) {
+            System.arraycopy(value, offset, buffer, position, length);
+            position += length;
             return;
         }
-        if (length > buffer.length - position) {
-            flushBuffer();
+        flushBuffer();
+        if (length >= buffer.length) {
+            destination.write(value, offset, length);
+            return;
         }
         System.arraycopy(value, offset, buffer, position, length);
         position += length;
     }
 
     public void text(Object value) throws IOException {
-        if (value != null) {
-            text(value.toString());
+        switch (value) {
+            case null -> {
+            }
+            case String string -> text(string);
+            case Integer number -> text(number.intValue());
+            case Long number -> text(number.longValue());
+            case Boolean flag -> text(flag.booleanValue());
+            default -> text(value.toString());
         }
     }
 
@@ -76,19 +87,19 @@ public final class HtmlOutput {
             raw(MIN_LONG, 0, MIN_LONG.length);
             return;
         }
-        if (value < 0) {
-            byteValue('-');
+        var negative = value < 0;
+        if (negative) {
             value = -value;
         }
-        var divisor = 1L;
-        while (value / divisor >= 10) {
-            divisor *= 10;
-        }
+        var cursor = 20;
         do {
-            byteValue((int) ('0' + value / divisor));
-            value %= divisor;
-            divisor /= 10;
-        } while (divisor != 0);
+            digits[--cursor] = (byte) ('0' + value % 10);
+            value /= 10;
+        } while (value != 0);
+        if (negative) {
+            digits[--cursor] = '-';
+        }
+        raw(digits, cursor, 20 - cursor);
     }
 
     public void text(float value) throws IOException {
@@ -103,37 +114,69 @@ public final class HtmlOutput {
         if (value == null) {
             return;
         }
-        for (var index = 0; index < value.length(); index++) {
+        var dest = buffer;
+        var pos = position;
+        var capacity = dest.length;
+        var length = value.length();
+        for (var index = 0; index < length; index++) {
             var character = value.charAt(index);
-            switch (character) {
-                case '&' -> raw(AMPERSAND, 0, AMPERSAND.length);
-                case '\'' -> raw(APOSTROPHE, 0, APOSTROPHE.length);
-                case '>' -> raw(GREATER_THAN, 0, GREATER_THAN.length);
-                case '<' -> raw(LESS_THAN, 0, LESS_THAN.length);
-                case '"' -> raw(QUOTATION_MARK, 0, QUOTATION_MARK.length);
-                default -> {
-                    if (character < 0x80) {
-                        byteValue(character);
-                    } else if (character < 0x800) {
-                        byteValue(0xc0 | character >> 6);
-                        byteValue(0x80 | character & 0x3f);
-                    } else if (Character.isHighSurrogate(character) && index + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(index + 1))) {
-                        var codePoint = Character.toCodePoint(character, value.charAt(++index));
-                        byteValue(0xf0 | codePoint >> 18);
-                        byteValue(0x80 | codePoint >> 12 & 0x3f);
-                        byteValue(0x80 | codePoint >> 6 & 0x3f);
-                        byteValue(0x80 | codePoint & 0x3f);
-                    } else if (Character.isSurrogate(character)) {
-                        raw(REPLACEMENT_CHARACTER, 0, REPLACEMENT_CHARACTER.length);
-                    } else {
-                        byteValue(0xe0 | character >> 12);
-                        byteValue(0x80 | character >> 6 & 0x3f);
-                        byteValue(0x80 | character & 0x3f);
+            if (character < 0x80) {
+                if (!htmlSpecial(character)) {
+                    if (pos == capacity) {
+                        destination.write(dest, 0, pos);
+                        pos = 0;
                     }
+                    dest[pos++] = (byte) character;
+                    continue;
                 }
+                position = pos;
+                writeEntity(switch (character) {
+                    case '&' -> AMPERSAND;
+                    case '\'' -> APOSTROPHE;
+                    case '>' -> GREATER_THAN;
+                    case '<' -> LESS_THAN;
+                    default -> QUOTATION_MARK;
+                });
+                pos = position;
+                continue;
             }
+            if (character < 0x800) {
+                if (capacity - pos < 2) {
+                    destination.write(dest, 0, pos);
+                    pos = 0;
+                }
+                dest[pos++] = (byte) (0xc0 | character >> 6);
+                dest[pos++] = (byte) (0x80 | character & 0x3f);
+                continue;
+            }
+            if (Character.isHighSurrogate(character) && index + 1 < length
+                    && Character.isLowSurrogate(value.charAt(index + 1))) {
+                var codePoint = Character.toCodePoint(character, value.charAt(++index));
+                if (capacity - pos < 4) {
+                    destination.write(dest, 0, pos);
+                    pos = 0;
+                }
+                dest[pos++] = (byte) (0xf0 | codePoint >> 18);
+                dest[pos++] = (byte) (0x80 | codePoint >> 12 & 0x3f);
+                dest[pos++] = (byte) (0x80 | codePoint >> 6 & 0x3f);
+                dest[pos++] = (byte) (0x80 | codePoint & 0x3f);
+                continue;
+            }
+            if (Character.isSurrogate(character)) {
+                position = pos;
+                writeEntity(REPLACEMENT_CHARACTER);
+                pos = position;
+                continue;
+            }
+            if (capacity - pos < 3) {
+                destination.write(dest, 0, pos);
+                pos = 0;
+            }
+            dest[pos++] = (byte) (0xe0 | character >> 12);
+            dest[pos++] = (byte) (0x80 | character >> 6 & 0x3f);
+            dest[pos++] = (byte) (0x80 | character & 0x3f);
         }
+        position = pos;
     }
 
     public void flush() throws IOException {
@@ -152,11 +195,12 @@ public final class HtmlOutput {
         }
     }
 
-    private void byteValue(int value) throws IOException {
-        if (position == buffer.length) {
-            flushBuffer();
-        }
-        buffer[position++] = (byte) value;
+    private static boolean htmlSpecial(char character) {
+        return character < 64 && (HTML_SPECIALS & 1L << character) != 0;
+    }
+
+    private void writeEntity(byte[] entity) throws IOException {
+        raw(entity, 0, entity.length);
     }
 
     private void flushBuffer() throws IOException {

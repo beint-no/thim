@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Thim render benchmark</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <header>
+        <p>Thim static-copy fixture. The title is the only dynamic value; the rest is UTF-8 that the renderer should copy as byte ranges.</p>
+    </header>
+    <main>
+        <section>
+            <h2>Why this page exists</h2>
+            <p>Most of a finished document is static markup. Thim stores that markup as UTF-8 and copies ranges into the response buffer. This template is long enough to keep that path on the hot side of a microbenchmark without hiding the encoder behind a huge list.</p>
+            <p>Repeated paragraphs follow so the compiled resource is several kilobytes. They stay identical on purpose so the compiler can reuse byte ranges.</p>
+        </section>
+        <section>
+            <h2>Static copy</h2>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+            <p>The renderer should write this paragraph with a single raw copy. The same sentence is repeated so the static resource is large enough to exercise the buffer.</p>
+        </section>
+        <section>
+            <h2>More static copy</h2>
+            <ul>
+                <li>Navigation, chrome, and legal text are static.</li>
+                <li>Locale branches belong on the messages, not on this chrome.</li>
+                <li>A regression here is usually a change to HtmlOutput.raw or the generated ranges.</li>
+                <li>Navigation, chrome, and legal text are static.</li>
+                <li>Locale branches belong on the messages, not on this chrome.</li>
+                <li>A regression here is usually a change to HtmlOutput.raw or the generated ranges.</li>
+                <li>Navigation, chrome, and legal text are static.</li>
+                <li>Locale branches belong on the messages, not on this chrome.</li>
+                <li>A regression here is usually a change to HtmlOutput.raw or the generated ranges.</li>
+            </ul>
+        </section>
+        <footer>
+            <p>End of the static fixture. Title was injected above.</p>
+        </footer>
+    </main>
+</body>
+</html>

@@ -30,6 +30,10 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty(
+        "thim.goldens.update",
+        providers.systemProperty("thim.goldens.update").orElse("false"),
+    )
     testLogging {
         events("passed", "failed", "standardOut", "standardError")
     }
