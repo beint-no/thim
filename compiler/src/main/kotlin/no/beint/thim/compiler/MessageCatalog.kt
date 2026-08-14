@@ -407,6 +407,11 @@ internal class MessageCatalog private constructor(
                 else -> null
             }
             require(expectedTag == null || node.tag == expectedTag) { problem(path, node, "YAML tags are not supported") }
+            if (node is ScalarNode) {
+                require(node.value.codePoints().noneMatch { it in 0xD800..0xDFFF }) {
+                    problem(path, node, "invalid Unicode scalar value: unpaired surrogate")
+                }
+            }
         }
 
         private fun problem(path: Path, node: Node, message: String): String =
