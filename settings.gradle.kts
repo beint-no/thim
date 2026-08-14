@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "thim"
 
-include("runtime", "compiler", "spring", "gradle-plugin", "example")
+include("runtime", "compiler", "spring", "gradle-plugin", "example", "benchmark")

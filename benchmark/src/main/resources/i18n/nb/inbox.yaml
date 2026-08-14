@@ -1,0 +1,6 @@
+title: Innboks
+new: Ny
+unread:
+  _plural: unreadCount
+  one: Én ulest melding
+  other: "{unreadCount} uleste meldinger"

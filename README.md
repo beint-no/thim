@@ -2,6 +2,8 @@
 
 Thim is a compile-time-safe server-side HTML renderer for Java and Kotlin applications. It validates templates against page models, messages and Spring routes, then generates direct Java renderers. Static HTML is stored as UTF-8 bytes and dynamic values are encoded for their output context.
 
+The marketing site is at [beint-no.github.io/thim](https://beint-no.github.io/thim/).
+
 Thim requires JDK 26 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
 ## Use
@@ -220,5 +222,22 @@ Missing models, properties, messages and routes; unsafe nullable access; malform
 - `spring`: Java Spring MVC adapter
 - `gradle-plugin`: Java and Kotlin build integration
 - `example`: Spring Boot application
+- `benchmark`: generated-renderer fixtures, regression tests, and JMH benches
+
+## Performance tests
+
+The `benchmark` module renders compiled inbox, catalog, and mostly-static pages, plus the `HtmlOutput` hot paths. `./gradlew build` runs the JUnit suite: it checks output, measures median nanoseconds per render after warmup, and fails if a case is slower than the committed ceiling in `benchmark/src/test/resources/render-baselines.properties`.
+
+Ceilings are intentionally loose so CI noise does not fail the build. Tighten them after a real improvement. Print the measured times with:
+
+```shell
+./gradlew :benchmark:test --info
+```
+
+For a longer local run that is better at guiding speed work:
+
+```shell
+./gradlew :benchmark:jmh
+```
 
 See [DESIGN.md](DESIGN.md) for the architecture.
