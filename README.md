@@ -69,6 +69,7 @@ thim {
     modelPackages.set(listOf("no.example.page"))
     failOnUnusedMessages.set(true)
     generateRoutes.set(true)
+    // failOnUnusedCss.set(true)
 }
 ```
 
@@ -77,6 +78,8 @@ Thim deliberately owns its default source layout: templates go in `src/main/reso
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
 Every page template must have a matching model by default. Set `strictTemplates` to `false` only while Thim and a runtime template engine intentionally share a template directory. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
+
+An experimental CSS checker scans first-party stylesheets under `src/main/resources/static` (skipping `vendor/`) and looks for those class names in templates, Kotlin/Java sources, and first-party JavaScript. It writes `build/reports/thim/css.json` and warns on unused classes. Set `failOnUnusedCss` to make unused classes fail the build once the report is clean of false positives. Interpolated names such as `"r-analytics-sparkline-bar-$index"` count as a prefix match, so numbered variants stay live. Vendor CSS is ignored. `th:class="${dynamic}"` with no literal prefix cannot prove a class is used. If another module consumes the same stylesheet, add it with `cssUsage.from(project(":other").file("src/main"))`.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 

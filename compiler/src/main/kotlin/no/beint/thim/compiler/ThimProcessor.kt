@@ -65,6 +65,21 @@ private class ThimProcessor(
         .split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
+    private val cssDirectory = environment.options["thim.css"]
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let { Path.of(it).toAbsolutePath().normalize() }
+    private val cssUsageDirectories = environment.options["thim.cssUsage"]
+        .orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .map { Path.of(it).toAbsolutePath().normalize() }
+    private val failOnUnusedCss = environment.options["thim.failOnUnusedCss"].toBoolean()
+    private val cssReport = environment.options["thim.cssReport"]
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let { Path.of(it).toAbsolutePath().normalize() }
     private var completed = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -111,6 +126,7 @@ private class ThimProcessor(
             collect(problems) { if (failOnUnusedMessages) catalog.requireAllUsed() }
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
             collect(problems) { reportUnusedFragments(expander) }
+            collect(problems) { reportUnusedCss() }
             val documentChecker = DocumentChecker(logger::warn)
             templates.forEach { documentChecker.check(it.nodes) }
             problems += documentChecker.problems
@@ -237,6 +253,26 @@ private class ThimProcessor(
                 output.append(RouteGenerator(routeCatalog).generate(generatedPackage, routesName))
             }
         }
+    }
+
+    private fun reportUnusedCss() {
+        val cssRoot = cssDirectory?.takeIf { Files.isDirectory(it) }
+        val usageRoots = (cssUsageDirectories + templatesDirectory)
+            .filter { Files.isDirectory(it) }
+            .distinct()
+        if (cssRoot == null || usageRoots.isEmpty()) {
+            return
+        }
+        val report = CssDeadCode.analyze(cssRoot, usageRoots)
+        cssReport?.let { CssDeadCode.write(report, it) }
+        if (report.unused.isEmpty()) {
+            return
+        }
+        val summary = "THIM-CSS-UNUSED ${report.unused.size} first-party CSS classes were never referenced"
+        if (failOnUnusedCss) {
+            diagnostic("THIM-CSS-UNUSED", null, "unused CSS classes: ${report.unused.joinToString(", ")}")
+        }
+        logger.warn("$summary; see ${cssReport ?: "the Thim CSS report"}")
     }
 
     private fun parsedTemplates(): Map<String, List<Node>> {

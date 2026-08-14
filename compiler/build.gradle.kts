@@ -28,3 +28,10 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+tasks.register<JavaExec>("cssCheck") {
+    group = "verification"
+    description = "Experimental first-party CSS dead-class report"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("no.beint.thim.compiler.CssDeadCodeMain")
+}

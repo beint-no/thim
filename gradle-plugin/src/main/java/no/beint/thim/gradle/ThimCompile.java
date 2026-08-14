@@ -99,6 +99,23 @@ public abstract class ThimCompile extends DefaultTask {
     @Input
     public abstract ListProperty<String> getForbiddenModelAnnotations();
 
+    @InputDirectory
+    @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract DirectoryProperty getCss();
+
+    @InputFiles
+    @Optional
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getCssUsage();
+
+    @Input
+    public abstract Property<Boolean> getFailOnUnusedCss();
+
+    @OutputFile
+    @Optional
+    public abstract RegularFileProperty getCssReport();
+
     @Input
     public abstract Property<String> getModuleName();
 
@@ -168,7 +185,14 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.validateRoutes=" + getValidateRoutes().get(),
                 "thim.trustedPaths=" + String.join(",", getTrustedPaths().get()),
                 "thim.strictModels=" + getStrictModels().get(),
-                "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get())
+                "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get()),
+                "thim.css=" + optionalDirectory(getCss()),
+                "thim.cssUsage=" + getCssUsage().getFiles().stream()
+                        .map(File::getAbsolutePath)
+                        .reduce((left, right) -> left + "," + right)
+                        .orElse(""),
+                "thim.failOnUnusedCss=" + getFailOnUnusedCss().get(),
+                "thim.cssReport=" + (getCssReport().isPresent() ? getCssReport().get().getAsFile().getAbsolutePath() : "")
         );
         var arguments = List.of(
                 "-java-source-roots=" + javaSources,
@@ -203,6 +227,10 @@ public abstract class ThimCompile extends DefaultTask {
         }
 
         writeReport();
+    }
+
+    private static String optionalDirectory(DirectoryProperty directory) {
+        return directory.isPresent() ? directory.get().getAsFile().getAbsolutePath() : "";
     }
 
     private void writeReport() throws IOException {

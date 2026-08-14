@@ -48,6 +48,12 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getForbiddenModelAnnotations().convention(java.util.List.of(
                 "jakarta.persistence.Entity", "jakarta.persistence.Embeddable", "jakarta.persistence.MappedSuperclass",
                 "javax.persistence.Entity", "javax.persistence.Embeddable", "javax.persistence.MappedSuperclass"));
+        extension.getCss().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/static"));
+        var mainSources = project.getLayout().getProjectDirectory().dir("src/main").getAsFile();
+        if (mainSources.isDirectory()) {
+            extension.getCssUsage().from(mainSources);
+        }
+        extension.getFailOnUnusedCss().convention(false);
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> {
@@ -86,6 +92,13 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
+        ksp.arg("thim.css", extension.getCss().map(directory -> directory.getAsFile().getAbsolutePath()));
+        ksp.arg("thim.cssUsage", project.provider(() -> extension.getCssUsage().getFiles().stream()
+                .map(java.io.File::getAbsolutePath)
+                .collect(java.util.stream.Collectors.joining(","))));
+        ksp.arg("thim.failOnUnusedCss", extension.getFailOnUnusedCss().map(String::valueOf));
+        ksp.arg("thim.cssReport", project.getLayout().getBuildDirectory().file("reports/thim/css.json")
+                .map(file -> file.getAsFile().getAbsolutePath()));
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
@@ -93,6 +106,12 @@ public final class ThimPlugin implements Plugin<Project> {
                     .withPathSensitivity(PathSensitivity.RELATIVE);
             task.getInputs().files(extension.getMessages().map(directory -> allFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
+                    .withPathSensitivity(PathSensitivity.RELATIVE);
+            task.getInputs().files(extension.getCss().map(directory -> cssFiles(project, directory.getAsFile())))
+                    .withPropertyName("thimCss")
+                    .withPathSensitivity(PathSensitivity.RELATIVE);
+            task.getInputs().files(extension.getCssUsage())
+                    .withPropertyName("thimCssUsage")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
 
@@ -182,6 +201,12 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getTrustedPaths().set(extension.getTrustedPaths());
         task.getStrictModels().set(extension.getStrictModels());
         task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());
+        if (extension.getCss().getAsFile().get().isDirectory()) {
+            task.getCss().set(extension.getCss());
+        }
+        task.getCssUsage().from(extension.getCssUsage());
+        task.getFailOnUnusedCss().set(extension.getFailOnUnusedCss());
+        task.getCssReport().set(project.getLayout().getBuildDirectory().file("reports/thim/css.json"));
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));
         task.getProjectBase().set(project.getLayout().getProjectDirectory());
@@ -209,6 +234,13 @@ public final class ThimPlugin implements Plugin<Project> {
 
     private FileTree htmlFiles(Project project, java.io.File directory) {
         return project.fileTree(directory, files -> files.include("**/*.html"));
+    }
+
+    private FileTree cssFiles(Project project, java.io.File directory) {
+        return project.fileTree(directory, files -> {
+            files.include("**/*.css");
+            files.exclude("**/vendor/**");
+        });
     }
 
     private FileTree allFiles(Project project, java.io.File directory) {

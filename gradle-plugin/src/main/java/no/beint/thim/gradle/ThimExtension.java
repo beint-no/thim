@@ -36,4 +36,10 @@ public abstract class ThimExtension {
     public abstract Property<Boolean> getStrictModels();
 
     public abstract ListProperty<String> getForbiddenModelAnnotations();
+
+    public abstract DirectoryProperty getCss();
+
+    public abstract org.gradle.api.file.ConfigurableFileCollection getCssUsage();
+
+    public abstract Property<Boolean> getFailOnUnusedCss();
 }
