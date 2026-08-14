@@ -70,6 +70,9 @@ thim {
     failOnUnusedMessages.set(true)
     generateRoutes.set(true)
     // failOnUnusedCss.set(true)
+    // failOnUnknownCss.set(true)
+    cssClassPrefixes.set(listOf("r-", "thim-"))
+    // cssAllowedPrefixes.set(listOf("r-", "wa-", "htmx-"))
 }
 ```
 
@@ -79,7 +82,7 @@ The default model package is `<project group>.page`. Nested template names are p
 
 Every page template must have a matching model by default. Set `strictTemplates` to `false` only while Thim and a runtime template engine intentionally share a template directory. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
 
-An experimental CSS checker scans first-party stylesheets under `src/main/resources/static` (skipping `vendor/`) and looks for those class names in templates, Kotlin/Java sources, and first-party JavaScript. It writes `build/reports/thim/css.json` and warns on unused classes. Set `failOnUnusedCss` to make unused classes fail the build once the report is clean of false positives. Interpolated names such as `"r-analytics-sparkline-bar-$index"` count as a prefix match, so numbered variants stay live. Vendor CSS is ignored. `th:class="${dynamic}"` with no literal prefix cannot prove a class is used. If another module consumes the same stylesheet, add it with `cssUsage.from(project(":other").file("src/main"))`.
+An experimental CSS checker scans first-party stylesheets under `src/main/resources/static` (skipping `vendor/`) and looks for those class names in templates, Kotlin/Java sources, and first-party JavaScript. It writes `build/reports/thim/css.json` and warns on unused classes. It also warns when an HTML `class` / `th:class` token starts with an owned prefix (`cssClassPrefixes`, default `r-` and `thim-`) and has no first-party CSS rule. Set `failOnUnknownCss` once that list is clean. Optionally set `cssAllowedPrefixes` to `r-`, `wa-`, `htmx-` (or your own list) to warn — or `failOnDisallowedCssPrefix` to fail — when a class token uses any other prefix. Interpolated names such as `"r-analytics-sparkline-bar-$index"` count as a prefix match, so numbered variants stay live. Vendor CSS is ignored. `th:class="${dynamic}"` with no literal prefix cannot prove a class is used. If another module consumes the same stylesheet, add it with `cssUsage.from(project(":other").file("src/main"))`.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 

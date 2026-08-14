@@ -112,6 +112,18 @@ public abstract class ThimCompile extends DefaultTask {
     @Input
     public abstract Property<Boolean> getFailOnUnusedCss();
 
+    @Input
+    public abstract ListProperty<String> getCssClassPrefixes();
+
+    @Input
+    public abstract ListProperty<String> getCssAllowedPrefixes();
+
+    @Input
+    public abstract Property<Boolean> getFailOnUnknownCss();
+
+    @Input
+    public abstract Property<Boolean> getFailOnDisallowedCssPrefix();
+
     @OutputFile
     @Optional
     public abstract RegularFileProperty getCssReport();
@@ -192,6 +204,10 @@ public abstract class ThimCompile extends DefaultTask {
                         .reduce((left, right) -> left + "," + right)
                         .orElse(""),
                 "thim.failOnUnusedCss=" + getFailOnUnusedCss().get(),
+                "thim.cssClassPrefixes=" + String.join(",", getCssClassPrefixes().get()),
+                "thim.cssAllowedPrefixes=" + String.join(",", getCssAllowedPrefixes().get()),
+                "thim.failOnUnknownCss=" + getFailOnUnknownCss().get(),
+                "thim.failOnDisallowedCssPrefix=" + getFailOnDisallowedCssPrefix().get(),
                 "thim.cssReport=" + (getCssReport().isPresent() ? getCssReport().get().getAsFile().getAbsolutePath() : "")
         );
         var arguments = List.of(

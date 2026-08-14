@@ -42,4 +42,12 @@ public abstract class ThimExtension {
     public abstract org.gradle.api.file.ConfigurableFileCollection getCssUsage();
 
     public abstract Property<Boolean> getFailOnUnusedCss();
+
+    public abstract ListProperty<String> getCssClassPrefixes();
+
+    public abstract ListProperty<String> getCssAllowedPrefixes();
+
+    public abstract Property<Boolean> getFailOnUnknownCss();
+
+    public abstract Property<Boolean> getFailOnDisallowedCssPrefix();
 }

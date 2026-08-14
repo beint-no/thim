@@ -54,6 +54,10 @@ public final class ThimPlugin implements Plugin<Project> {
             extension.getCssUsage().from(mainSources);
         }
         extension.getFailOnUnusedCss().convention(false);
+        extension.getCssClassPrefixes().convention(java.util.List.of("r-", "thim-"));
+        extension.getCssAllowedPrefixes().convention(java.util.List.of());
+        extension.getFailOnUnknownCss().convention(false);
+        extension.getFailOnDisallowedCssPrefix().convention(false);
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlinProject(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> {
@@ -97,6 +101,10 @@ public final class ThimPlugin implements Plugin<Project> {
                 .map(java.io.File::getAbsolutePath)
                 .collect(java.util.stream.Collectors.joining(","))));
         ksp.arg("thim.failOnUnusedCss", extension.getFailOnUnusedCss().map(String::valueOf));
+        ksp.arg("thim.cssClassPrefixes", extension.getCssClassPrefixes().map(prefixes -> String.join(",", prefixes)));
+        ksp.arg("thim.cssAllowedPrefixes", extension.getCssAllowedPrefixes().map(prefixes -> String.join(",", prefixes)));
+        ksp.arg("thim.failOnUnknownCss", extension.getFailOnUnknownCss().map(String::valueOf));
+        ksp.arg("thim.failOnDisallowedCssPrefix", extension.getFailOnDisallowedCssPrefix().map(String::valueOf));
         ksp.arg("thim.cssReport", project.getLayout().getBuildDirectory().file("reports/thim/css.json")
                 .map(file -> file.getAsFile().getAbsolutePath()));
 
@@ -206,6 +214,10 @@ public final class ThimPlugin implements Plugin<Project> {
         }
         task.getCssUsage().from(extension.getCssUsage());
         task.getFailOnUnusedCss().set(extension.getFailOnUnusedCss());
+        task.getCssClassPrefixes().set(extension.getCssClassPrefixes());
+        task.getCssAllowedPrefixes().set(extension.getCssAllowedPrefixes());
+        task.getFailOnUnknownCss().set(extension.getFailOnUnknownCss());
+        task.getFailOnDisallowedCssPrefix().set(extension.getFailOnDisallowedCssPrefix());
         task.getCssReport().set(project.getLayout().getBuildDirectory().file("reports/thim/css.json"));
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));

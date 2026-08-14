@@ -76,6 +76,18 @@ private class ThimProcessor(
         .filter(String::isNotEmpty)
         .map { Path.of(it).toAbsolutePath().normalize() }
     private val failOnUnusedCss = environment.options["thim.failOnUnusedCss"].toBoolean()
+    private val failOnUnknownCss = environment.options["thim.failOnUnknownCss"].toBoolean()
+    private val failOnDisallowedCssPrefix = environment.options["thim.failOnDisallowedCssPrefix"].toBoolean()
+    private val cssClassPrefixes = environment.options["thim.cssClassPrefixes"]
+        .orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+    private val cssAllowedPrefixes = environment.options["thim.cssAllowedPrefixes"]
+        .orEmpty()
+        .split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
     private val cssReport = environment.options["thim.cssReport"]
         ?.trim()
         ?.takeIf(String::isNotEmpty)
@@ -263,16 +275,34 @@ private class ThimProcessor(
         if (cssRoot == null || usageRoots.isEmpty()) {
             return
         }
-        val report = CssDeadCode.analyze(cssRoot, usageRoots)
+        val options = CssCheckOptions(cssClassPrefixes, cssAllowedPrefixes)
+        val report = CssDeadCode.analyze(cssRoot, usageRoots, options)
         cssReport?.let { CssDeadCode.write(report, it) }
-        if (report.unused.isEmpty()) {
-            return
+        if (report.unused.isNotEmpty()) {
+            val summary = "THIM-CSS-UNUSED ${report.unused.size} first-party CSS classes were never referenced"
+            if (failOnUnusedCss) {
+                diagnostic("THIM-CSS-UNUSED", null, "unused CSS classes: ${report.unused.joinToString(", ")}")
+            }
+            logger.warn("$summary; see ${cssReport ?: "the Thim CSS report"}")
         }
-        val summary = "THIM-CSS-UNUSED ${report.unused.size} first-party CSS classes were never referenced"
-        if (failOnUnusedCss) {
-            diagnostic("THIM-CSS-UNUSED", null, "unused CSS classes: ${report.unused.joinToString(", ")}")
+        if (report.unknown.isNotEmpty()) {
+            val summary = "THIM-CSS-UNKNOWN ${report.unknown.size} owned class tokens have no first-party CSS rule"
+            if (failOnUnknownCss) {
+                diagnostic("THIM-CSS-UNKNOWN", null, "unknown CSS classes: ${report.unknown.joinToString(", ")}")
+            }
+            logger.warn("$summary; see ${cssReport ?: "the Thim CSS report"}")
         }
-        logger.warn("$summary; see ${cssReport ?: "the Thim CSS report"}")
+        if (report.disallowedPrefix.isNotEmpty()) {
+            val summary = "THIM-CSS-PREFIX ${report.disallowedPrefix.size} class tokens are outside ${report.allowedPrefixes}"
+            if (failOnDisallowedCssPrefix) {
+                diagnostic(
+                    "THIM-CSS-PREFIX",
+                    null,
+                    "class tokens outside allowed prefixes ${report.allowedPrefixes}: ${report.disallowedPrefix.joinToString(", ")}",
+                )
+            }
+            logger.warn("$summary; see ${cssReport ?: "the Thim CSS report"}")
+        }
     }
 
     private fun parsedTemplates(): Map<String, List<Node>> {

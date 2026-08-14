@@ -106,6 +106,48 @@ class CssDeadCodeTest {
     }
 
     @Test
+    fun `reports owned class tokens used in html but missing from css`() {
+        write("css/base.css", ".r-used { }\n")
+        write("src/page.html", """<div class="r-used r-font-semibold"></div>""")
+        write("src/Hook.kt", """val hook = "r-metric-refresh"""")
+
+        val report = CssDeadCode.analyze(directory.resolve("css"), listOf(directory.resolve("src")))
+
+        assertEquals(listOf("r-font-semibold"), report.unknown)
+        assertEquals(emptyList(), report.disallowedPrefix)
+    }
+
+    @Test
+    fun `owned prefixes are configurable`() {
+        write("css/base.css", ".app-used { }\n")
+        write("src/page.html", """<div class="app-used app-missing r-also"></div>""")
+
+        val report = CssDeadCode.analyze(
+            directory.resolve("css"),
+            listOf(directory.resolve("src")),
+            CssCheckOptions(ownedPrefixes = listOf("app-")),
+        )
+
+        assertEquals(listOf("app-missing"), report.unknown)
+        assertEquals(listOf("app-"), report.ownedPrefixes)
+    }
+
+    @Test
+    fun `allowed prefixes flag class tokens outside the list`() {
+        write("css/base.css", ".r-used { }\n")
+        write("src/page.html", """<div class="r-used wa-stack home-hero"></div>""")
+
+        val report = CssDeadCode.analyze(
+            directory.resolve("css"),
+            listOf(directory.resolve("src")),
+            CssCheckOptions(allowedPrefixes = listOf("r-", "wa-", "htmx-")),
+        )
+
+        assertEquals(listOf("home-hero"), report.disallowedPrefix)
+        assertEquals(emptyList(), report.unknown)
+    }
+
+    @Test
     fun `keeps class tokens after a kotlin interpolation`() {
         val segments = CssUsage.interpolationSegments(
             "r-sticky r-z-10 \$border r-max-[576px]:r-min-w-[55px] \$left",

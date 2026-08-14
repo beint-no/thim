@@ -15,6 +15,7 @@ internal data class CssUsageHit(
 
 internal class CssUsage(
     val tokens: Set<String>,
+    val htmlClassTokens: Set<String>,
     val prefixes: Set<String>,
     val hits: List<CssUsageHit>,
 ) {
@@ -27,6 +28,7 @@ internal class CssUsage(
 
         fun scan(roots: List<Path>): CssUsage {
             val tokens = linkedSetOf<String>()
+            val htmlClassTokens = linkedSetOf<String>()
             val prefixes = linkedSetOf<String>()
             val hits = mutableListOf<CssUsageHit>()
             roots.filter { Files.isDirectory(it) }.forEach { root ->
@@ -37,11 +39,19 @@ internal class CssUsage(
                         .forEach { path ->
                             val relative = path.relativeTo(root).pathString.replace('\\', '/')
                             val source = Files.readString(path, StandardCharsets.UTF_8)
-                            collect(source, path.extension.lowercase(), relative, tokens, prefixes, hits)
+                            collect(
+                                source,
+                                path.extension.lowercase(),
+                                relative,
+                                tokens,
+                                htmlClassTokens,
+                                prefixes,
+                                hits,
+                            )
                         }
                 }
             }
-            return CssUsage(tokens, prefixes, hits)
+            return CssUsage(tokens, htmlClassTokens, prefixes, hits)
         }
 
         internal fun collect(
@@ -49,12 +59,13 @@ internal class CssUsage(
             extension: String,
             file: String,
             tokens: MutableSet<String>,
+            htmlClassTokens: MutableSet<String>,
             prefixes: MutableSet<String>,
             hits: MutableList<CssUsageHit>,
         ) {
             if (extension == "html") {
                 htmlClassAttribute.findAll(source).forEach { match ->
-                    addLiteral(match.groupValues[2], file, tokens, prefixes, hits)
+                    addLiteral(match.groupValues[2], file, tokens, prefixes, hits, htmlClassTokens)
                 }
             }
             extractStrings(source).forEach { literal ->
@@ -116,6 +127,7 @@ internal class CssUsage(
             tokens: MutableSet<String>,
             prefixes: MutableSet<String>,
             hits: MutableList<CssUsageHit>,
+            htmlClassTokens: MutableSet<String>? = null,
         ) {
             if (literal.isEmpty()) return
             interpolationSegments(literal).forEach { segment ->
@@ -126,6 +138,7 @@ internal class CssUsage(
                 }
                 classTokens(segment).forEach { token ->
                     tokens += token
+                    htmlClassTokens?.add(token)
                     hits += CssUsageHit(token, file)
                 }
             }
