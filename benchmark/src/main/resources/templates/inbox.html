@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title th:text="#{inbox.title}">Inbox</title>
+</head>
+<body>
+    <main>
+        <h1 th:text="#{inbox.title}">Inbox</h1>
+        <p th:text="${greeting}">Greeting</p>
+        <p th:text="#{inbox.unread(unreadCount=${unreadCount})}">Unread</p>
+        <ul>
+            <li th:each="message : ${messages}">
+                <strong th:text="${message.from}">from</strong>
+                <span th:text="${message.subject}">subject</span>
+                <em th:if="${message.unread}" th:text="#{inbox.new}">New</em>
+            </li>
+        </ul>
+    </main>
+</body>
+</html>

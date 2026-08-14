@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Thim — compile-time HTML for Java and Kotlin</title>
+    <meta name="description" content="Thim compiles HTML templates, YAML catalogs, and page models into Java renderers. Missing keys, unused copy, and dead model fields fail the build. Locale is included.">
+    <meta name="theme-color" content="#efe6d4">
+    <meta property="og:title" content="Thim — fail the build, never the request">
+    <meta property="og:description" content="An opinionated compile-time HTML renderer for Java and Kotlin. More safety than JTE or JStachio, with compiled locale catalogs included.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://beint-no.github.io/thim/">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,640&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="wrap site-header">
+        <a class="wordmark" href="#main">
+            <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+                <rect width="32" height="32" rx="4" fill="#1a1712"/>
+                <path d="M7 9h18M16 9v15" stroke="#efe6d4" stroke-width="2.2"/>
+                <path d="M10 24h12" stroke="#c9841a" stroke-width="2.2"/>
+            </svg>
+            <strong>Thim</strong>
+            <span>0.7.2</span>
+        </a>
+        <nav class="nav" aria-label="Page">
+            <a href="#opinions">Opinions</a>
+            <a href="#language">Language</a>
+            <a href="#locale">Locale</a>
+            <a href="#compare">Compare</a>
+            <a href="#start">Start</a>
+            <a href="https://github.com/beint-no/thim">GitHub</a>
+        </nav>
+    </header>
+
+    <main id="main">
+        <section class="wrap hero">
+            <div>
+                <p class="kicker">Java · Kotlin · JDK 26</p>
+                <h1>Fail the build. Never the request.</h1>
+                <p class="lede">
+                    Thim is an opinionated compile-time HTML renderer. Templates, translations,
+                    and page models are compiler inputs. Missing properties, unused copy, dead
+                    fragments, and incomplete locales fail compilation. The request path is
+                    generated Java writing UTF-8.
+                </p>
+                <div class="actions">
+                    <a class="button" href="#start">Add the Gradle plugin</a>
+                    <a class="button ghost" href="https://github.com/beint-no/thim">Read the source</a>
+                </div>
+                <p class="meta-row">
+                    <span>Apache-2.0</span>
+                    <span>Maven Central</span>
+                    <span>Spring Framework 7 optional</span>
+                    <span>No runtime template engine</span>
+                </p>
+            </div>
+            <aside class="terminal" aria-label="Example compiler diagnostics">
+                <div class="terminal-bar">
+                    <span>./gradlew thimCheck</span>
+                    <span>exit 1</span>
+                </div>
+                <pre><span class="err">home.html:11:18</span> <span class="code">THIM-PROPERTY-UNKNOWN</span>
+  'greetting' is not a property of HomePage
+  <span class="hint">did you mean 'greeting'?</span>
+
+<span class="err">home.html:14:13</span> <span class="code">THIM-MESSAGE</span>
+  message 'home.subtitl' does not exist
+
+<span class="err">HomePage.unusedNote</span> <span class="code">THIM-MODEL-UNUSED-PROPERTY</span>
+  HomePage.unusedNote is not used by template 'home'
+
+<span class="err">nb/home.yaml</span>
+  locale 'nb' is missing key 'home.inbox' present in 'en'
+
+<span class="ok">3 templates · 2 locales · 0 shipped mistakes</span></pre>
+            </aside>
+        </section>
+
+        <section class="wrap band" id="opinions">
+            <p class="kicker">Closed world</p>
+            <h2>More safety. More batteries. Less rope.</h2>
+            <p class="section-copy">
+                JTE lets you write Java in the template. JStachio compiles Mustache against a
+                model. Thim competes with both, then refuses more. The language is small on
+                purpose. If the compiler cannot prove a value, a message, or a URL, the
+                application does not compile.
+            </p>
+            <div class="cards">
+                <article class="card">
+                    <span class="num">01</span>
+                    <h3>Dead code is a compiler error</h3>
+                    <p>
+                        Unused page-model properties fail the build. Unused fragments can fail
+                        the build. Unused catalog keys fail when you own the bundle. A field
+                        that nothing prints is leftover surface area, not a feature.
+                    </p>
+                </article>
+                <article class="card">
+                    <span class="num">02</span>
+                    <h3>Locale is not an add-on</h3>
+                    <p>
+                        YAML catalogs compile into the renderer. Every locale must carry the
+                        same files, keys, and argument types. CLDR plural rules are embedded.
+                        <code>lang</code> on <code>&lt;html&gt;</code> comes from the request
+                        locale when you omit it.
+                    </p>
+                </article>
+                <article class="card">
+                    <span class="num">03</span>
+                    <h3>Request time is boring Java</h3>
+                    <p>
+                        Static HTML is stored as UTF-8 bytes. Dynamic values are encoded for
+                        their output context. There is no OGNL, no reflective dispatch, no
+                        runtime template lookup, and no leftover engine in the jar.
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <section class="wrap band" id="language">
+            <p class="kicker">Familiar HTML</p>
+            <h2>Thymeleaf-shaped templates. A typed page model.</h2>
+            <p class="section-copy">
+                Name the model after the template. <code>home.html</code> resolves to
+                <code>HomePage</code>. Return the model from a controller. Thim generates the
+                renderer.
+            </p>
+            <div class="split">
+                <article class="panel">
+                    <div class="panel-head">
+                        <span>home.html</span>
+                        <button type="button" class="copy" data-copy="tpl">Copy</button>
+                    </div>
+                    <pre id="tpl">&lt;!doctype html&gt;
+&lt;html&gt;
+&lt;body&gt;
+  &lt;h1 th:text="#{home.title(version=${version})}"&gt;Home&lt;/h1&gt;
+  &lt;p th:text="${greeting}"&gt;Greeting&lt;/p&gt;
+  &lt;p th:text="#{home.inbox(unreadCount=${unreadCount})}"&gt;Unread&lt;/p&gt;
+  &lt;li th:each="feature : ${features}"&gt;
+    &lt;a th:href="@{/feature/{name}(name=${feature.name})}"
+       th:text="${feature.name}"&gt;Name&lt;/a&gt;
+  &lt;/li&gt;
+&lt;/body&gt;
+&lt;/html&gt;</pre>
+                </article>
+                <article class="panel">
+                    <div class="panel-head">
+                        <span>HomePage.kt</span>
+                        <button type="button" class="copy" data-copy="model">Copy</button>
+                    </div>
+                    <pre id="model">data class HomePage(
+    val version: String,
+    val greeting: String,
+    val unreadCount: Int,
+    val features: List&lt;Feature&gt;,
+)
+
+@GetMapping("/")
+fun home() = HomePage(
+    version = "0.7.2",
+    greeting = "Typed models, compiled HTML.",
+    unreadCount = 3,
+    features = listOf(
+        Feature("Safe", "Checked while you compile."),
+        Feature("Small", "Dependency-free Java runtime."),
+    ),
+)</pre>
+                </article>
+            </div>
+        </section>
+
+        <section class="band thyme" id="refuse">
+            <div class="wrap">
+                <p class="kicker">What the compiler refuses</p>
+                <h2>If it can go wrong at request time, it is a build failure.</h2>
+                <p class="section-copy">
+                    Thim is narrower than a general template engine. That is the product.
+                    Prepare computed display values on the page model. Do not ask the
+                    template to invent types, look up templates, or evaluate an expression
+                    language.
+                </p>
+                <ul class="checklist">
+                    <li>Missing, extra, or mistyped message keys across locales</li>
+                    <li>Unused model properties, unused fragments, unused messages</li>
+                    <li>Mutable models, <code>Any</code>/<code>Object</code>, maps, lazy collections</li>
+                    <li>JPA entities on a page model</li>
+                    <li>Nullable dereference without <code>?.</code></li>
+                    <li>Unknown Spring routes and unsafe <code>javascript:</code> URLs</li>
+                    <li>Dynamic JavaScript, CSS, or event-handler content</li>
+                    <li>Nested forms, broken <code>label</code> / ARIA / local anchors</li>
+                    <li>OGNL utility objects and runtime template selection</li>
+                    <li>Malformed HTML and unsupported output contexts</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="wrap band" id="locale">
+            <p class="kicker">Batteries included</p>
+            <h2>Translations compile with the page.</h2>
+            <p class="section-copy">
+                Catalogs are a failsafe YAML 1.2 subset: mappings and string scalars only.
+                <code>no</code>, <code>true</code>, and dates stay text. SnakeYAML Engine is
+                a compiler dependency. Request time never parses YAML, looks up a key, or
+                interprets a pattern. The generated renderer already contains the UTF-8
+                bytes and the locale branch.
+            </p>
+            <div class="locale-grid">
+                <article class="panel">
+                    <div class="panel-head"><span>en/home.yaml</span></div>
+                    <pre>title: Thim {version}
+inbox:
+  _plural: unreadCount
+  one: One unread message
+  other: "{unreadCount} unread messages"
+salutation:
+  _select: audience
+  MEMBER: Welcome back, {name}
+  other: Welcome, {name}</pre>
+                </article>
+                <article class="panel">
+                    <div class="panel-head"><span>nb/home.yaml</span></div>
+                    <pre>title: Thim {version}
+inbox:
+  _plural: unreadCount
+  one: Én ulest melding
+  other: "{unreadCount} uleste meldinger"
+salutation:
+  _select: audience
+  MEMBER: Velkommen tilbake, {name}
+  other: Velkommen, {name}</pre>
+                </article>
+                <article class="panel">
+                    <div class="panel-head"><span>Generated request path</span></div>
+                    <pre>switch (messageLocale) {
+  case 1 -> switch (PluralRules
+      .cardinal("nb", "", unread)) {
+    case "one" -> output.raw(STATIC, …);
+    default -> {
+      output.text(unread);
+      output.raw(STATIC, …);
+    }
+  };
+  default -> /* en contract */
+}</pre>
+                </article>
+            </div>
+            <p class="fine">
+                Integer cardinal rules from Unicode CLDR 49 are embedded for the European
+                languages Thim lists in the README. A <code>_plural</code> catalog in an
+                unsupported language fails compilation rather than guessing.
+            </p>
+        </section>
+
+        <section class="wrap band" id="compare">
+            <p class="kicker">Among compile-time engines</p>
+            <h2>JTE and JStachio are flexible. Thim is closed.</h2>
+            <p class="section-copy">
+                Choose JTE if you want Java or Kotlin in the template and an IntelliJ
+                plugin. Choose JStachio if you want Mustache and logic-less views. Choose
+                Thim if you want Thymeleaf-shaped HTML, compiled locale catalogs, and a
+                compiler that treats leftover model fields and leftover copy as defects.
+            </p>
+            <div class="table-wrap" tabindex="0">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Contract</th>
+                            <th scope="col">Thim</th>
+                            <th scope="col">JTE</th>
+                            <th scope="col">JStachio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Template language</th>
+                            <td>Restricted <code>th:*</code> HTML</td>
+                            <td>Java or Kotlin in the template</td>
+                            <td>Mustache 1.3</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Type checking</th>
+                            <td>Page model vs template</td>
+                            <td>The host language</td>
+                            <td>Model bindings</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Unused model surface</th>
+                            <td class="yes">Error in strict mode</td>
+                            <td>Parameters are declared in the template</td>
+                            <td>Unused fields are allowed</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Compiled locale catalogs</th>
+                            <td class="yes">YAML in, branches out</td>
+                            <td class="no">Build it yourself</td>
+                            <td class="no">Build it yourself</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Locale parity</th>
+                            <td class="yes">Same keys and arguments in every locale</td>
+                            <td class="no">Not a compiler concern</td>
+                            <td class="no">Not a compiler concern</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Plurals and selects</th>
+                            <td class="yes">CLDR cardinals, enum selects</td>
+                            <td class="no">Host-language <code>if</code></td>
+                            <td class="no">Lambdas or extra models</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Expression language</th>
+                            <td class="yes">None</td>
+                            <td>Java / Kotlin</td>
+                            <td>Mustache sections and lambdas</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Runtime engine</th>
+                            <td class="yes">None on the request path</td>
+                            <td>Optional engine, precompile, hot reload</td>
+                            <td>Optional JMustache fallback</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Layouts</th>
+                            <td>Fixed fragments, inlined at compile time</td>
+                            <td>Content blocks and template calls</td>
+                            <td>Mustache inheritance</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Spring</th>
+                            <td>MVC adapter, optional typed routes</td>
+                            <td>Integrations</td>
+                            <td>First-party Spring support</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Opinion</th>
+                            <td class="yes">Closed world</td>
+                            <td>Flexible</td>
+                            <td>Logic-less</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="fine">
+                All three compile templates to Java and escape HTML. Thim does not claim to
+                be the fastest of the three. It claims to reject more invalid programs
+                before they start a JVM.
+            </p>
+        </section>
+
+        <section class="wrap band" id="runtime">
+            <p class="kicker">Runtime</p>
+            <h2>A small Java output API. Readable generated code.</h2>
+            <p class="section-copy">
+                The runtime, generated renderers, Spring adapter, and Gradle plugin are
+                Java. A request creates one buffered <code>HtmlOutput</code>, copies static
+                byte ranges, and encodes escaped values into that buffer. It creates no
+                intermediate escaped strings. Composition is erased when fragments are
+                inlined. Each template jar publishes its registry through
+                <code>ServiceLoader</code>.
+            </p>
+            <div class="cards">
+                <article class="card">
+                    <span class="num">runtime</span>
+                    <h3>Dependency-free output</h3>
+                    <p><code>HtmlOutput</code>, <code>RenderContext</code>, <code>TrustedUrl</code>, <code>SafeHtml</code>, and CLDR plural tables.</p>
+                </article>
+                <article class="card">
+                    <span class="num">compiler</span>
+                    <h3>KSP for Java and Kotlin</h3>
+                    <p>Records, beans, and data classes keep their source-level types. Templates can only print scalars.</p>
+                </article>
+                <article class="card">
+                    <span class="num">spring</span>
+                    <h3>Return the page model</h3>
+                    <p>The MVC adapter recognizes page models and <code>ThimResult</code>. Non-Spring apps call <code>TemplateSet</code> directly.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="wrap band" id="start">
+            <p class="kicker">Get started</p>
+            <h2>One plugin. Conventional directories. Strict by default.</h2>
+            <p class="section-copy">
+                Templates live in <code>src/main/resources/templates</code>. Catalogs live in
+                <code>src/main/resources/i18n</code>. The default model package is
+                <code>&lt;group&gt;.page</code>. Override a directory only for a migration.
+                Requires JDK 26 or newer.
+            </p>
+            <div class="install">
+                <article class="panel">
+                    <div class="panel-head">
+                        <span>Kotlin module</span>
+                        <button type="button" class="copy" data-copy="kotlin-plugin">Copy</button>
+                    </div>
+                    <pre id="kotlin-plugin">plugins {
+    kotlin("jvm")
+    id("no.beint.thim") version "0.7.2"
+}
+
+thim {
+    generatedPackage.set("your.group.thim.generated")
+    modelPackages.set(listOf("your.group.page"))
+    failOnUnusedMessages.set(true)
+    generateRoutes.set(true)
+}</pre>
+                </article>
+                <article class="panel">
+                    <div class="panel-head">
+                        <span>Java module</span>
+                        <button type="button" class="copy" data-copy="java-plugin">Copy</button>
+                    </div>
+                    <pre id="java-plugin">plugins {
+    java
+    id("no.beint.thim") version "0.7.2"
+}
+
+thim {
+    generatedPackage.set("your.group.thim.generated")
+    modelPackages.set(listOf("your.group.page"))
+    failOnUnusedMessages.set(true)
+}</pre>
+                </article>
+            </div>
+            <p class="fine">
+                Artifacts are on Maven Central. Add <code>mavenCentral()</code> to plugin
+                management and dependency resolution. Use
+                <code>./gradlew thimCheck --continuous</code> while you edit templates.
+                Full instructions live in the
+                <a href="https://github.com/beint-no/thim#thim">README</a>.
+            </p>
+        </section>
+    </main>
+
+    <footer class="wrap footer">
+        <span>Thim is Apache-2.0 software from <a href="https://github.com/beint-no">Beint</a>.</span>
+        <span>
+            <a href="https://github.com/beint-no/thim">Source</a>
+            ·
+            <a href="https://central.sonatype.com/artifact/no.beint.thim/runtime">Maven Central</a>
+            ·
+            <a href="https://github.com/beint-no/thim/blob/main/DESIGN.md">Design</a>
+        </span>
+    </footer>
+    <script src="site.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+title: Inbox
+new: New
+unread:
+  _plural: unreadCount
+  one: One unread message
+  other: "{unreadCount} unread messages"
