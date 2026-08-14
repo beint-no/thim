@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.ServiceLoader;
 
 public final class ThimRenderer {
-    private static final int OUTPUT_BUFFER_SIZE = 1024;
+    private static final int OUTPUT_BUFFER_SIZE = 16 * 1024;
 
     private final List<TemplateSet> templates;
     private final RequestDataValueProcessor requestDataValueProcessor;
@@ -63,7 +63,7 @@ public final class ThimRenderer {
         var context = requestDataValueProcessor == null
                 ? new RenderContext(locale, contextPath)
                 : new RenderContext(locale, contextPath, new SpringRequestDataValues(request, requestDataValueProcessor));
-        var body = new ByteArrayOutputStream(8 * 1024);
+        var body = new ByteArrayOutputStream(OUTPUT_BUFFER_SIZE);
         var output = new HtmlOutput(body, OUTPUT_BUFFER_SIZE);
         templateSet.render(model, context, output);
         output.flush();

@@ -46,6 +46,24 @@ class DocumentCheckerTest {
         assertTrue(problems.any { it.contains("THIM-REFERENCE-UNKNOWN") && it.contains("for=") }, problems.toString())
     }
 
+    @Test
+    fun `htmx hash targets must match an id`() {
+        val problems = check(
+            """
+            <html><body>
+            <button hx-target="#missing">Load</button>
+            <div id="inbox"></div>
+            <button hx-target="#inbox">Ok</button>
+            <button hx-target="closest article">Relative</button>
+            </body></html>
+            """.trimIndent(),
+        )
+
+        assertTrue(problems.any { it.contains("THIM-REFERENCE-UNKNOWN") && it.contains("hx-target=\"#missing\"") }, problems.toString())
+        assertTrue(problems.none { it.contains("hx-target=\"#inbox\"") }, problems.toString())
+        assertTrue(problems.none { it.contains("closest") }, problems.toString())
+    }
+
     private fun check(source: String): List<String> {
         val checker = DocumentChecker {}
         checker.check(TemplateParser("page", source).parse())

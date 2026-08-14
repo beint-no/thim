@@ -76,7 +76,7 @@ Thim deliberately owns its default source layout: templates go in `src/main/reso
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
-Every page template must have a matching model by default. Set `strictTemplates` to `false` only while Thim and a runtime template engine intentionally share a template directory. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
+Every page template must have a matching model by default. Set `strictTemplates` to `false` only while Thim and a runtime template engine intentionally share a template directory. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes both unused-fragment and unused-parameter warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 

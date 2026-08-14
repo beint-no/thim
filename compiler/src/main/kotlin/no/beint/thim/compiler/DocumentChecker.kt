@@ -81,18 +81,7 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
             }
         }
         ariaAttributes.forEach { checkTokens(node, it, ids, list = true) }
-        node.attributes["href"]?.let { href ->
-            if ("th:href" !in node.attributes && href.startsWith("#")) {
-                val target = href.substring(1)
-                if (target.isNotEmpty() && target != "top" && target !in ids) {
-                    report(
-                        "THIM-REFERENCE-UNKNOWN",
-                        node.attributeLocations["href"] ?: node.location,
-                        "href=\"#$target\" has no matching id in this page",
-                    )
-                }
-            }
-        }
+        hashIdAttributes.forEach { checkHashId(node, it, ids) }
         node.children.forEach { checkReferences(it, ids) }
     }
 
@@ -120,6 +109,20 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         }
     }
 
+    private fun checkHashId(node: ElementNode, attribute: String, ids: Set<String>) {
+        if ("th:$attribute" in node.attributes) return
+        val value = node.attributes[attribute]?.trim() ?: return
+        if (!value.startsWith("#") || value.length == 1 || value.any(Char::isWhitespace)) return
+        val target = value.substring(1)
+        if (target != "top" && target !in ids) {
+            report(
+                "THIM-REFERENCE-UNKNOWN",
+                node.attributeLocations[attribute] ?: node.location,
+                "$attribute=\"#$target\" has no matching id in this page",
+            )
+        }
+    }
+
     private companion object {
         val singleIdAttributes = listOf("for", "form", "list")
         val ariaAttributes = listOf(
@@ -129,6 +132,7 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
             "aria-owns",
             "aria-activedescendant",
         )
+        val hashIdAttributes = listOf("href", "hx-target", "hx-include", "hx-indicator")
         val whitespace = Regex("\\s+")
     }
 }
