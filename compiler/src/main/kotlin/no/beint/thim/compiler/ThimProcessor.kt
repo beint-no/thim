@@ -208,6 +208,18 @@ private class ThimProcessor(
             output.appendLine("    }")
             output.appendLine()
             output.appendLine("    @Override")
+            output.appendLine("    public boolean usesRequestDataValues(Class<?> modelType) {")
+            val requestDataTemplates = compiled.filter { it.usesRequestDataValues }
+            output.appendLine(if (requestDataTemplates.isEmpty()) {
+                "        return false;"
+            } else {
+                "        return " + requestDataTemplates.joinToString(" ||\n            ") {
+                    "modelType == ${it.model.qualifiedName!!.asString()}.class"
+                } + ";"
+            })
+            output.appendLine("    }")
+            output.appendLine()
+            output.appendLine("    @Override")
             output.appendLine("    public void render(Object model, RenderContext context, HtmlOutput output) throws IOException {")
             compiled.forEach {
                 val modelName = it.model.qualifiedName!!.asString()
