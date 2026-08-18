@@ -22,7 +22,6 @@ final class SpringRequestDataValues implements RequestDataValues {
             RequestDataValueProcessor processor
     ) {
         var resourceUrlProvider = resourceUrlProvider(request);
-        if (processor == null && resourceUrlProvider == null) return RequestDataValues.NONE;
         return new SpringRequestDataValues(request, response, processor, resourceUrlProvider);
     }
 
