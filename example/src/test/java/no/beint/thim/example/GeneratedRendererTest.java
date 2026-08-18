@@ -1,5 +1,12 @@
 package no.beint.thim.example;
 
+import no.beint.thim.HtmlOutput;
+import no.beint.thim.RenderContext;
+import no.beint.thim.example.generated.ExampleTemplates;
+import no.beint.thim.example.page.HomePage;
+import no.beint.thim.example.page.LargePage;
+import org.junit.jupiter.api.Test;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.classfile.ClassFile;
@@ -7,14 +14,18 @@ import java.lang.classfile.attribute.CodeAttribute;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
-import no.beint.thim.HtmlOutput;
-import no.beint.thim.RenderContext;
-import no.beint.thim.example.generated.ExampleTemplates;
-import org.junit.jupiter.api.Test;
-
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GeneratedRendererTest {
+    @Test
+    void reportsRequestDataUsagePerCompiledModel() {
+        var templates = new ExampleTemplates();
+
+        assertTrue(templates.usesRequestDataValues(HomePage.class));
+        assertFalse(templates.usesRequestDataValues(LargePage.class));
+    }
+
     @Test
     void partitionsLargeRenderersBelowTheHotSpotHugeMethodThreshold() throws IOException {
         var resource = "/no/beint/thim/example/generated/no_beint_thim_example_page_LargePageThimRenderer.class";
@@ -42,7 +53,7 @@ class GeneratedRendererTest {
 
         var html = bytes.toString(StandardCharsets.UTF_8);
         assertTrue(html.contains(
-                "data-config=\"{&quot;value&quot;:&quot;id&quot;,&quot;title&quot;:&quot;A&amp;B&quot;,&quot;markup&quot;:&quot;&lt;b&gt;&quot;}\""),
+                        "data-config=\"{&quot;value&quot;:&quot;id&quot;,&quot;title&quot;:&quot;A&amp;B&quot;,&quot;markup&quot;:&quot;&lt;b&gt;&quot;}\""),
                 html);
     }
 

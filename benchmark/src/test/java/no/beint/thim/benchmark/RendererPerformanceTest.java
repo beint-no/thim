@@ -100,8 +100,10 @@ class RendererPerformanceTest {
     @Test
     void catalogCostScalesRoughlyWithItemCount() {
         var session = new RenderSession();
-        var one = Measure.run("catalog.1", 40, 60, 80, () -> session.render(SINGLE, Locale.ENGLISH));
-        var fifty = Measure.run("catalog.50", 40, 60, 20, () -> session.render(CATALOG, Locale.ENGLISH));
+        // Keep each timed sample large enough that scheduler and timer noise do not
+        // dominate the ratio, especially for the sub-microsecond single-item render.
+        var one = Measure.run("catalog.1", 40, 60, 2_000, () -> session.render(SINGLE, Locale.ENGLISH));
+        var fifty = Measure.run("catalog.50", 40, 60, 100, () -> session.render(CATALOG, Locale.ENGLISH));
         var scale = fifty.medianNanosPerOp() / (double) Math.max(1, one.medianNanosPerOp());
         System.out.println("[thim-bench] catalog.scale  " + String.format(java.util.Locale.ROOT, "%.2fx", scale));
         assertTrue(

@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
+import no.beint.thim.RequestDataValues;
 import no.beint.thim.TemplateSet;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import org.springframework.web.servlet.support.RequestDataValueProcessor;
@@ -60,9 +61,10 @@ public final class ThimRenderer {
         var templateSet = templateSetFor(model);
         var locale = RequestContextUtils.getLocale(request);
         var contextPath = request.getContextPath();
-        var context = requestDataValueProcessor == null
-                ? new RenderContext(locale, contextPath)
-                : new RenderContext(locale, contextPath, new SpringRequestDataValues(request, requestDataValueProcessor));
+        var requestDataValues = templateSet.usesRequestDataValues(model.getClass())
+                ? SpringRequestDataValues.create(request, response, requestDataValueProcessor)
+                : RequestDataValues.NONE;
+        var context = new RenderContext(locale, contextPath, requestDataValues);
         var body = new ByteArrayOutputStream(8 * 1024);
         var output = new HtmlOutput(body, OUTPUT_BUFFER_SIZE);
         templateSet.render(model, context, output);
