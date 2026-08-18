@@ -19,16 +19,19 @@ Generate a Central Portal user token at:
 https://central.sonatype.com/usertoken
 ```
 
-Add the publishing values to `~/.gradle/gradle.properties`:
+Set these standard environment variables in the shell or CI environment:
+
+```text
+MAVEN_CENTRAL_USERNAME
+MAVEN_CENTRAL_PASSWORD
+SIGNING_IN_MEMORY_KEY
+SIGNING_IN_MEMORY_KEY_ID
+SIGNING_IN_MEMORY_KEY_PASSWORD
+```
+
+The following project metadata remains Gradle configuration:
 
 ```properties
-mavenCentralUsername=<central-token-username>
-mavenCentralPassword=<central-token-password>
-
-signingInMemoryKey=<ascii-armored-private-key-without-header-footer-lines>
-signingInMemoryKeyId=<key-id>
-signingInMemoryKeyPassword=<key-password>
-
 thim.pom.developer.id=beint-no
 thim.pom.developer.name=Beint
 thim.pom.developer.url=https://github.com/beint-no
@@ -43,9 +46,6 @@ SIGNING_IN_MEMORY_KEY
 SIGNING_IN_MEMORY_KEY_ID
 SIGNING_IN_MEMORY_KEY_PASSWORD
 ```
-
-This repository also uses a local `.maven-central.local.properties` file as a scratch copy for setting up CI secrets.
-It is ignored by git and must not be committed.
 
 The GitHub Actions workflow is `.github/workflows/publish.yml`.
 It builds on pushes and pull requests, and publishes only from `v*` tags or manual `workflow_dispatch`.
