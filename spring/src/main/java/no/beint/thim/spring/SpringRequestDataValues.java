@@ -49,7 +49,7 @@ final class SpringRequestDataValues implements RequestDataValues {
     public String processUrl(String url) {
         var processed = processor == null ? url : processor.processUrl(request, url);
         if (processed == null) processed = url;
-        if (resourceUrlProvider != null) {
+        if (resourceUrlProvider != null && isApplicationUrl(processed)) {
             var resolved = resourceUrlProvider.getForRequestUrl(request, processed);
             // A root lookup path ("/") can match the first slash in a context-prefixed
             // request URL. Thim application URLs have a known context-path boundary.
@@ -59,6 +59,10 @@ final class SpringRequestDataValues implements RequestDataValues {
         return response.encodeURL(processed);
     }
 
+    private boolean isApplicationUrl(String url) {
+        return !url.startsWith("//") && url.startsWith(request.getContextPath() + "/");
+    }
+
     private String resolveApplicationUrl(String url) {
         var contextPath = request.getContextPath();
         var pathEnd = url.length();
@@ -66,7 +70,7 @@ final class SpringRequestDataValues implements RequestDataValues {
         if (queryIndex >= 0) pathEnd = queryIndex;
         var fragmentIndex = url.indexOf('#');
         if (fragmentIndex >= 0) pathEnd = Math.min(pathEnd, fragmentIndex);
-        if (!url.startsWith(contextPath + "/") || url.startsWith("//")) return null;
+        if (!isApplicationUrl(url)) return null;
         var resolved = resourceUrlProvider.getForLookupPath(url.substring(contextPath.length(), pathEnd));
         return resolved == null ? null : contextPath + resolved + url.substring(pathEnd);
     }

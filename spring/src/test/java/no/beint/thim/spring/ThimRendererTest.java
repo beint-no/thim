@@ -108,7 +108,13 @@ class ThimRendererTest {
 
         assertEquals("/app/assets/missing.js", values.processUrl("/app/assets/missing.js"));
         assertEquals("https://cdn.example/app.js", values.processUrl("https://cdn.example/app.js"));
+        assertEquals("https://assets/app.js", values.processUrl("https://assets/app.js"));
         assertEquals("//cdn.example/app.js", values.processUrl("//cdn.example/app.js"));
+        assertEquals("//assets/app.js", values.processUrl("//assets/app.js"));
+        assertEquals(
+                "//assets/app.js?theme=dark#module",
+                values.processUrl("//assets/app.js?theme=dark#module")
+        );
     }
 
     @Test
