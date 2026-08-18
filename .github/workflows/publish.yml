@@ -1,91 +1,43 @@
-name: Publish
+name: Publish to Maven Central
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      automatic_release:
-        description: 'Automatically release the Central Portal deployment'
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: maven-central-publish
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: Build
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: oracle
-          java-version: '26'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
-
-      - name: Build
-        run: ./gradlew clean build
-
   publish:
-    name: Publish to Maven Central
-    needs: build
-    runs-on: macos-latest
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
-    env:
-      ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-      ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-      ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
-      ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_IN_MEMORY_KEY_ID }}
-      ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+    runs-on: ubuntu-latest
+    environment: maven-central
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
         with:
-          distribution: oracle
+          distribution: temurin
           java-version: '26'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
-
+      - uses: gradle/actions/setup-gradle@v5
       - name: Check release version
         run: |
-          version="$(sed -n 's/^[[:space:]]*version = "\(.*\)"/\1/p' build.gradle.kts | head -n 1)"
-          test -n "$version"
-
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            tag_version="${GITHUB_REF#refs/tags/v}"
-            if [[ "$tag_version" != "$version" ]]; then
-              echo "Tag version $tag_version does not match Gradle version $version" >&2
-              exit 1
-            fi
-          fi
-
-          if [[ "$version" == *-SNAPSHOT ]]; then
-            echo "Release publishing requires a non-SNAPSHOT version, found $version" >&2
+          version="$(./gradlew -q printReleaseVersion)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          [[ "$tag_version" == "$version" ]] || {
+            echo "Tag version $tag_version does not match Gradle version $version" >&2
             exit 1
-          fi
-
+          }
+          [[ "$version" != *-SNAPSHOT ]] || exit 1
           echo "Publishing version $version"
-
-      - name: Publish
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.automatic_release }}" == "true" ]]; then
-            ./gradlew publishAndReleaseToMavenCentral
-          else
-            ./gradlew publishToMavenCentral
-          fi
+      - name: Build and publish
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_IN_MEMORY_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: ./gradlew clean build publishAndReleaseToMavenCentral
