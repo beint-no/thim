@@ -97,6 +97,11 @@ internal class MessageCatalog private constructor(
         require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
     }
 
+    fun exportedDefinitions(): Map<String, MessageDefinition> {
+        used += definitions.keys
+        return definitions
+    }
+
     companion object {
         fun load(directory: Path, defaultLocale: String, supportedLocales: List<String>): MessageCatalog {
             val canonicalDefault = canonicalLocale(defaultLocale)

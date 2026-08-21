@@ -42,6 +42,8 @@ ksp {
     arg("thim.supportedLocales", "en,nb")
     arg("thim.package", "no.beint.thim.benchmark.generated")
     arg("thim.registry", "BenchmarkTemplates")
+    arg("thim.generateMessages", "true")
+    arg("thim.messagesName", "BenchmarkMessages")
     arg("thim.generateRoutes", "false")
     arg("thim.validateRoutes", "false")
     arg("thim.modelPackages", "no.beint.thim.benchmark.page")

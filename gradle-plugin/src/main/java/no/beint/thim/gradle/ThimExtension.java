@@ -31,6 +31,10 @@ public abstract class ThimExtension {
 
     public abstract Property<String> getRoutesName();
 
+    public abstract Property<Boolean> getGenerateMessages();
+
+    public abstract Property<String> getMessagesName();
+
     public abstract ListProperty<String> getTrustedPaths();
 
     public abstract Property<Boolean> getStrictModels();
