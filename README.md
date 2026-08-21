@@ -47,7 +47,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.7.3"
+    id("no.beint.thim") version "0.7.4"
 }
 ```
 
@@ -56,11 +56,11 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.7.3"
+    id("no.beint.thim") version "0.7.4"
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.7.3")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.7.4")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -145,6 +145,28 @@ Use named model properties in the template:
 `_plural` accepts the locale's reachable subset of `zero`, `one`, `two`, `few`, `many` and the required `other` category. Its argument must be a non-null integral property. `_select` requires a non-null string or enum and also requires `other`; enum variants must name real enum constants. Selections can be nested. All interpolated values are HTML-escaped; catalogs cannot produce raw HTML. Write `{{` or `}}` for a literal brace.
 
 Every discovered locale must contain the same relative `.yaml` files, message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages (when enabled) fail compilation. At runtime Thim chooses an exact available language tag, then an available language-only tag, then the default locale.
+
+### Typed backend messages
+
+Applications can use the same compiled catalog outside templates without runtime string keys or a second message bundle:
+
+```kotlin
+thim {
+    generateMessages.set(true)
+    messagesName.set("WebAppMessages")
+}
+```
+
+Thim generates one factory per catalog key. The first namespace component becomes a nested class, and remaining components form the method name:
+
+```kotlin
+val title = WebAppMessages.Home.title(version).resolve(locale)
+val inbox = WebAppMessages.Home.inbox(unreadCount).resolve(locale)
+```
+
+Keys, argument names, argument kinds, locale branches, selects and plural rules are all compiled. Renaming a key or changing its arguments therefore breaks consumers at compilation rather than at runtime. Factories return `CompiledMessage`, which lets application code supply its current locale through a small framework-specific adapter. Resolution returns plain text, not HTML; generated template renderers still escape the result for its output context.
+
+The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Enabling this public backend API exports the full catalog, so its entries count as used when `failOnUnusedMessages` is enabled.
 
 Catalogs use a deliberately small YAML 1.2 profile: mappings and string scalars only. The failsafe schema means plain `no`, `true`, `12` and `2026-08-08` remain text. Duplicate keys, tags, anchors, aliases, sequences, multiple documents, empty catalogs and non-YAML files are rejected. Block scalars are supported for multiline copy. Only the lowercase `.yaml` extension is accepted.
 

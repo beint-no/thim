@@ -26,7 +26,7 @@
                 <path d="M10 24h12" stroke="#c9841a" stroke-width="2.2"/>
             </svg>
             <strong>Thim</strong>
-            <span>0.7.3</span>
+            <span>0.7.4</span>
         </a>
         <nav class="nav" aria-label="Page">
             <a href="#opinions">Opinions</a>
@@ -164,7 +164,7 @@
 
 @GetMapping("/")
 fun home() = HomePage(
-    version = "0.7.3",
+    version = "0.7.4",
     greeting = "Typed models, compiled HTML.",
     unreadCount = 3,
     features = listOf(
@@ -254,7 +254,10 @@ salutation:
             <p class="fine">
                 Integer cardinal rules from Unicode CLDR 49 are embedded for the European
                 languages Thim lists in the README. A <code>_plural</code> catalog in an
-                unsupported language fails compilation rather than guessing.
+                unsupported language fails compilation rather than guessing. Enable
+                <code>generateMessages</code> to use the same catalog from backend code
+                through generated, typed factories returning <code>CompiledMessage</code>;
+                runtime string keys and a second message bundle are not needed.
             </p>
         </section>
 
@@ -401,13 +404,14 @@ salutation:
                     </div>
                     <pre id="kotlin-plugin">plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.7.3"
+    id("no.beint.thim") version "0.7.4"
 }
 
 thim {
     generatedPackage.set("your.group.thim.generated")
     modelPackages.set(listOf("your.group.page"))
     failOnUnusedMessages.set(true)
+    generateMessages.set(true)
     generateRoutes.set(true)
 }</pre>
                 </article>
@@ -418,13 +422,14 @@ thim {
                     </div>
                     <pre id="java-plugin">plugins {
     java
-    id("no.beint.thim") version "0.7.3"
+    id("no.beint.thim") version "0.7.4"
 }
 
 thim {
     generatedPackage.set("your.group.thim.generated")
     modelPackages.set(listOf("your.group.page"))
     failOnUnusedMessages.set(true)
+    generateMessages.set(true)
 }</pre>
                 </article>
             </div>

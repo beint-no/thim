@@ -7,6 +7,7 @@ import java.util.Locale;
 
 import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
+import no.beint.thim.benchmark.generated.BenchmarkMessages;
 import no.beint.thim.benchmark.generated.BenchmarkTemplates;
 import no.beint.thim.benchmark.page.CatalogPage;
 import no.beint.thim.benchmark.page.InboxPage;
@@ -50,6 +51,16 @@ class RendererPerformanceTest {
         assertTrue(one.contains(">Ny<"), one);
         assertTrue(many.contains("3 uleste meldinger"), many);
         assertTrue(many.contains("Innboks"), many);
+    }
+
+    @Test
+    void backendMessagesUseTypedArgumentsAndTheCompiledLocaleCatalog() {
+        assertEquals("One unread message", BenchmarkMessages.Inbox.unread(1).resolve(Locale.ENGLISH));
+        assertEquals("3 uleste meldinger", BenchmarkMessages.Inbox.unread(3).resolve(NORWEGIAN));
+        assertEquals("5 items", BenchmarkMessages.Catalog.count("5").resolve(Locale.ENGLISH));
+        assertEquals("Thim in backend", BenchmarkMessages.Catalog.echo("Thim", "backend").resolve(Locale.ENGLISH));
+        assertEquals("Welcome, <Ada>", BenchmarkMessages.Catalog.salutation("GUEST", "<Ada>").resolve(Locale.ENGLISH));
+        assertEquals("Ny", BenchmarkMessages.Inbox.new_().resolve(Locale.forLanguageTag("nb-NO")));
     }
 
     @Test

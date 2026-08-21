@@ -60,6 +60,9 @@ private class ThimProcessor(
     private val generateRoutes = environment.options["thim.generateRoutes"]?.toBoolean() ?: false
     private val routesName = environment.options["thim.routesName"]
         ?: registryName.removeSuffix("Templates") + "Routes"
+    private val generateMessages = environment.options["thim.generateMessages"]?.toBoolean() ?: false
+    private val messagesName = environment.options["thim.messagesName"]
+        ?: registryName.removeSuffix("Templates") + "Messages"
     private val trustedPaths = environment.options["thim.trustedPaths"]
         .orEmpty()
         .split(',')
@@ -77,7 +80,11 @@ private class ThimProcessor(
             val templates = typedTemplates(resolver, parsed).map { template ->
                 template.copy(nodes = expander.expand(template.name, template.nodes))
             }
+            val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
             if (templates.isEmpty()) {
+                if (generateMessages) {
+                    generateMessages(catalog, emptyArray())
+                }
                 completed = true
                 return emptyList()
             }
@@ -91,7 +98,6 @@ private class ThimProcessor(
                 problems += checker.problems
             }
 
-            val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
             val extractedRoutes = if (validateRoutes || generateRoutes) {
                 RouteCatalog.load(resolver, trustedPaths)
             } else {
@@ -108,6 +114,7 @@ private class ThimProcessor(
                 generator.compile(template.name, template.model, template.nodes)
             }
             problems += generator.errors
+            if (generateMessages) catalog.exportedDefinitions()
             collect(problems) { if (failOnUnusedMessages) catalog.requireAllUsed() }
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
             collect(problems) { reportUnusedFragments(expander) }
@@ -120,6 +127,10 @@ private class ThimProcessor(
                 return emptyList()
             }
             generate(compiled, staticContent.bytes(), extractedRoutes)
+            if (generateMessages) {
+                val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
+                generateMessages(catalog, files)
+            }
             completed = true
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Thim compilation failed")
@@ -251,6 +262,17 @@ private class ThimProcessor(
         }
     }
 
+    private fun generateMessages(catalog: MessageCatalog, files: Array<com.google.devtools.ksp.symbol.KSFile>) {
+        codeGenerator.createNewFile(
+            dependencies = Dependencies(aggregating = true, *files),
+            packageName = generatedPackage,
+            fileName = messagesName,
+            extensionName = "java",
+        ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+            output.append(MessageGenerator(catalog).generate(generatedPackage, messagesName))
+        }
+    }
+
     private fun parsedTemplates(): Map<String, List<Node>> {
         val paths = mutableListOf<Path>()
         Files.walk(templatesDirectory).use { stream ->
@@ -297,6 +319,7 @@ private class ThimProcessor(
         }
         require(registryName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid registry name '$registryName'" }
         require(routesName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid routes name '$routesName'" }
+        require(messagesName.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))) { "Invalid messages name '$messagesName'" }
         modelPackages.forEach { modelPackage ->
             require(modelPackage.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
                 "Invalid model package '$modelPackage'"

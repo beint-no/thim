@@ -1,3 +1,8 @@
 title: Catalog
 count: "{size} items"
 featured: Featured
+echo: "{output} in {locale}"
+salutation:
+  _select: audience
+  MEMBER: Welcome back, {name}
+  other: Welcome, {name}

@@ -1,3 +1,8 @@
 title: Katalog
 count: "{size} varer"
 featured: Fremhevet
+echo: "{output} på {locale}"
+salutation:
+  _select: audience
+  MEMBER: Velkommen tilbake, {name}
+  other: Velkommen, {name}
