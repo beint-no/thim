@@ -47,7 +47,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.7.4"
+    id("no.beint.thim") version "0.7.5"
 }
 ```
 
@@ -56,11 +56,11 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.7.4"
+    id("no.beint.thim") version "0.7.5"
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.7.4")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.7.5")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -165,6 +165,8 @@ val inbox = WebAppMessages.Home.inbox(unreadCount).resolve(locale)
 ```
 
 Keys, argument names, argument kinds, locale branches, selects and plural rules are all compiled. Renaming a key or changing its arguments therefore breaks consumers at compilation rather than at runtime. Factories return `CompiledMessage`, which lets application code supply its current locale through a small framework-specific adapter. Resolution returns plain text, not HTML; generated template renderers still escape the result for its output context.
+
+Argument-free messages also expose compile-time constant references for APIs such as Jakarta Bean Validation annotations, where Java only permits constant annotation arguments. For example, `message = WebAppMessages.Validation.requiredReference` produces a generated `{thim:validation.required}` reference. Framework integration can recognize it with `WebAppMessages.isReference(...)` and resolve it through `WebAppMessages.resolveReference(..., locale)`. Removing the catalog entry or adding arguments removes the generated constant and breaks the consumer at compilation.
 
 The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Enabling this public backend API exports the full catalog, so its entries count as used when `failOnUnusedMessages` is enabled.
 

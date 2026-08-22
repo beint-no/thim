@@ -7,6 +7,11 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         val definitions = catalog.exportedDefinitions().toSortedMap()
         val groups = definitions.entries.groupBy { it.key.substringBefore('.') }.toSortedMap()
         val groupNames = uniqueNames(groups.keys, setOf(className), ::className)
+        val methodNames = groups.mapValues { (_, entries) ->
+            uniqueNames(entries.map { it.key }) { key ->
+                methodName(key.substringAfter('.', missingDelimiterValue = key))
+            }
+        }
 
         return buildString {
             appendLine("package $packageName;")
@@ -15,21 +20,72 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             appendLine("    private $className() {}")
             appendLine()
             appendLocaleResolver()
+            appendLine()
+            appendReferenceResolver(groups, groupNames)
             groups.forEach { (namespace, entries) ->
                 appendLine()
                 appendLine("    public static final class ${groupNames.getValue(namespace)} {")
                 appendLine("        private ${groupNames.getValue(namespace)}() {}")
-                val methodNames = uniqueNames(entries.map { it.key }) { key ->
-                    methodName(key.substringAfter('.', missingDelimiterValue = key))
+                val argumentFreeEntries = entries.filter { (_, definition) -> definition.arguments.isEmpty() }
+                if (argumentFreeEntries.isNotEmpty()) {
+                    appendLine()
+                    appendNamespaceReferenceResolver(argumentFreeEntries, methodNames.getValue(namespace))
                 }
                 entries.forEach { (key, definition) ->
                     appendLine()
-                    appendMessageMethod(methodNames.getValue(key), definition)
+                    val methodName = methodNames.getValue(namespace).getValue(key)
+                    if (definition.arguments.isEmpty()) appendMessageReference(methodName, key)
+                    appendMessageMethod(methodName, definition)
                 }
                 appendLine("    }")
             }
             appendLine("}")
         }
+    }
+
+    private fun StringBuilder.appendReferenceResolver(
+        groups: Map<String, List<Map.Entry<String, MessageDefinition>>>,
+        groupNames: Map<String, String>,
+    ) {
+        appendLine("    public static boolean isReference(String reference) {")
+        appendLine("        return reference != null && reference.startsWith(\"{thim:\") && reference.endsWith(\"}\");")
+        appendLine("    }")
+        appendLine()
+        appendLine("    public static String resolveReference(String reference, java.util.Locale locale) {")
+        appendLine("        java.util.Objects.requireNonNull(reference, \"reference\");")
+        appendLine("        java.util.Objects.requireNonNull(locale, \"locale\");")
+        appendLine("        var namespaceEnd = reference.indexOf('.', 6);")
+        appendLine("        if (!isReference(reference) || namespaceEnd < 0) {")
+        appendLine("            throw new IllegalArgumentException(\"Unknown compiled message reference \" + reference);")
+        appendLine("        }")
+        appendLine("        return switch (reference.substring(6, namespaceEnd)) {")
+        groups.filterValues { entries -> entries.any { (_, definition) -> definition.arguments.isEmpty() } }
+            .forEach { (namespace, _) ->
+                val groupName = groupNames.getValue(namespace)
+                appendLine("            case \"${javaString(namespace)}\" -> $groupName.resolveReference(reference, locale);")
+        }
+        appendLine("            default -> throw new IllegalArgumentException(\"Unknown compiled message reference \" + reference);")
+        appendLine("        };")
+        appendLine("    }")
+    }
+
+    private fun StringBuilder.appendNamespaceReferenceResolver(
+        entries: List<Map.Entry<String, MessageDefinition>>,
+        methodNames: Map<String, String>,
+    ) {
+        appendLine("        private static String resolveReference(String reference, java.util.Locale locale) {")
+        appendLine("            return switch (reference) {")
+        entries.forEach { (key, _) ->
+            val methodName = methodNames.getValue(key)
+            appendLine("                case ${methodName}Reference -> $methodName().resolve(locale);")
+        }
+        appendLine("                default -> throw new IllegalArgumentException(\"Unknown compiled message reference \" + reference);")
+        appendLine("            };")
+        appendLine("        }")
+    }
+
+    private fun StringBuilder.appendMessageReference(name: String, key: String) {
+        appendLine("        public static final String ${name}Reference = \"{thim:${javaString(key)}}\";")
     }
 
     private fun StringBuilder.appendLocaleResolver() {
