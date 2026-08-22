@@ -10,8 +10,14 @@ import org.springframework.web.servlet.support.RequestDataValueProcessor;
 public class ThimAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    ThimRenderer thimRenderer(ObjectProvider<RequestDataValueProcessor> requestDataValueProcessor) {
-        return new ThimRenderer(requestDataValueProcessor.getIfAvailable());
+    ThimRenderer thimRenderer(
+            ObjectProvider<RequestDataValueProcessor> requestDataValueProcessor,
+            ObjectProvider<ThimRenderObserver> renderObservers
+    ) {
+        return new ThimRenderer(
+                requestDataValueProcessor.getIfAvailable(),
+                renderObservers.orderedStream().toList()
+        );
     }
 
     @Bean
