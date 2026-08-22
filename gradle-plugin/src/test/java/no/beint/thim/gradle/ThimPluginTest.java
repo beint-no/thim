@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.List;
+import java.util.Set;
 import javax.tools.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +49,8 @@ class ThimPluginTest {
                             thim.failOnUnusedFragments.get(),
                             thim.validateRoutes.get(),
                             thim.generateMessages.get(),
-                            thim.generateRoutes.get()
+                            thim.generateRoutes.get(),
+                            thim.failOnUnusedCss.get()
                         ].join('\\n')
                     }
                 }
@@ -61,9 +63,140 @@ class ThimPluginTest {
                 .build();
 
         assertEquals(
-                List.of("true", "true", "true", "true", "true", "true", "false"),
+                List.of("true", "true", "true", "true", "true", "true", "false", "true"),
                 Files.readAllLines(project.resolve("thim-defaults.txt"))
         );
+    }
+
+    @Test
+    void checkFailsOnUnusedCssByDefault() throws IOException {
+        var project = dependencyProject("dead-css", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("src/main/resources/static/app.css"), """
+                .used { color: green; }
+                .dead { color: red; }
+                """);
+        write(project.resolve("src/main/resources/templates/home.html"), "<div class=\"used\"></div>\n");
+
+        var result = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("check", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+
+        assertTrue(result.getOutput().contains("Unused first-party CSS classes:"));
+        assertTrue(result.getOutput().contains("dead (src/main/resources/static/app.css)"));
+        assertTrue(Files.readString(project.resolve("build/reports/thim/css-usage.json"))
+                .contains("\"name\": \"dead\""));
+    }
+
+    @Test
+    void cssUsageIsAggregatedAcrossModulesAndDynamicPrefixes() throws IOException {
+        var project = dependencyProject("shared-css", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("settings.gradle"), """
+                rootProject.name = 'shared-css'
+                include 'feature'
+                """);
+        write(project.resolve("feature/build.gradle"), "plugins { id 'java' }\n");
+        write(project.resolve("src/main/resources/static/app.css"), """
+                .root-used { color: green; }
+                .feature-used { color: blue; }
+                .r-spark-1 { height: 1px; }
+                .r-spark-2 { height: 2px; }
+                """);
+        write(project.resolve("src/main/resources/templates/home.html"), "<div class=\"root-used\"></div>\n");
+        write(project.resolve("feature/src/main/java/sample/Feature.java"), """
+                package sample;
+                final class Feature {
+                    String css(int index) { return "feature-used r-spark-" + index; }
+                }
+                """);
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+
+        var report = Files.readString(project.resolve("build/reports/thim/css-usage.json"));
+        assertTrue(report.contains("\"defined\": 4"));
+        assertTrue(report.contains("\"unused\": 0"));
+        assertTrue(report.contains("\"prefixUsed\": 2"));
+    }
+
+    @Test
+    void unusedCssCheckHasAnExplicitModuleOptOut() throws IOException {
+        var project = dependencyProject("css-opt-out", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { failOnUnusedCss.set(false) }
+                """);
+        write(project.resolve("src/main/resources/static/app.css"), ".dead { color: red; }\n");
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+    }
+
+    @Test
+    void runtimeCssClassesAreAnExactAllowlist() throws IOException {
+        var project = dependencyProject("runtime-css", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { runtimeCssClasses.add('external-widget__button') }
+                """);
+        write(project.resolve("src/main/resources/static/app.css"), """
+                .external-widget__button { color: green; }
+                .external-widget__unused { color: red; }
+                """);
+
+        var result = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+
+        assertFalse(result.getOutput().contains("external-widget__button ("));
+        assertTrue(result.getOutput().contains("external-widget__unused ("));
+    }
+
+    @Test
+    void cssParserUnescapesVariantsAndIgnoresCommentsAndStrings() {
+        var classes = ThimCssUsageCheck.classNames("""
+                /* .commented */
+                .r-max-md\\:r-font-size-l, .plain:hover { content: ".not-a-selector"; }
+                """);
+
+        assertEquals(Set.of("r-max-md:r-font-size-l", "plain"), classes);
+    }
+
+    @Test
+    void usageScannerIgnoresCommentedClassNames() {
+        var tokens = new java.util.LinkedHashSet<String>();
+        var prefixes = new java.util.LinkedHashSet<String>();
+
+        ThimCssUsageCheck.collectLiterals("""
+                // "line-comment"
+                /* "block-comment" */
+                <!-- class="html-comment" -->
+                const classes = `live r-chart-${index > 0 ? "r-positive" : "r-negative"}`;
+                """, tokens, prefixes);
+
+        assertEquals(Set.of("live", "r-chart-", "r-positive", "r-negative"), tokens);
+        assertEquals(Set.of("r-chart-"), prefixes);
     }
 
     @Test

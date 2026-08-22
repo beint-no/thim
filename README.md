@@ -47,7 +47,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.8.0"
+    id("no.beint.thim") version "0.9.0"
 }
 ```
 
@@ -56,11 +56,11 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.8.0"
+    id("no.beint.thim") version "0.9.0"
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.8.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.9.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -75,7 +75,7 @@ Thim deliberately owns its default source layout: templates go in `src/main/reso
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
-Every page template must have a matching model by default. Unused messages and fragments also fail the build by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary. Unused fragment parameters remain warnings.
+Every page template must have a matching model by default. Unused messages, fragments and fragment parameters also fail the build by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 
@@ -95,7 +95,7 @@ Migrate one controller and page model at a time. Copy the messages used by that 
 
 Complete documents are checked for duplicate ids and broken `label`, ARIA and local-anchor references. Repeated static ids warn. Templates without an `<html>` root are treated as partials, so document-wide references are not checked.
 
-Use `thimCheck` for template validation and application-wide dead-message detection during development:
+Use `thimCheck` for template validation and application-wide dead-message and dead-CSS detection during development:
 
 ```shell
 ./gradlew thimCheck
@@ -103,6 +103,23 @@ Use `thimCheck` for template validation and application-wide dead-message detect
 ```
 
 `thimCheck` runs the same validation as normal compilation. Java modules also write a report to `build/reports/thim/check.json`.
+
+## CSS usage
+
+First-party CSS under `src/main/resources/static` is checked for dead class selectors by default. The root `thimCssUsageCheck` task aggregates HTML, Java, Kotlin, JavaScript and TypeScript production sources from every module in the Gradle build, so a stylesheet can be consumed by sibling modules without extra configuration. Vendor stylesheets and `node_modules` are not treated as application-owned CSS. Literal class names and statically visible dynamic prefixes such as `r-chart-$index` count as usage.
+
+The task is part of both `check` and `thimCheck`. It writes `build/reports/thim/css-usage.json` and fails when a first-party class is never referenced. Classes applied by an external runtime whose source is not in the build must be listed exactly:
+
+```kotlin
+thim {
+    runtimeCssClasses.addAll(listOf(
+        "external-widget__container",
+        "external-widget__button",
+    ))
+}
+```
+
+Use `cssUsage.from(...)` only for generated or nonstandard production source roots. Set `failOnUnusedCss` to `false` only for a module whose stylesheet consumers live outside the current Gradle build.
 
 ## Message catalogs
 
