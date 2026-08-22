@@ -1,10 +1,12 @@
 package no.beint.thim.compiler
 
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 import javax.lang.model.SourceVersion
 
 internal class MessageGenerator(private val catalog: MessageCatalog) {
     fun generate(packageName: String, className: String): String {
-        val definitions = catalog.exportedDefinitions().toSortedMap()
+        val definitions = catalog.definitions().toSortedMap()
         val groups = definitions.entries.groupBy { it.key.substringBefore('.') }.toSortedMap()
         val groupNames = uniqueNames(groups.keys, setOf(className), ::className)
         val methodNames = groups.mapValues { (_, entries) ->
@@ -21,7 +23,7 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             appendLine()
             appendLocaleResolver()
             appendLine()
-            appendReferenceResolver(groups, groupNames)
+            appendReferenceResolver(packageName, className, groups, groupNames)
             groups.forEach { (namespace, entries) ->
                 appendLine()
                 appendLine("    public static final class ${groupNames.getValue(namespace)} {")
@@ -34,7 +36,7 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
                 entries.forEach { (key, definition) ->
                     appendLine()
                     val methodName = methodNames.getValue(namespace).getValue(key)
-                    if (definition.arguments.isEmpty()) appendMessageReference(methodName, key)
+                    if (definition.arguments.isEmpty()) appendMessageReference(packageName, className, methodName, key)
                     appendMessageMethod(methodName, definition)
                 }
                 appendLine("    }")
@@ -43,22 +45,57 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         }
     }
 
+    fun usageManifest(
+        packageName: String,
+        className: String,
+        catalogId: String,
+        enforceUnused: Boolean,
+    ): String {
+        val definitions = catalog.definitions().toSortedMap()
+        val groups = definitions.entries.groupBy { it.key.substringBefore('.') }.toSortedMap()
+        val groupNames = uniqueNames(groups.keys, setOf(className), ::className)
+        val methodNames = groups.mapValues { (_, entries) ->
+            uniqueNames(entries.map { it.key }) { key -> methodName(key.substringAfter('.', missingDelimiterValue = key)) }
+        }
+        val outerClass = "$packageName.$className".replace('.', '/')
+
+        return buildString {
+            appendLine("thim-message-usage\t1")
+            appendLine("catalog\t${encoded(catalogId)}")
+            appendLine("enforce\t$enforceUnused")
+            appendLine("api\t$outerClass")
+            groups.forEach { (namespace, entries) ->
+                val owner = "$outerClass\$${groupNames.getValue(namespace)}"
+                entries.forEach { (key, _) ->
+                    val method = methodNames.getValue(namespace).getValue(key)
+                    appendLine("definition\t${encoded(key)}\t$owner\t$method\t${encoded(reference(packageName, className, key))}")
+                }
+            }
+            catalog.usedKeys().sorted().forEach { key -> appendLine("template\t${encoded(key)}") }
+        }
+    }
+
     private fun StringBuilder.appendReferenceResolver(
+        packageName: String,
+        className: String,
         groups: Map<String, List<Map.Entry<String, MessageDefinition>>>,
         groupNames: Map<String, String>,
     ) {
+        val prefix = "{thim:$packageName.$className:"
+        appendLine("    private static final String REFERENCE_PREFIX = \"${javaString(prefix)}\";")
+        appendLine()
         appendLine("    public static boolean isReference(String reference) {")
-        appendLine("        return reference != null && reference.startsWith(\"{thim:\") && reference.endsWith(\"}\");")
+        appendLine("        return reference != null && reference.startsWith(REFERENCE_PREFIX) && reference.endsWith(\"}\");")
         appendLine("    }")
         appendLine()
         appendLine("    public static String resolveReference(String reference, java.util.Locale locale) {")
         appendLine("        java.util.Objects.requireNonNull(reference, \"reference\");")
         appendLine("        java.util.Objects.requireNonNull(locale, \"locale\");")
-        appendLine("        var namespaceEnd = reference.indexOf('.', 6);")
+        appendLine("        var namespaceEnd = reference.indexOf('.', REFERENCE_PREFIX.length());")
         appendLine("        if (!isReference(reference) || namespaceEnd < 0) {")
         appendLine("            throw new IllegalArgumentException(\"Unknown compiled message reference \" + reference);")
         appendLine("        }")
-        appendLine("        return switch (reference.substring(6, namespaceEnd)) {")
+        appendLine("        return switch (reference.substring(REFERENCE_PREFIX.length(), namespaceEnd)) {")
         groups.filterValues { entries -> entries.any { (_, definition) -> definition.arguments.isEmpty() } }
             .forEach { (namespace, _) ->
                 val groupName = groupNames.getValue(namespace)
@@ -84,8 +121,8 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         appendLine("        }")
     }
 
-    private fun StringBuilder.appendMessageReference(name: String, key: String) {
-        appendLine("        public static final String ${name}Reference = \"{thim:${javaString(key)}}\";")
+    private fun StringBuilder.appendMessageReference(packageName: String, className: String, name: String, key: String) {
+        appendLine("        public static final String ${name}Reference = \"${javaString(reference(packageName, className, key))}\";")
     }
 
     private fun StringBuilder.appendLocaleResolver() {
@@ -257,4 +294,10 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             )
         }
     }
+
+    private fun reference(packageName: String, className: String, key: String): String =
+        "{thim:$packageName.$className:$key}"
+
+    private fun encoded(value: String): String = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(value.toByteArray(StandardCharsets.UTF_8))
 }

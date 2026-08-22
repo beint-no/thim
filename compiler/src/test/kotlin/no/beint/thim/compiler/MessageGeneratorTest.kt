@@ -22,8 +22,32 @@ class MessageGeneratorTest {
         val generated = MessageGenerator(MessageCatalog.load(directory, "en", listOf("en")))
             .generate("example", "Messages")
 
-        assertContains(generated, "public static final String titleReference = \"{thim:account.title}\";")
+        assertContains(generated, "public static final String titleReference = \"{thim:example.Messages:account.title}\";")
         assertContains(generated, "case titleReference -> title().resolve(locale);")
         assertFalse(generated.contains("greetingReference"))
+    }
+
+    @Test
+    fun `records generated factories separately from actual template usage`() {
+        Files.createDirectories(directory.resolve("en"))
+        Files.writeString(
+            directory.resolve("en/account.yaml"),
+            "title: Account\ngreeting: Hello {name}\n",
+        )
+        val catalog = MessageCatalog.load(directory, "en", listOf("en"))
+        catalog.use("account.title", emptySet(), "test")
+
+        val manifest = MessageGenerator(catalog).usageManifest(
+            packageName = "example",
+            className = "Messages",
+            catalogId = "app:messages",
+            enforceUnused = true,
+        )
+
+        assertContains(manifest, "catalog\tYXBwOm1lc3NhZ2Vz")
+        assertContains(manifest, "definition\tYWNjb3VudC5ncmVldGluZw\texample/Messages\$Account\tgreeting")
+        assertContains(manifest, "definition\tYWNjb3VudC50aXRsZQ\texample/Messages\$Account\ttitle")
+        assertContains(manifest, "template\tYWNjb3VudC50aXRsZQ")
+        assertFalse(manifest.contains("template\tYWNjb3VudC5ncmVldGluZw"))
     }
 }

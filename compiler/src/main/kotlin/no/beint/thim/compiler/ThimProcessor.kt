@@ -46,10 +46,10 @@ private class ThimProcessor(
         .split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
-    private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
-    private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
-    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"].toBoolean()
-    private val strictModels = environment.options["thim.strictModels"].toBoolean()
+    private val strictTemplates = environment.options["thim.strictTemplates"]?.toBoolean() ?: true
+    private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"]?.toBoolean() ?: true
+    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"]?.toBoolean() ?: true
+    private val strictModels = environment.options["thim.strictModels"]?.toBoolean() ?: true
     private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
         ?.split(',')
         ?.map(String::trim)
@@ -60,9 +60,11 @@ private class ThimProcessor(
     private val generateRoutes = environment.options["thim.generateRoutes"]?.toBoolean() ?: false
     private val routesName = environment.options["thim.routesName"]
         ?: registryName.removeSuffix("Templates") + "Routes"
-    private val generateMessages = environment.options["thim.generateMessages"]?.toBoolean() ?: false
+    private val generateMessages = environment.options["thim.generateMessages"]?.toBoolean() ?: true
     private val messagesName = environment.options["thim.messagesName"]
         ?: registryName.removeSuffix("Templates") + "Messages"
+    private val catalogId = environment.options["thim.catalogId"]
+        ?: messagesDirectory.toAbsolutePath().normalize().toString()
     private val trustedPaths = environment.options["thim.trustedPaths"]
         .orEmpty()
         .split(',')
@@ -82,8 +84,10 @@ private class ThimProcessor(
             }
             val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
             if (templates.isEmpty()) {
-                if (generateMessages) {
+                if (generateMessages && catalog.definitions().isNotEmpty()) {
                     generateMessages(catalog, emptyArray())
+                } else if (failOnUnusedMessages) {
+                    catalog.requireAllUsed()
                 }
                 completed = true
                 return emptyList()
@@ -114,8 +118,7 @@ private class ThimProcessor(
                 generator.compile(template.name, template.model, template.nodes)
             }
             problems += generator.errors
-            if (generateMessages) catalog.exportedDefinitions()
-            collect(problems) { if (failOnUnusedMessages) catalog.requireAllUsed() }
+            collect(problems) { if (!generateMessages && failOnUnusedMessages) catalog.requireAllUsed() }
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
             collect(problems) { reportUnusedFragments(expander) }
             val documentChecker = DocumentChecker(logger::warn)
@@ -127,7 +130,7 @@ private class ThimProcessor(
                 return emptyList()
             }
             generate(compiled, staticContent.bytes(), extractedRoutes)
-            if (generateMessages) {
+            if (generateMessages && catalog.definitions().isNotEmpty()) {
                 val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
                 generateMessages(catalog, files)
             }
@@ -263,13 +266,22 @@ private class ThimProcessor(
     }
 
     private fun generateMessages(catalog: MessageCatalog, files: Array<com.google.devtools.ksp.symbol.KSFile>) {
+        val dependencies = Dependencies(aggregating = true, *files)
+        val generator = MessageGenerator(catalog)
         codeGenerator.createNewFile(
-            dependencies = Dependencies(aggregating = true, *files),
+            dependencies = dependencies,
             packageName = generatedPackage,
             fileName = messagesName,
             extensionName = "java",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.append(MessageGenerator(catalog).generate(generatedPackage, messagesName))
+            output.append(generator.generate(generatedPackage, messagesName))
+        }
+        codeGenerator.createNewFileByPath(
+            dependencies = dependencies,
+            path = "META-INF/thim/messages/${generatedPackage.replace('.', '_')}_$messagesName.usage",
+            extensionName = "",
+        ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+            output.append(generator.usageManifest(generatedPackage, messagesName, catalogId, failOnUnusedMessages))
         }
     }
 

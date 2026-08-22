@@ -14,6 +14,8 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.TaskProvider;
+import org.gradle.language.base.plugins.LifecycleBasePlugin;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
 import javax.lang.model.SourceVersion;
@@ -25,6 +27,8 @@ import java.util.Locale;
 public final class ThimPlugin implements Plugin<Project> {
     private static final String KSP_VERSION = "2.3.10";
     private static final String KOTLIN_VERSION = "2.3.20";
+    private static final String MESSAGE_USAGE_TASK = "thimMessageUsageCheck";
+    private static final String MESSAGE_USAGE_TASK_KEY = "no.beint.thim.messageUsageTask";
 
     @Override
     public void apply(Project project) {
@@ -37,13 +41,13 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getRegistryName().convention("ThimTemplates");
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
         extension.getStrictTemplates().convention(true);
-        extension.getFailOnUnusedMessages().convention(false);
-        extension.getFailOnUnusedFragments().convention(false);
+        extension.getFailOnUnusedMessages().convention(true);
+        extension.getFailOnUnusedFragments().convention(true);
         extension.getValidateRoutes().convention(true);
         extension.getGenerateRoutes().convention(false);
         extension.getRoutesName().convention(extension.getRegistryName().map(name ->
                 name.endsWith("Templates") ? name.substring(0, name.length() - "Templates".length()) + "Routes" : name + "Routes"));
-        extension.getGenerateMessages().convention(false);
+        extension.getGenerateMessages().convention(true);
         extension.getMessagesName().convention(extension.getRegistryName().map(name ->
                 name.endsWith("Templates") ? name.substring(0, name.length() - "Templates".length()) + "Messages" : name + "Messages"));
         extension.getTrustedPaths().convention(java.util.List.of());
@@ -85,6 +89,7 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.routesName", extension.getRoutesName());
         ksp.arg("thim.generateMessages", extension.getGenerateMessages().map(String::valueOf));
         ksp.arg("thim.messagesName", extension.getMessagesName());
+        ksp.arg("thim.catalogId", extension.getMessages().map(directory -> catalogId(project, directory.getAsFile())));
         ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
@@ -100,11 +105,13 @@ public final class ThimPlugin implements Plugin<Project> {
 
         var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
                 .matching(task -> task.getName().equals("kspKotlin"));
+        var messageUsageCheck = messageUsageCheck(project);
         project.getTasks().register("thimCheck", task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
-            task.dependsOn(kspKotlinTasks);
+            task.dependsOn(kspKotlinTasks, messageUsageCheck);
         });
+        project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME).configure(task -> task.dependsOn(messageUsageCheck));
 
         var generatedResources = project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources");
         project.getTasks().matching(task -> task.getName().equals("bootRun")).configureEach(task -> {
@@ -141,11 +148,14 @@ public final class ThimPlugin implements Plugin<Project> {
             configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, generatedBase, "main");
         });
         var checkBase = project.getLayout().getBuildDirectory().dir("generated/thim/check");
+        var messageUsageCheck = messageUsageCheck(project);
         project.getTasks().register("thimCheck", ThimCompile.class, task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
             configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, checkBase, "check");
+            task.dependsOn(messageUsageCheck);
         });
+        project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME).configure(task -> task.dependsOn(messageUsageCheck));
 
         main.getJava().srcDir(compileThim.flatMap(ThimCompile::getJavaOutput));
         main.getResources().srcDir(compileThim.flatMap(ThimCompile::getResourceOutput));
@@ -182,6 +192,7 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getValidateRoutes().set(extension.getValidateRoutes());
         task.getGenerateMessages().set(extension.getGenerateMessages());
         task.getMessagesName().set(extension.getMessagesName());
+        task.getCatalogId().set(extension.getMessages().map(directory -> catalogId(project, directory.getAsFile())));
         task.getTrustedPaths().set(extension.getTrustedPaths());
         task.getStrictModels().set(extension.getStrictModels());
         task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());
@@ -240,6 +251,37 @@ public final class ThimPlugin implements Plugin<Project> {
                     return file.startsWith(templates);
                 })
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private TaskProvider<ThimMessageUsageCheck> messageUsageCheck(Project project) {
+        var root = project.getRootProject();
+        var extras = root.getExtensions().getExtraProperties();
+        synchronized (extras) {
+            if (extras.has(MESSAGE_USAGE_TASK_KEY)) {
+                return (TaskProvider<ThimMessageUsageCheck>) extras.get(MESSAGE_USAGE_TASK_KEY);
+            }
+            var check = root.getTasks().register(MESSAGE_USAGE_TASK, ThimMessageUsageCheck.class, task -> {
+                task.setGroup("verification");
+                task.setDescription("Detects unused Thim messages across production project classes");
+                task.getReportFile().set(root.getLayout().getBuildDirectory().file("reports/thim/message-usage.json"));
+            });
+            extras.set(MESSAGE_USAGE_TASK_KEY, check);
+            root.allprojects(candidate -> candidate.getPluginManager().withPlugin("java", ignored -> {
+                var sourceSets = candidate.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
+                var main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+                check.configure(task -> {
+                    task.getProjectOutputs().from(main.getOutput());
+                    task.dependsOn(candidate.getTasks().named(JavaPlugin.CLASSES_TASK_NAME));
+                });
+            }));
+            return check;
+        }
+    }
+
+    private String catalogId(Project project, File directory) {
+        var relative = project.getRootProject().relativePath(directory).replace(File.separatorChar, '/');
+        return project.getRootProject().getName() + "/" + relative;
     }
 
     private String generatedPackage(Project project) {

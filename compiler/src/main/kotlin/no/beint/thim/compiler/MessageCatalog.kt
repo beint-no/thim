@@ -97,10 +97,9 @@ internal class MessageCatalog private constructor(
         require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
     }
 
-    fun exportedDefinitions(): Map<String, MessageDefinition> {
-        used += definitions.keys
-        return definitions
-    }
+    fun definitions(): Map<String, MessageDefinition> = definitions
+
+    fun usedKeys(): Set<String> = used.toSet()
 
     companion object {
         fun load(directory: Path, defaultLocale: String, supportedLocales: List<String>): MessageCatalog {

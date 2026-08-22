@@ -16,7 +16,7 @@ plugins {
 
 allprojects {
     group = "no.beint.thim"
-    version = "0.7.5"
+    version = "0.8.0"
 }
 
 tasks.register("printReleaseVersion") {
