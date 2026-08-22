@@ -29,6 +29,41 @@ class ThimPluginTest {
     }
 
     @Test
+    void validationDefaultsAreStrictAndCodeGenerationRemainsOptIn() throws IOException {
+        var project = dependencyProject("strict-defaults", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                tasks.register('writeThimDefaults') {
+                    doLast {
+                        file('thim-defaults.txt').text = [
+                            thim.strictTemplates.get(),
+                            thim.strictModels.get(),
+                            thim.failOnUnusedMessages.get(),
+                            thim.failOnUnusedFragments.get(),
+                            thim.validateRoutes.get(),
+                            thim.generateMessages.get(),
+                            thim.generateRoutes.get()
+                        ].join('\\n')
+                    }
+                }
+                """);
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("writeThimDefaults", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+
+        assertEquals(
+                List.of("true", "true", "true", "true", "true", "false", "false"),
+                Files.readAllLines(project.resolve("thim-defaults.txt"))
+        );
+    }
+
+    @Test
     void migrationModulesKeepRuntimeTemplatesButNotCompiledCatalogs() throws IOException {
         var project = project("migration", "thim { strictTemplates.set(false) }");
 

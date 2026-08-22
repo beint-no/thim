@@ -46,10 +46,10 @@ private class ThimProcessor(
         .split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
-    private val strictTemplates = environment.options["thim.strictTemplates"].toBoolean()
-    private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"].toBoolean()
-    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"].toBoolean()
-    private val strictModels = environment.options["thim.strictModels"].toBoolean()
+    private val strictTemplates = environment.options["thim.strictTemplates"]?.toBoolean() ?: true
+    private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"]?.toBoolean() ?: true
+    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"]?.toBoolean() ?: true
+    private val strictModels = environment.options["thim.strictModels"]?.toBoolean() ?: true
     private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
         ?.split(',')
         ?.map(String::trim)

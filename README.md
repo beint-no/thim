@@ -47,7 +47,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.7.5"
+    id("no.beint.thim") version "0.8.0"
 }
 ```
 
@@ -56,18 +56,17 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.7.5"
+    id("no.beint.thim") version "0.8.0"
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.7.5")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.8.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
     generatedPackage.set("your.group.your_module.thim.generated")
     registryName.set("ThimTemplates")
     modelPackages.set(listOf("no.example.page"))
-    failOnUnusedMessages.set(true)
     generateRoutes.set(true)
 }
 ```
@@ -76,7 +75,7 @@ Thim deliberately owns its default source layout: templates go in `src/main/reso
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
-Every page template must have a matching model by default. Set `strictTemplates` to `false` only while Thim and a runtime template engine intentionally share a template directory. Unused fragments and fragment parameters are reported, and `failOnUnusedFragments` promotes unused-fragment warnings to errors. Enable `failOnUnusedMessages` only when the configured bundles are owned entirely by compiled templates.
+Every page template must have a matching model by default. Unused messages and fragments also fail compilation by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary. Unused fragment parameters remain warnings.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 
@@ -87,10 +86,12 @@ For gradual migration, keep the conventional template directory shared and confi
 ```kotlin
 thim {
     strictTemplates.set(false)
+    failOnUnusedMessages.set(false)
+    failOnUnusedFragments.set(false)
 }
 ```
 
-Migrate one controller and page model at a time. Copy the messages used by that page into the YAML catalog; keep legacy catalog entries temporarily when the old engine or an existing catalog linter still needs them. Once every page is compiled, remove the runtime engine and the `strictTemplates` override.
+Migrate one controller and page model at a time. Copy the messages used by that page into the YAML catalog; keep legacy catalog entries temporarily when the old engine or an existing catalog linter still needs them. Once every page is compiled, remove the runtime engine and all three migration overrides.
 
 Complete documents are checked for duplicate ids and broken `label`, ARIA and local-anchor references. Repeated static ids warn. Templates without an `<html>` root are treated as partials, so document-wide references are not checked.
 
@@ -144,7 +145,7 @@ Use named model properties in the template:
 
 `_plural` accepts the locale's reachable subset of `zero`, `one`, `two`, `few`, `many` and the required `other` category. Its argument must be a non-null integral property. `_select` requires a non-null string or enum and also requires `other`; enum variants must name real enum constants. Selections can be nested. All interpolated values are HTML-escaped; catalogs cannot produce raw HTML. Write `{{` or `}}` for a literal brace.
 
-Every discovered locale must contain the same relative `.yaml` files, message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages (when enabled) fail compilation. At runtime Thim chooses an exact available language tag, then an available language-only tag, then the default locale.
+Every discovered locale must contain the same relative `.yaml` files, message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages fail compilation. Set `failOnUnusedMessages` to `false` only when code outside Thim's compiled templates owns catalog usage. At runtime Thim chooses an exact available language tag, then an available language-only tag, then the default locale.
 
 ### Typed backend messages
 

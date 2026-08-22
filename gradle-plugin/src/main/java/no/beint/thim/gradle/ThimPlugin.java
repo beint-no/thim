@@ -37,8 +37,8 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getRegistryName().convention("ThimTemplates");
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
         extension.getStrictTemplates().convention(true);
-        extension.getFailOnUnusedMessages().convention(false);
-        extension.getFailOnUnusedFragments().convention(false);
+        extension.getFailOnUnusedMessages().convention(true);
+        extension.getFailOnUnusedFragments().convention(true);
         extension.getValidateRoutes().convention(true);
         extension.getGenerateRoutes().convention(false);
         extension.getRoutesName().convention(extension.getRegistryName().map(name ->
