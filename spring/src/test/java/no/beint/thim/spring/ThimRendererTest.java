@@ -9,6 +9,7 @@ import no.beint.thim.TemplateSet;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -23,12 +24,93 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ThimRendererTest {
+    @Test
+    void autoConfigurationSuppliesObserverBeans() {
+        var beans = new DefaultListableBeanFactory();
+        var recording = new RecordingObserver();
+        beans.registerSingleton("renderObserver", recording);
+        var renderer = new ThimAutoConfiguration().thimRenderer(
+                beans.getBeanProvider(RequestDataValueProcessor.class),
+                beans.getBeanProvider(ThimRenderObserver.class)
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> renderer.renderToString("model", Locale.ENGLISH)
+        );
+
+        assertEquals(List.of("started", "failed"), recording.events);
+    }
+
+    @Test
+    void observesTheCompleteServletRenderAndIsolatesObserverFailures() throws IOException {
+        var recording = new RecordingObserver();
+        var renderer = new ThimRenderer(
+                List.of(new RecordingTemplateSet()),
+                null,
+                List.of(new ThrowingObserver(), recording)
+        );
+        var request = new MockHttpServletRequest("GET", "/products/42");
+        var response = new MockHttpServletResponse();
+
+        renderer.render("model", request, response);
+
+        assertEquals("rendered", response.getContentAsString());
+        assertEquals(List.of("started", "succeeded"), recording.events);
+        assertSame(recording.renders.getFirst(), recording.renders.getLast());
+        var render = recording.renders.getFirst();
+        assertEquals("java.lang.String", render.templateId());
+        assertEquals(String.class, render.modelType());
+        assertEquals(ThimRender.Mode.SERVLET_RESPONSE, render.mode());
+        assertEquals("/products/42", render.requestUri());
+    }
+
+    @Test
+    void observesStringRenderFailuresWithoutReplacingTheOriginalFailure() {
+        var failure = new IllegalStateException("render failed");
+        var recording = new RecordingObserver();
+        var renderer = new ThimRenderer(
+                List.of(new FailingTemplateSet(failure)),
+                null,
+                List.of(new ThrowingObserver(), recording)
+        );
+
+        var thrown = assertThrows(
+                IllegalStateException.class,
+                () -> renderer.renderToString("model", Locale.ENGLISH)
+        );
+
+        assertSame(failure, thrown);
+        assertEquals(List.of("started", "failed"), recording.events);
+        assertSame(failure, recording.failure);
+        assertSame(recording.renders.getFirst(), recording.renders.getLast());
+        var render = recording.renders.getFirst();
+        assertEquals(ThimRender.Mode.STRING, render.mode());
+        assertEquals("", render.requestUri());
+    }
+
+    @Test
+    void observesTemplateSelectionFailures() {
+        var recording = new RecordingObserver();
+        var renderer = new ThimRenderer(List.of(), null, List.of(recording));
+
+        var failure = assertThrows(
+                IllegalArgumentException.class,
+                () -> renderer.renderToString("model", Locale.ENGLISH)
+        );
+
+        assertEquals("No compiled template for java.lang.String", failure.getMessage());
+        assertEquals(List.of("started", "failed"), recording.events);
+        assertSame(failure, recording.failure);
+    }
+
     @Test
     void rendersUrlFreeTemplateWithoutRequestProcessorAllocation() throws IOException {
         var templates = new RecordingTemplateSet();
@@ -188,6 +270,66 @@ class ThimRendererTest {
             this.context = context;
             var bytes = "rendered".getBytes(StandardCharsets.UTF_8);
             output.raw(bytes, 0, bytes.length);
+        }
+    }
+
+    private static final class FailingTemplateSet implements TemplateSet {
+        private final RuntimeException failure;
+
+        private FailingTemplateSet(RuntimeException failure) {
+            this.failure = failure;
+        }
+
+        @Override
+        public boolean supports(Class<?> modelType) {
+            return modelType == String.class;
+        }
+
+        @Override
+        public void render(Object model, RenderContext context, HtmlOutput output) {
+            throw failure;
+        }
+    }
+
+    private static final class RecordingObserver implements ThimRenderObserver {
+        private final java.util.ArrayList<String> events = new java.util.ArrayList<>();
+        private final java.util.ArrayList<ThimRender> renders = new java.util.ArrayList<>();
+        private Throwable failure;
+
+        @Override
+        public void started(ThimRender render) {
+            events.add("started");
+            renders.add(render);
+        }
+
+        @Override
+        public void succeeded(ThimRender render) {
+            events.add("succeeded");
+            renders.add(render);
+        }
+
+        @Override
+        public void failed(ThimRender render, Throwable failure) {
+            events.add("failed");
+            renders.add(render);
+            this.failure = failure;
+        }
+    }
+
+    private static final class ThrowingObserver implements ThimRenderObserver {
+        @Override
+        public void started(ThimRender render) {
+            throw new IllegalStateException("observer start failed");
+        }
+
+        @Override
+        public void succeeded(ThimRender render) {
+            throw new IllegalStateException("observer success failed");
+        }
+
+        @Override
+        public void failed(ThimRender render, Throwable failure) {
+            throw new IllegalStateException("observer failure failed");
         }
     }
 

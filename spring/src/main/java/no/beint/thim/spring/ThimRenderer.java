@@ -21,13 +21,25 @@ public final class ThimRenderer {
 
     private final List<TemplateSet> templates;
     private final RequestDataValueProcessor requestDataValueProcessor;
+    private final List<ThimRenderObserver> observers;
 
     public ThimRenderer() {
         this((RequestDataValueProcessor) null);
     }
 
     public ThimRenderer(RequestDataValueProcessor requestDataValueProcessor) {
-        this(ServiceLoader.load(TemplateSet.class).stream().map(ServiceLoader.Provider::get).toList(), requestDataValueProcessor);
+        this(requestDataValueProcessor, List.of());
+    }
+
+    public ThimRenderer(
+            RequestDataValueProcessor requestDataValueProcessor,
+            List<ThimRenderObserver> observers
+    ) {
+        this(
+                ServiceLoader.load(TemplateSet.class).stream().map(ServiceLoader.Provider::get).toList(),
+                requestDataValueProcessor,
+                observers
+        );
     }
 
     public ThimRenderer(List<TemplateSet> templates) {
@@ -35,8 +47,17 @@ public final class ThimRenderer {
     }
 
     public ThimRenderer(List<TemplateSet> templates, RequestDataValueProcessor requestDataValueProcessor) {
+        this(templates, requestDataValueProcessor, List.of());
+    }
+
+    public ThimRenderer(
+            List<TemplateSet> templates,
+            RequestDataValueProcessor requestDataValueProcessor,
+            List<ThimRenderObserver> observers
+    ) {
         this.templates = List.copyOf(templates);
         this.requestDataValueProcessor = requestDataValueProcessor;
+        this.observers = List.copyOf(observers);
     }
 
     public boolean supports(Class<?> modelType) {
@@ -58,6 +79,22 @@ public final class ThimRenderer {
     }
 
     public void render(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
+        if (observers.isEmpty()) {
+            renderResponse(model, request, response);
+            return;
+        }
+        var render = new ThimRender(model.getClass(), ThimRender.Mode.SERVLET_RESPONSE, request.getRequestURI());
+        started(render);
+        try {
+            renderResponse(model, request, response);
+        } catch (IOException | RuntimeException | Error failure) {
+            failed(render, failure);
+            throw failure;
+        }
+        succeeded(render);
+    }
+
+    private void renderResponse(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
         var templateSet = templateSetFor(model);
         var locale = RequestContextUtils.getLocale(request);
         var contextPath = request.getContextPath();
@@ -80,12 +117,55 @@ public final class ThimRenderer {
     }
 
     public String renderToString(Object model, Locale locale, String contextPath) throws IOException {
+        if (observers.isEmpty()) {
+            return renderString(model, locale, contextPath);
+        }
+        var render = new ThimRender(model.getClass(), ThimRender.Mode.STRING, "");
+        started(render);
+        try {
+            var result = renderString(model, locale, contextPath);
+            succeeded(render);
+            return result;
+        } catch (IOException | RuntimeException | Error failure) {
+            failed(render, failure);
+            throw failure;
+        }
+    }
+
+    private String renderString(Object model, Locale locale, String contextPath) throws IOException {
         var templateSet = templateSetFor(model);
         var bytes = new ByteArrayOutputStream(4096);
         var output = new HtmlOutput(bytes, OUTPUT_BUFFER_SIZE);
         templateSet.render(model, new RenderContext(locale, contextPath), output);
         output.flush();
         return bytes.toString(StandardCharsets.UTF_8);
+    }
+
+    private void started(ThimRender render) {
+        for (var observer : observers) {
+            try {
+                observer.started(render);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void succeeded(ThimRender render) {
+        for (var observer : observers) {
+            try {
+                observer.succeeded(render);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void failed(ThimRender render, Throwable failure) {
+        for (var observer : observers) {
+            try {
+                observer.failed(render, failure);
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     private TemplateSet templateSetFor(Object model) {

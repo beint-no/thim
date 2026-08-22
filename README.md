@@ -47,7 +47,7 @@ Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.9.0"
+    id("no.beint.thim") version "0.10.0"
 }
 ```
 
@@ -56,11 +56,11 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.9.0"
+    id("no.beint.thim") version "0.10.0"
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.9.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.10.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -234,6 +234,14 @@ fun select(): ThimResult =
 `ThimResult.Page.model` has type `Any`, so page models remain dependency-free. The Spring adapter renders `Page` and sends the path in `Redirect` as an HTTP redirect.
 
 Existing handlers declared as Kotlin `Any` or Java `Object` remain supported, but `ThimResult` documents mixed page/redirect outcomes more clearly.
+
+## Render observation
+
+Register `ThimRenderObserver` beans to observe every Spring render without replacing `ThimRenderer`. This covers typed controller returns, `ThimResult.Page`, explicit servlet rendering and `renderToString`. Each attempt reports start and exactly one success or failure callback around template selection, rendering, flushing and response writing.
+
+`ThimRender.templateId` is the fully qualified runtime page-model class name, which is stable across application restarts and suitable for per-template metrics. `requestUri` is present for servlet rendering and empty for string rendering; use request URIs for diagnostics rather than metric tags because path values can have high cardinality. The same unique `ThimRender` object is passed to every callback, so an observer can associate its own timer with the operation.
+
+Observer failures never change the rendered result, replace the original render failure or prevent other observers from running. When no observers are registered, `ThimRenderer` takes its existing fast path without allocating observation metadata.
 
 Artifacts and the Gradle plugin marker are published to Maven Central. Add `mavenCentral()` to `pluginManagement` and dependency resolution.
 
