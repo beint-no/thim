@@ -1,5 +1,6 @@
 package no.beint.thim.gradle;
 
+import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
@@ -40,4 +41,12 @@ public abstract class ThimExtension {
     public abstract Property<Boolean> getStrictModels();
 
     public abstract ListProperty<String> getForbiddenModelAnnotations();
+
+    public abstract DirectoryProperty getCss();
+
+    public abstract ConfigurableFileCollection getCssUsage();
+
+    public abstract Property<Boolean> getFailOnUnusedCss();
+
+    public abstract ListProperty<String> getRuntimeCssClasses();
 }

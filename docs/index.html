@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Thim — compile-time HTML for Java and Kotlin</title>
-    <meta name="description" content="Thim compiles HTML templates, YAML catalogs, and page models into Java renderers. Missing keys, unused copy, and dead model fields fail the build. Locale is included.">
+    <meta name="description" content="Thim compiles HTML templates, YAML catalogs, and page models into Java renderers. Missing keys, unused copy, dead CSS, and dead model fields fail the build. Locale is included.">
     <meta name="theme-color" content="#efe6d4">
     <meta property="og:title" content="Thim — fail the build, never the request">
     <meta property="og:description" content="An opinionated compile-time HTML renderer for Java and Kotlin. More safety than JTE or JStachio, with compiled locale catalogs included.">
@@ -26,7 +26,7 @@
                 <path d="M10 24h12" stroke="#c9841a" stroke-width="2.2"/>
             </svg>
             <strong>Thim</strong>
-            <span>0.8.0</span>
+            <span>0.9.0</span>
         </a>
         <nav class="nav" aria-label="Page">
             <a href="#opinions">Opinions</a>
@@ -46,7 +46,7 @@
                 <p class="lede">
                     Thim is an opinionated compile-time HTML renderer. Templates, translations,
                     and page models are compiler inputs. Missing properties, unused copy, dead
-                    fragments, and incomplete locales fail compilation. The request path is
+                    fragments, CSS, and incomplete locales fail compilation. The request path is
                     generated Java writing UTF-8.
                 </p>
                 <div class="actions">
@@ -164,7 +164,7 @@
 
 @GetMapping("/")
 fun home() = HomePage(
-    version = "0.8.0",
+    version = "0.9.0",
     greeting = "Typed models, compiled HTML.",
     unreadCount = 3,
     features = listOf(
@@ -188,7 +188,7 @@ fun home() = HomePage(
                 </p>
                 <ul class="checklist">
                     <li>Missing, extra, or mistyped message keys across locales</li>
-                    <li>Unused model properties, unused fragments, unused messages</li>
+                    <li>Unused model properties, fragments, messages, and first-party CSS classes</li>
                     <li>Mutable models, <code>Any</code>/<code>Object</code>, maps, lazy collections</li>
                     <li>JPA entities on a page model</li>
                     <li>Nullable dereference without <code>?.</code></li>
@@ -407,7 +407,7 @@ salutation:
                     </div>
                     <pre id="kotlin-plugin">plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.8.0"
+    id("no.beint.thim") version "0.9.0"
 }
 
 thim {
@@ -423,7 +423,7 @@ thim {
                     </div>
                     <pre id="java-plugin">plugins {
     java
-    id("no.beint.thim") version "0.8.0"
+    id("no.beint.thim") version "0.9.0"
 }
 
 thim {

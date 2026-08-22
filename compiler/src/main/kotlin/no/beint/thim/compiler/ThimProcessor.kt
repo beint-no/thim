@@ -156,8 +156,19 @@ private class ThimProcessor(
     }
 
     private fun reportUnusedFragments(expander: FragmentExpander) {
-        expander.unusedParameters().forEach {
-            logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
+        val unusedParameters = expander.unusedParameters()
+        if (unusedParameters.isNotEmpty()) {
+            if (failOnUnusedFragments) {
+                diagnostic(
+                    "THIM-FRAGMENT-PARAMETER-UNUSED",
+                    null,
+                    "fragment parameters never used: ${unusedParameters.joinToString(", ")}",
+                )
+            } else {
+                unusedParameters.forEach {
+                    logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
+                }
+            }
         }
         val unused = expander.unusedFragments()
         if (unused.isNotEmpty()) {

@@ -22,4 +22,24 @@ class FragmentExpanderTest {
         }
         assertTrue(problem.message.orEmpty().contains("THIM-FRAGMENT-DUPLICATE"), problem.message)
     }
+
+    @Test
+    fun `used fragment reports parameters that never appear in the body`() {
+        val templates = mapOf(
+            "cards" to TemplateParser(
+                "cards",
+                """<div th:fragment="card(title, unused)"><span th:text="${'$'}{title}"></span></div>""",
+            ).parse(),
+            "home" to TemplateParser(
+                "home",
+                """<div th:replace="~{cards :: card(${'$'}{name}, ${'$'}{extra})}"></div>""",
+            ).parse(),
+        )
+
+        val expander = FragmentExpander(templates)
+        expander.expand("home", templates.getValue("home"))
+
+        assertTrue(expander.unusedParameters().single().contains("unused"), expander.unusedParameters().toString())
+        assertTrue(expander.unusedFragments().isEmpty(), expander.unusedFragments().toString())
+    }
 }
