@@ -66,6 +66,38 @@ class MessageCatalogTest {
     }
 
     @Test
+    fun `decodes valid YAML Unicode escapes`() {
+        write("en/values.yaml", """
+            literal: Kunne ikke akkurat nå 📅
+            bmpEscape: "Kunne ikke akkurat n\u00E5"
+            longEscape: "\U0001F4C5"
+            surrogatePair: "\uD83D\uDCC5"
+        """)
+
+        val catalog = MessageCatalog.load(directory, "en", listOf("en"))
+
+        assertText(catalog, "values.literal", "Kunne ikke akkurat nå 📅")
+        assertText(catalog, "values.bmpEscape", "Kunne ikke akkurat nå")
+        assertText(catalog, "values.longEscape", "📅")
+        assertText(catalog, "values.surrogatePair", "📅")
+    }
+
+    @Test
+    fun `rejects unpaired Unicode surrogates`() {
+        write("en/values.yaml", "broken: \"\\uD83D\"")
+
+        assertProblem("invalid Unicode scalar value: unpaired surrogate") {
+            MessageCatalog.load(directory, "en", listOf("en"))
+        }
+
+        write("en/values.yaml", "broken: \"\\uDCC5\"")
+
+        assertProblem("invalid Unicode scalar value: unpaired surrogate") {
+            MessageCatalog.load(directory, "en", listOf("en"))
+        }
+    }
+
+    @Test
     fun `loads select messages and nested selections`() {
         write("en/account.yaml", """
             greeting:
