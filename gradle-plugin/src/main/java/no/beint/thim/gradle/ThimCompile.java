@@ -97,6 +97,9 @@ public abstract class ThimCompile extends DefaultTask {
     public abstract Property<String> getMessagesName();
 
     @Input
+    public abstract Property<String> getCatalogId();
+
+    @Input
     public abstract ListProperty<String> getTrustedPaths();
 
     @Input
@@ -174,6 +177,7 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.validateRoutes=" + getValidateRoutes().get(),
                 "thim.generateMessages=" + getGenerateMessages().get(),
                 "thim.messagesName=" + getMessagesName().get(),
+                "thim.catalogId=" + getCatalogId().get(),
                 "thim.trustedPaths=" + String.join(",", getTrustedPaths().get()),
                 "thim.strictModels=" + getStrictModels().get(),
                 "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get())

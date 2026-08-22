@@ -43,10 +43,6 @@ ksp {
     arg("thim.registry", "ExampleTemplates")
     arg("thim.generateRoutes", "true")
     arg("thim.modelPackages", "no.beint.thim.example.page")
-    arg("thim.strictTemplates", "true")
-    arg("thim.failOnUnusedMessages", "true")
-    arg("thim.failOnUnusedFragments", "true")
-    arg("thim.strictModels", "true")
 }
 
 tasks.withType<KspAATask>().configureEach {

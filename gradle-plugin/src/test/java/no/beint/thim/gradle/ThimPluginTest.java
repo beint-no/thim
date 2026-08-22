@@ -5,9 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
+import javax.tools.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -29,7 +32,7 @@ class ThimPluginTest {
     }
 
     @Test
-    void validationDefaultsAreStrictAndCodeGenerationRemainsOptIn() throws IOException {
+    void validationAndMessageGenerationDefaultsAreStrict() throws IOException {
         var project = dependencyProject("strict-defaults", """
                 id 'java'
                 id 'no.beint.thim'
@@ -58,7 +61,7 @@ class ThimPluginTest {
                 .build();
 
         assertEquals(
-                List.of("true", "true", "true", "true", "true", "false", "false"),
+                List.of("true", "true", "true", "true", "true", "true", "false"),
                 Files.readAllLines(project.resolve("thim-defaults.txt"))
         );
     }
@@ -104,6 +107,33 @@ class ThimPluginTest {
                 """);
 
         assertEquals(List.of("runtime", "spring"), thimDependencies(project));
+    }
+
+    @Test
+    void messageUsageCheckFindsGeneratedFactoryCallsAndRejectsDeadKeys() throws IOException {
+        var project = messageUsageProject("dead-message", "sample.Messages.Home.used();");
+
+        var result = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimMessageUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+
+        assertTrue(result.getOutput().contains("Unused messages in test/catalog: [home.dead]"));
+    }
+
+    @Test
+    void messageUsageCheckFindsInlinedAnnotationReferences() throws IOException {
+        var project = messageUsageProject(
+                "message-reference",
+                "String reference = \"{thim:sample.Messages:home.dead}\"; sample.Messages.Home.used();"
+        );
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimMessageUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .build();
     }
 
     private Path project(String name, String thimConfiguration) throws IOException {
@@ -175,6 +205,65 @@ class ThimPluginTest {
                 .withPluginClasspath()
                 .build();
         return Files.readAllLines(project.resolve("thim-dependencies.txt"));
+    }
+
+    private Path messageUsageProject(String name, String consumerStatement) throws IOException {
+        var project = dependencyProject(name, """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                tasks.matching { it.name == 'thimMessageUsageCheck' }.configureEach {
+                    projectOutputs.setFrom(files('usage-output'))
+                }
+                """);
+        var source = project.resolve("usage-source");
+        var output = project.resolve("usage-output");
+        write(source.resolve("sample/Messages.java"), """
+                package sample;
+                public final class Messages {
+                    public static final class Home {
+                        public static String used() { return "used"; }
+                        public static String dead() { return "dead"; }
+                    }
+                }
+                """);
+        write(source.resolve("sample/Consumer.java"), """
+                package sample;
+                public final class Consumer {
+                    public static void consume() { %s }
+                }
+                """.formatted(consumerStatement));
+        Files.createDirectories(output);
+        var compiler = ToolProvider.getSystemJavaCompiler();
+        assertEquals(0, compiler.run(
+                null,
+                null,
+                null,
+                "-d", output.toString(),
+                source.resolve("sample/Messages.java").toString(),
+                source.resolve("sample/Consumer.java").toString()
+        ));
+        write(output.resolve("META-INF/thim/messages/test.usage"), """
+                thim-message-usage\t1
+                catalog\t%s
+                enforce\ttrue
+                api\tsample/Messages
+                definition\t%s\tsample/Messages$Home\tused\t%s
+                definition\t%s\tsample/Messages$Home\tdead\t%s
+                """.formatted(
+                encoded("test/catalog"),
+                encoded("home.used"),
+                encoded("{thim:sample.Messages:home.used}"),
+                encoded("home.dead"),
+                encoded("{thim:sample.Messages:home.dead}")
+        ));
+        return project;
+    }
+
+    private String encoded(String value) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private void write(Path path, String contents) throws IOException {

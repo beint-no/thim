@@ -75,7 +75,7 @@ Thim deliberately owns its default source layout: templates go in `src/main/reso
 
 The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
 
-Every page template must have a matching model by default. Unused messages and fragments also fail compilation by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary. Unused fragment parameters remain warnings.
+Every page template must have a matching model by default. Unused messages and fragments also fail the build by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary. Unused fragment parameters remain warnings.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 
@@ -95,7 +95,7 @@ Migrate one controller and page model at a time. Copy the messages used by that 
 
 Complete documents are checked for duplicate ids and broken `label`, ARIA and local-anchor references. Repeated static ids warn. Templates without an `<html>` root are treated as partials, so document-wide references are not checked.
 
-Use `thimCheck` for fast template validation during development:
+Use `thimCheck` for template validation and application-wide dead-message detection during development:
 
 ```shell
 ./gradlew thimCheck
@@ -145,15 +145,14 @@ Use named model properties in the template:
 
 `_plural` accepts the locale's reachable subset of `zero`, `one`, `two`, `few`, `many` and the required `other` category. Its argument must be a non-null integral property. `_select` requires a non-null string or enum and also requires `other`; enum variants must name real enum constants. Selections can be nested. All interpolated values are HTML-escaped; catalogs cannot produce raw HTML. Write `{{` or `}}` for a literal brace.
 
-Every discovered locale must contain the same relative `.yaml` files, message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages fail compilation. Set `failOnUnusedMessages` to `false` only when code outside Thim's compiled templates owns catalog usage. At runtime Thim chooses an exact available language tag, then an available language-only tag, then the default locale.
+Every discovered locale must contain the same relative `.yaml` files, message keys and argument contracts. The default locale defines the contract. Missing translations, extra keys, misspelled placeholders, incompatible argument types and unused messages fail the build. Thim records template usage while compiling and then links it with generated factory calls and annotation references found in production project classes. Catalogs shared by modules are checked once across the complete Gradle build. Set `failOnUnusedMessages` to `false` only for a published catalog whose consumers live outside the current build. At runtime Thim chooses an exact available language tag, then an available language-only tag, then the default locale.
 
 ### Typed backend messages
 
-Applications can use the same compiled catalog outside templates without runtime string keys or a second message bundle:
+Applications can use the same compiled catalog outside templates without runtime string keys or a second message bundle. Typed factories are generated automatically whenever a catalog exists:
 
 ```kotlin
 thim {
-    generateMessages.set(true)
     messagesName.set("WebAppMessages")
 }
 ```
@@ -167,9 +166,9 @@ val inbox = WebAppMessages.Home.inbox(unreadCount).resolve(locale)
 
 Keys, argument names, argument kinds, locale branches, selects and plural rules are all compiled. Renaming a key or changing its arguments therefore breaks consumers at compilation rather than at runtime. Factories return `CompiledMessage`, which lets application code supply its current locale through a small framework-specific adapter. Resolution returns plain text, not HTML; generated template renderers still escape the result for its output context.
 
-Argument-free messages also expose compile-time constant references for APIs such as Jakarta Bean Validation annotations, where Java only permits constant annotation arguments. For example, `message = WebAppMessages.Validation.requiredReference` produces a generated `{thim:validation.required}` reference. Framework integration can recognize it with `WebAppMessages.isReference(...)` and resolve it through `WebAppMessages.resolveReference(..., locale)`. Removing the catalog entry or adding arguments removes the generated constant and breaks the consumer at compilation.
+Argument-free messages also expose compile-time constant references for APIs such as Jakarta Bean Validation annotations, where Java only permits constant annotation arguments. For example, `message = WebAppMessages.Validation.requiredReference` produces a generated catalog-specific `{thim:…}` reference. Framework integration can recognize it with `WebAppMessages.isReference(...)` and resolve it through `WebAppMessages.resolveReference(..., locale)`. Removing the catalog entry or adding arguments removes the generated constant and breaks the consumer at compilation.
 
-The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Enabling this public backend API exports the full catalog, so its entries count as used when `failOnUnusedMessages` is enabled.
+The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Generating a factory does not count as usage: a key remains dead until a template, factory call, or annotation reference actually consumes it. Set `generateMessages` to `false` only when a module intentionally wants template-only catalogs and no typed backend API.
 
 Catalogs use a deliberately small YAML 1.2 profile: mappings and string scalars only. The failsafe schema means plain `no`, `true`, `12` and `2026-08-08` remain text. Duplicate keys, tags, anchors, aliases, sequences, multiple documents, empty catalogs and non-YAML files are rejected. Block scalars are supported for multiline copy. Only the lowercase `.yaml` extension is accepted.
 

@@ -254,9 +254,9 @@ salutation:
             <p class="fine">
                 Integer cardinal rules from Unicode CLDR 49 are embedded for the European
                 languages Thim lists in the README. A <code>_plural</code> catalog in an
-                unsupported language fails compilation rather than guessing. Enable
-                <code>generateMessages</code> to use the same catalog from backend code
-                through generated, typed factories returning <code>CompiledMessage</code>;
+                unsupported language fails compilation rather than guessing. The same catalog is
+                automatically available to backend code through generated, typed factories returning
+                <code>CompiledMessage</code>;
                 runtime string keys and a second message bundle are not needed. Argument-free
                 messages also provide constant <code>*Reference</code> values for annotation
                 APIs, with generated <code>isReference</code> and <code>resolveReference</code>
@@ -413,7 +413,6 @@ salutation:
 thim {
     generatedPackage.set("your.group.thim.generated")
     modelPackages.set(listOf("your.group.page"))
-    generateMessages.set(true)
     generateRoutes.set(true)
 }</pre>
                 </article>
@@ -430,7 +429,6 @@ thim {
 thim {
     generatedPackage.set("your.group.thim.generated")
     modelPackages.set(listOf("your.group.page"))
-    generateMessages.set(true)
 }</pre>
                 </article>
             </div>
