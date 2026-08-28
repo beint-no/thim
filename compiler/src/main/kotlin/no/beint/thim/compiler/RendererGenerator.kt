@@ -1527,6 +1527,7 @@ internal class RendererGenerator(
             "hx-put" to "PUT",
             "hx-patch" to "PATCH",
             "hx-delete" to "DELETE",
+            "hx-query" to "QUERY",
         )
         val urlVariablePattern = Regex("\\{([A-Za-z_][A-Za-z0-9_]*)}")
 
