@@ -1,8 +1,6 @@
 import com.google.devtools.ksp.gradle.KspAATask
 import org.gradle.api.tasks.PathSensitivity
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode
-import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 plugins {
     kotlin("jvm")
@@ -12,11 +10,7 @@ plugins {
 
 kotlin {
     jvmToolchain(26)
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_25)
-}
-
-tasks.withType<KotlinJvmCompile>().configureEach {
-    jvmTargetValidationMode.set(JvmTargetValidationMode.IGNORE)
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_26)
 }
 
 dependencies {
