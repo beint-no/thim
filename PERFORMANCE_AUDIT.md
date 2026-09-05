@@ -187,3 +187,73 @@ The example Spring Boot application was also started over HTTP. English and Norw
 pages, UTF-8 content lengths, submitted form errors, escaping, and the health endpoint
 passed. These checks cover the changed library behavior; they are not a claim of
 exhaustive application behavior or production traffic testing.
+
+## 0.10.2 final review
+
+The final pass reviewed message generation, output formatting, servlet rendering,
+KSP property lookup, and the Gradle CSS/message validation tasks. One further change
+justifies a release: constant translations now return their compiled string literal
+instead of creating a `StringBuilder` and another string on every resolution.
+
+The optimization applies only when every locale contains a single text part or an
+empty pattern. Parameterized messages, plurals, and selections retain their existing
+generated bodies. Locale selection, regional fallback, reference factories, string
+escaping, and null-locale validation are preserved. Runtime and Spring adapter class
+files are byte-identical to published 0.10.1.
+
+JMH on the same Apple M5 Max/JDK 26 machine used two JVM forks, three one-second warmup
+iterations, five one-second measurements, and the GC profiler. Before and after runs
+used the same benchmark and fixtures with their respective generated message classes.
+
+| Lookup | Before | After | Allocated bytes before / after |
+| --- | ---: | ---: | ---: |
+| Constant message, English | 4.306 ± 0.026 ns | 0.648 ± 0.013 ns | 48 / approximately 0 |
+| Constant message, Norwegian | 4.297 ± 0.058 ns | 0.821 ± 0.020 ns | 48 / approximately 0 |
+| Constant reference, English | 9.421 ± 0.079 ns | 11.841 ± 3.939 ns | 72 / 24 |
+| Constant reference, Norwegian | 9.946 ± 0.757 ns | 9.028 ± 0.634 ns | 72 / 24 |
+
+The margins are JMH's 99.9% confidence margins. Reference timings varied between
+forks and do not establish a latency improvement; the allocation reduction is stable.
+Parameterized message allocation stays at 80 bytes in this fixture, with overlapping
+timing intervals before and after. These are individual lookups, not page latency or
+whole-build measurements. The sub-nanosecond constant lookup reflects successful JIT
+optimization of a simple generated factory and should not be extrapolated to all call sites.
+Raw results are in [before](benchmark/results/2026-09-05-messages-before.json) and
+[after](benchmark/results/2026-09-05-messages-after.json).
+
+For a ReAI catalog containing 8,793 message factories, generated Java shrank from
+7,850,983 to 6,897,779 bytes (12.1%). Compiled class files shrank from 4,847,362 to
+4,562,756 bytes (5.9%), with the same 244 classes. A comparison of every factory,
+public signature, and reference field produced the same digest before and after:
+`9ff6493228810baf2485223a13e476f017397c26d816560c9631b1b49508a129`.
+It covers 184,653 message resolutions, 56,546 reference resolutions, and 26,379
+null-locale checks per version, using seven locales and three argument fixtures.
+
+The clean library build passes 100 tests. New tests compile and execute generated
+Java for single-locale and multilingual/regional catalogs, including empty strings,
+quotes, backslashes, newlines, Unicode, references, parameters, plurals, and selections.
+
+Clean consumer builds pass with published 0.10.1 and the locally staged 0.10.2 candidate.
+The packaged application comparisons cover 399,882 message resolutions, 122,724
+reference resolutions, 57,126 null-locale checks, public generated message signatures,
+and 24 HTML renderings per version. All results match. Six generated message sources
+change as intended; the other 35 generated files are byte-identical. Utin has no
+generated message factories, and all seven of its generated files are unchanged.
+
+Other small candidates were left for later: reusing the remaining naming regexes,
+replacing the form-error stream with a loop, and using a linear string join for Java
+source arguments. None has evidence of a substantial benefit in these consumers;
+the Java-only compilation path is not used by these four Kotlin applications. The
+larger property-resolution, dispatch, response-buffering, and incremental-compilation
+ideas above still need dedicated profiling and compatibility work.
+
+Reproduce the message measurements with:
+
+```sh
+./gradlew :benchmark:jmhJar
+java -jar benchmark/build/libs/benchmark-0.10.2-jmh.jar MessageBenchmark \
+  -f 2 -wi 3 -i 5 -w 1s -r 1s -prof gc -rf json -rff /tmp/thim-messages.json
+```
+
+For the before run, use the same `MessageBenchmark.java` with the 0.10.1 compiler
+and regenerate the benchmark's message classes before building its JMH jar.
