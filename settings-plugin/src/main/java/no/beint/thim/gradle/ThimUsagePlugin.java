@@ -60,7 +60,7 @@ public final class ThimUsagePlugin implements Plugin<Project> {
         });
     }
 
-    static void configureCss(Project project, ThimExtension extension) {
+    public static void configureCss(Project project, ThimExtension extension) {
         var runtimeClasses = project.getTasks().register("thimCssRuntimeClasses", ThimCssRuntimeClasses.class, task -> {
             task.getClasses().set(extension.getRuntimeCssClasses());
             task.getOutputFile().set(project.getLayout().getBuildDirectory().file("thim/runtime-css-classes.txt"));

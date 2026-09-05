@@ -303,6 +303,7 @@ Missing models, properties, messages and routes; unsafe nullable access; malform
 - `compiler`: build-time Java and Kotlin type analysis
 - `spring`: Java Spring MVC adapter
 - `gradle-plugin`: Java and Kotlin build integration
+- `settings-plugin`: isolated build-wide validation without a Kotlin/KSP classpath
 - `example`: Spring Boot application
 - `benchmark`: generated-renderer fixtures, regression tests, and JMH benches
 

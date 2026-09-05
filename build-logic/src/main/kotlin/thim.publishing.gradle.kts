@@ -67,6 +67,7 @@ plugins.withId("com.vanniktech.maven.publish") {
                     "runtime" -> "Dependency-free Java output API for Thim templates."
                     "compiler" -> "Build-time Java and Kotlin template compiler for Thim."
                     "spring" -> "Spring MVC adapter for Thim templates."
+                    "settings-plugin" -> "Gradle settings plugin for isolated Thim validation."
                     "gradle-plugin" -> "Gradle plugin for compiling Thim templates."
                     else -> "Strict AOT HTML renderer for Java and Kotlin applications."
                 },

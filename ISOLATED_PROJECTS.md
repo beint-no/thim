@@ -21,14 +21,21 @@ KSP 2.3.11 supports Gradle's current isolation properties. Kotlin consumers usin
 also set `ksp.project.isolation.enabled=true` in `gradle.properties`; KSP's detection does not inspect the CLI flag.
 This repository sets that property so both normal and isolated builds use the same generated-source wiring.
 
+The settings plugin is published in `settings-plugin`, separately from `gradle-plugin`. It has no KSP dependency.
+Loading KSP in the settings classloader prevents Kotlin consumers from loading their compiler plugin API and makes
+explicit project-plugin versions conflict. The project plugin depends on the settings artifact for shared task/extension
+classes; CSS registration is public because these classes can belong to different plugin classloaders.
+
 ## Results
 
-- `./gradlew clean build` passes: 101 test cases across runtime (13), compiler (41), Spring (11), Gradle plugin (15),
-  benchmark (17) and example (4).
-- `./gradlew :runtime:check :compiler:check :spring:check :gradle-plugin:check :example:classes :benchmark:classes
+- `./gradlew clean build` passes: 102 test cases across runtime (13), compiler (41), Spring (11), Gradle plugin (15),
+  settings plugin (1), benchmark (17) and example (4).
+- `./gradlew :runtime:check :compiler:check :spring:check :gradle-plugin:check :settings-plugin:check :example:classes :benchmark:classes
   --isolated-projects` passes. CI runs this in addition to the complete build.
 - A functional test compiles a shared message catalog and a separate consumer under isolation, verifies configuration
   cache reuse, then removes a usage and verifies that the unused message fails validation.
+- A separate packaged-settings-plugin fixture compiles a Kotlin consumer under strict isolation and checks configuration-cache reuse.
+  Temporarily adding KSP to the settings classpath makes that regression test fail with the original missing Kotlin API error.
 - Cross-module CSS and dynamic-prefix validation passes under isolation.
 - A real plain Java consumer passes `clean build thimCheck --isolated-projects`, restores generated outputs from cache,
   rejects an added unused CSS class, and passes again after restoration.
@@ -39,6 +46,23 @@ This repository sets that property so both normal and isolated builds use the sa
 - ReAI also starts with `bootRun --isolated-projects`; login, health, OpenAPI and Enak pages returned HTTP 200 with no startup/request errors.
 - Local Maven publication of runtime, compiler, Spring, the project plugin marker and the settings plugin marker passes.
   The temporary repository is outside the source trees; nothing has been published to Maven Central.
+
+## Additional consumers
+
+Utin, Eteo and Ecomtools migration branches also pass clean builds without the build cache, strict isolated compilation
+and validation, configuration-cache reuse, and local startup. The consumers support `-PthimBuild` for source composites
+until 0.11.0 is released; published plugin resolution was tested against a temporary local Maven repository.
+
+| Consumer | Equivalent packaged entries | CSS classes | Catalog messages |
+| --- | ---: | ---: | ---: |
+| Utin | 2,789 | 1,034 | 0 |
+| Eteo | 3,946 | 215 | 386 |
+| Ecomtools | 2,093 | 35 | 191 |
+
+Content comparisons normalize Thim version labels and exclude ZIP metadata; classpath ordering is preserved.
+Validation reports are byte-identical. Eteo's missing-image task wiring is also verified with a failing image reference
+and a successful build after restoration. Startup smoke tests disable jobs and migrations, use local databases and verify
+rendered login/landing pages. Utin and Ecomtools also return health status UP.
 
 ## Remaining ecosystem blocker
 

@@ -2,6 +2,7 @@
 
 ## 0.11.0
 
+- Keep settings integration in a separate artifact so Kotlin and KSP load on the consumer project classpath.
 - Add the required `no.beint.thim.settings` settings plugin for build-wide validation under Isolated Projects.
 - Exchange compiled outputs, CSS sources, usage sources and runtime CSS classes through declared project artifacts.
 - Preserve shared-catalog validation across all production modules and root validation task/report locations.

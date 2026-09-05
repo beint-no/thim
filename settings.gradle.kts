@@ -15,7 +15,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "thim"
 
-include("runtime", "compiler", "spring", "gradle-plugin", "example", "benchmark")
+include("runtime", "compiler", "spring", "gradle-plugin", "settings-plugin", "example", "benchmark")
 
 
 gradle.lifecycle.beforeProject {
