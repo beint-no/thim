@@ -91,8 +91,8 @@ and allocations are recorded in [the benchmark results](benchmark/results/2026-0
 - A separate before/after corpus check produced the same SHA-256 over the complete
   parsed trees and expanded subset, including attributes and source locations:
   `e3f90868720f9c6c5498861c97e6e5e6ca3a16a7bf23cb5211acfce28b25465c`.
-- No full ReAI build, production deployment, or production latency measurement was
-  performed. Adoption requires publishing a new Thim version and upgrading ReAI.
+- The initial audit did not include a full ReAI build or production measurements.
+  The subsequent 0.10.1 release review below adds consumer build and rendering checks.
 
 ## Further opportunities
 
@@ -148,3 +148,42 @@ The integer comparison uses the same benchmark jar at each revision:
 java -jar /absolute/path/to/benchmark-0.10.0-jmh.jar HtmlOutputBenchmark.integers \
   -f 3 -wi 5 -i 5 -prof gc -rf json -rff /tmp/thim-integers.json
 ```
+
+## 0.10.1 release review
+
+A second review checked the integer formatter's sign handling, maximum digit count,
+small-buffer fallback, flush boundaries, and I/O exception propagation, plus parser
+locations and fragment binding isolation. It found no regression in those changes.
+One additional allocation improvement reuses the immutable source location for an
+opening tag instead of calculating and allocating it twice.
+
+The release candidate passes 98 library tests. Additional cases mix raw bytes, UTF-8,
+escaped characters, `int`, and `long` at every starting offset in buffers of 4–24 bytes,
+and check that destination failures propagate unchanged. Public signatures and class
+inventories are identical to published 0.10.0 for all 12 runtime classes and 12 Spring
+adapter classes.
+
+Each consumer was built cleanly first with published 0.10.0, then with 0.10.1 staged
+in an isolated local Maven repository. Existing validation settings remained enabled.
+
+| Consumer source revision | Application build | Generated files compared | Result |
+| --- | --- | ---: | --- |
+| ReAI `785cb1e6d` | `clean :web-app:build` | 18 | Identical |
+| Utin `3621bb95` | `clean :web-app:build` | 7 | Identical |
+| Eteo `48f63163` | `clean :web-app:build` | 10 | Identical |
+| Ecomtools `7cb741f` | `clean :customerservice:build` | 6 | Identical |
+
+The comparison includes all generated Java, Kotlin, binary static content, and service
+and message-usage metadata from each rendering module, not just the initial parser corpus.
+
+Packaged consumer smoke checks render `AuthLoginPage` (ReAI), `LoginPage` (Utin),
+`IndexPage` (Eteo), and `ReviewSubmissionConfirmationPage` (Ecomtools). Each is rendered
+with both boolean fixture variants and locales `en`, `nb`, and `no`. All 24 cases
+produce identical HTML hashes with the published 0.10.0 runtime/Spring jars and the
+packaged 0.10.1 jars. These checks load the actual executable application jars and
+service-loader registries without starting application jobs or contacting business APIs.
+
+The example Spring Boot application was also started over HTTP. English and Norwegian
+pages, UTF-8 content lengths, submitted form errors, escaping, and the health endpoint
+passed. These checks cover the changed library behavior; they are not a claim of
+exhaustive application behavior or production traffic testing.

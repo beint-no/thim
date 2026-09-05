@@ -4,10 +4,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class HtmlOutputTest {
     @Test
@@ -72,6 +75,46 @@ class HtmlOutputTest {
         output.raw(new SafeHtml("<i>ok</i>"));
         output.flush();
         assertEquals("<b><i>ok</i>", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void mixesIntegerAndUtf8OutputAtEveryBufferOffset() throws IOException {
+        var values = new long[] {0, 9, 10, 99, 100, -1, -10, Integer.MIN_VALUE, Integer.MAX_VALUE,
+                Long.MIN_VALUE, Long.MAX_VALUE, -Long.MAX_VALUE};
+        for (var bufferSize = 4; bufferSize <= 24; bufferSize++) {
+            for (var offset = 0; offset <= bufferSize; offset++) {
+                for (var value : values) {
+                    var bytes = new ByteArrayOutputStream();
+                    var output = new HtmlOutput(bytes, bufferSize);
+                    var prefix = "x".repeat(offset);
+                    output.text(prefix);
+                    output.text(value);
+                    output.text("æ😀&");
+                    output.text((int) value);
+                    output.raw(new byte[] {'!'}, 0, 1);
+                    output.flush();
+                    assertEquals(prefix + value + "æ😀&amp;" + (int) value + "!",
+                            bytes.toString(StandardCharsets.UTF_8),
+                            "bufferSize=" + bufferSize + ", offset=" + offset + ", value=" + value);
+                }
+            }
+        }
+    }
+
+    @Test
+    void propagatesDestinationFailuresDuringIntegerOutput() throws IOException {
+        var failure = new IOException("destination failed");
+        var destination = new OutputStream() {
+            @Override
+            public void write(int value) throws IOException {
+                throw failure;
+            }
+        };
+        for (var bufferSize : new int[] {4, 16, 32}) {
+            var output = new HtmlOutput(destination, bufferSize);
+            output.text("x".repeat(bufferSize));
+            assertSame(failure, assertThrows(IOException.class, () -> output.text(Long.MAX_VALUE)));
+        }
     }
 
     private static String render(String value) throws IOException {

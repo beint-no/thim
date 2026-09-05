@@ -132,7 +132,8 @@ internal class TemplateParser(
         val nameStart = position
         while (position < content.length && !content[position].isWhitespace()) position++
         val name = content.substring(nameStart, position).lowercase()
-        requireDiagnostic(name.matches(namePattern), "THIM-HTML-ELEMENT", location(contentOffset + nameStart)) {
+        val elementLocation = location(contentOffset + nameStart)
+        requireDiagnostic(name.matches(namePattern), "THIM-HTML-ELEMENT", elementLocation) {
             "invalid element name '$name'"
         }
 
@@ -170,7 +171,7 @@ internal class TemplateParser(
             attributes[attributeName] = value
             attributeLocations[attributeName] = attributeLocation
         }
-        return ParsedTag(name, attributes, location(contentOffset + nameStart), attributeLocations)
+        return ParsedTag(name, attributes, elementLocation, attributeLocations)
     }
 
     private fun location(offset: Int): SourceLocation {
