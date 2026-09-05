@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0
+
+- Add the required `no.beint.thim.settings` settings plugin for build-wide validation under Isolated Projects.
+- Exchange compiled outputs, CSS sources, usage sources and runtime CSS classes through declared project artifacts.
+- Preserve shared-catalog validation across all production modules and root validation task/report locations.
+- Make Kotlin compiler cache options relocatable while retaining absolute runtime paths.
+- Upgrade KSP to 2.3.11 and migrate this repository's shared build configuration to isolated callbacks and a publishing convention.
+
+
 ## 0.10.2
 
 - Generate direct literal returns for constant translations, avoiding a new string per lookup.

@@ -99,6 +99,7 @@ class ThimPluginTest {
                 id 'no.beint.thim'
                 """);
         write(project.resolve("settings.gradle"), """
+                plugins { id 'no.beint.thim.settings' }
                 rootProject.name = 'shared-css'
                 include 'feature'
                 """);
@@ -119,7 +120,7 @@ class ThimPluginTest {
 
         GradleRunner.create()
                 .withProjectDir(project.toFile())
-                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withArguments("thimCssUsageCheck", "--isolated-projects", "--stacktrace")
                 .withPluginClasspath()
                 .build();
 
@@ -127,6 +128,39 @@ class ThimPluginTest {
         assertTrue(report.contains("\"defined\": 4"));
         assertTrue(report.contains("\"unused\": 0"));
         assertTrue(report.contains("\"prefixUsed\": 2"));
+    }
+
+    @Test
+    void isolatedMessageAggregationBuildsConsumersAndReusesConfiguration() throws IOException {
+        var project = messageUsageProject("isolated-messages", "sample.Messages.Home.used(); sample.Messages.Home.dead();");
+        write(project.resolve("settings.gradle"), """
+                plugins { id 'no.beint.thim.settings' }
+                rootProject.name = 'isolated-messages'
+                include 'catalog', 'consumer'
+                """);
+        write(project.resolve("build.gradle"), "");
+        write(project.resolve("catalog/build.gradle"), "plugins { id 'java-library' }\n");
+        write(project.resolve("consumer/build.gradle"), """
+                plugins { id 'java' }
+                dependencies { implementation project(':catalog') }
+                """);
+        write(project.resolve("catalog/src/main/java/sample/Messages.java"),
+                Files.readString(project.resolve("usage-source/sample/Messages.java")));
+        write(project.resolve("catalog/src/main/resources/META-INF/thim/messages/test.usage"),
+                Files.readString(project.resolve("usage-output/META-INF/thim/messages/test.usage")));
+        var consumer = project.resolve("consumer/src/main/java/sample/Consumer.java");
+        var source = Files.readString(project.resolve("usage-source/sample/Consumer.java"));
+        write(consumer, source);
+        var runner = GradleRunner.create().withProjectDir(project.toFile()).withPluginClasspath()
+                .withArguments("thimMessageUsageCheck", "--isolated-projects", "--stacktrace");
+
+        var first = runner.build();
+        assertTrue(first.getOutput().contains(":consumer:compileJava"));
+        assertTrue(first.getOutput().contains("Configuration cache entry stored"));
+        assertTrue(runner.build().getOutput().contains("Reusing configuration cache"));
+
+        write(consumer, source.replace("sample.Messages.Home.dead();", ""));
+        assertTrue(runner.buildAndFail().getOutput().contains("Unused messages in test/catalog: [home.dead]"));
     }
 
     @Test
@@ -271,7 +305,7 @@ class ThimPluginTest {
 
     private Path project(String name, String thimConfiguration) throws IOException {
         var project = temporaryDirectory.resolve(name);
-        write(project.resolve("settings.gradle"), "rootProject.name = '" + name + "'\n");
+        write(project.resolve("settings.gradle"), "plugins { id 'no.beint.thim.settings' }\nrootProject.name = '" + name + "'\n");
         write(project.resolve("build.gradle"), """
                 plugins {
                     id 'java'
@@ -304,7 +338,7 @@ class ThimPluginTest {
 
     private Path dependencyProject(String name, String plugins) throws IOException {
         var project = temporaryDirectory.resolve(name);
-        write(project.resolve("settings.gradle"), "rootProject.name = '" + name + "'\n");
+        write(project.resolve("settings.gradle"), "plugins { id 'no.beint.thim.settings' }\nrootProject.name = '" + name + "'\n");
         write(project.resolve("build.gradle"), """
                 plugins {
                 %s

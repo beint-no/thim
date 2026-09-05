@@ -1,6 +1,6 @@
 plugins {
     `java-library`
-    id("com.vanniktech.maven.publish")
+    id("thim.publishing")
 }
 
 dependencies {
