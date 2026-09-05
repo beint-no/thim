@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.2
+
+- Generate direct literal returns for constant translations, avoiding a new string per lookup.
+- Preserve locale fallback, message references, escaping, parameters, plural/select handling,
+  and null-locale validation. Runtime and Spring adapter implementations are unchanged.
+- Add message-resolution benchmarks and tests that compile and execute generated Java for
+  both single-locale and regional/multilingual catalogs.
+
 ## 0.10.1
 
 - Index template line starts instead of rescanning the source for every diagnostic location.
