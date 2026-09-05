@@ -16,6 +16,7 @@ kotlin {
 dependencies {
     implementation(project(":runtime"))
     ksp(project(":compiler"))
+    jmhImplementation(project(":compiler"))
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

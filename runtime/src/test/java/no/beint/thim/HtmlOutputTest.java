@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -29,6 +30,38 @@ class HtmlOutputTest {
         assertEquals("0", render(0));
         assertEquals("-42", render(-42));
         assertEquals("-9223372036854775808", render(Long.MIN_VALUE));
+    }
+
+    @Test
+    void writesIntegersAcrossBufferBoundaries() throws IOException {
+        var random = new Random(42);
+        var values = new long[1000];
+        values[0] = Long.MIN_VALUE;
+        values[1] = Long.MAX_VALUE;
+        values[2] = 0;
+        values[3] = -1;
+        var index = 4;
+        for (var power = 1L; power <= 1_000_000_000_000_000_000L; power *= 10) {
+            for (var delta = -1; delta <= 1; delta++) {
+                values[index++] = power + delta;
+                values[index++] = -power + delta;
+            }
+            if (power == 1_000_000_000_000_000_000L) break;
+        }
+        while (index < values.length) values[index++] = random.nextLong();
+
+        for (var bufferSize = 4; bufferSize <= 32; bufferSize++) {
+            var bytes = new ByteArrayOutputStream();
+            var output = new HtmlOutput(bytes, bufferSize);
+            var expected = new StringBuilder();
+            for (var value : values) {
+                output.text("|");
+                output.text(value);
+                expected.append('|').append(value);
+            }
+            output.flush();
+            assertEquals(expected.toString(), bytes.toString(StandardCharsets.UTF_8), "bufferSize=" + bufferSize);
+        }
     }
 
     @Test

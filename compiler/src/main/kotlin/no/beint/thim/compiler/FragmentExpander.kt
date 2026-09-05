@@ -17,6 +17,7 @@ internal class FragmentExpander(
     }
 
     private val used = mutableSetOf<String>()
+    private val identifiers = mutableMapOf<String, Regex>()
 
     fun expand(template: String, nodes: List<Node>): List<Node> =
         nodes.flatMap { expand(it, template, emptyMap(), emptySet()) }
@@ -144,6 +145,7 @@ internal class FragmentExpander(
     }
 
     private fun substitute(value: String, bindings: Map<String, Binding>): String {
+        if (bindings.isEmpty() || "\${" !in value) return value
         variablePattern.matchEntire(value.trim())?.let { match ->
             val binding = bindings[match.groupValues[1]]
             if (binding is ValueBinding) return binding.value
@@ -235,7 +237,9 @@ internal class FragmentExpander(
         return null
     }
 
-    private fun identifier(name: String) = Regex("(?<![A-Za-z0-9_.])${Regex.escape(name)}(?![A-Za-z0-9_])")
+    private fun identifier(name: String) = identifiers.getOrPut(name) {
+        Regex("(?<![A-Za-z0-9_.])${Regex.escape(name)}(?![A-Za-z0-9_])")
+    }
 
     private data class Fragment(
         val template: String,

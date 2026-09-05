@@ -289,4 +289,20 @@ For a longer local run that is better at guiding speed work:
 ./gradlew :benchmark:jmh
 ```
 
+`TemplateCompilerBenchmark` measures parsing and fragment expansion separately from KSP and Java compilation.
+Its default fixtures contain 100 and 1,000 fragment calls. To measure an application's existing templates:
+
+```shell
+./gradlew :benchmark:jmhJar
+java -jar benchmark/build/libs/benchmark-0.10.0-jmh.jar TemplateCompilerBenchmark \
+  -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
+  -f 2 -prof gc
+```
+
+Sources are loaded before measurement. Parsing covers every HTML file; fragment expansion covers templates
+without fragment declarations, since the benchmark does not resolve page models. `elements` controls only
+the synthetic fixture. These measurements describe compiler phases, not total application build time.
+
+See [the September 2026 performance audit](PERFORMANCE_AUDIT.md) for measured improvements and follow-up opportunities.
+
 See [DESIGN.md](DESIGN.md) for the architecture.
