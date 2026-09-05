@@ -25,15 +25,16 @@ import java.util.List;
 import java.util.Locale;
 
 public final class ThimPlugin implements Plugin<Project> {
-    private static final String KSP_VERSION = "2.3.10";
+    private static final String KSP_VERSION = "2.3.11";
     private static final String KOTLIN_VERSION = "2.3.20";
     private static final String MESSAGE_USAGE_TASK = "thimMessageUsageCheck";
-    private static final String MESSAGE_USAGE_TASK_KEY = "no.beint.thim.messageUsageTask";
     private static final String CSS_USAGE_TASK = "thimCssUsageCheck";
-    private static final String CSS_USAGE_TASK_KEY = "no.beint.thim.cssUsageTask";
 
     @Override
     public void apply(Project project) {
+        if (!project.getPlugins().hasPlugin(ThimUsagePlugin.class)) {
+            throw new GradleException("Apply no.beint.thim.settings in settings.gradle(.kts) before applying no.beint.thim");
+        }
         var extension = project.getExtensions().create("thim", ThimExtension.class);
         extension.getTemplates().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/templates"));
         extension.getMessages().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/i18n"));
@@ -61,7 +62,8 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getFailOnUnusedCss().convention(true);
         extension.getRuntimeCssClasses().convention(java.util.List.of("htmx-request", "htmx-indicator"));
 
-        var cssUsageCheck = cssUsageCheck(project, extension);
+        ThimUsagePlugin.configureCss(project, extension);
+        var cssUsageCheck = ":" + CSS_USAGE_TASK;
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored ->
                 configureKotlinProject(project, extension, cssUsageCheck));
@@ -79,7 +81,7 @@ public final class ThimPlugin implements Plugin<Project> {
     private void configureKotlinProject(
             Project project,
             ThimExtension extension,
-            TaskProvider<ThimCssUsageCheck> cssUsageCheck
+            String cssUsageCheck
     ) {
         project.getPluginManager().apply("com.google.devtools.ksp");
         var version = implementationVersion(project);
@@ -115,9 +117,24 @@ public final class ThimPlugin implements Plugin<Project> {
                     .withPathSensitivity(PathSensitivity.RELATIVE);
         });
 
+        var projectDirectory = project.getLayout().getProjectDirectory().getAsFile().toPath();
+        // KSP initializes cache options after Kotlin finalizes its compilations.
+        project.afterEvaluate(evaluated -> project.getTasks().withType(KspAATask.class).configureEach(task ->
+                task.getKspConfig().getApOptions().putAll(task.getKspConfig().getProcessorOptions().map(options -> {
+                    var paths = new java.util.LinkedHashMap<String, String>();
+                    for (var key : List.of("thim.templates", "thim.messages")) {
+                        var value = options.get(key);
+                        if (value == null) continue;
+                        var path = new File(value).toPath();
+                        paths.put(key, (path.isAbsolute() ? projectDirectory.relativize(path) : path)
+                                .toString().replace(File.separatorChar, '/'));
+                    }
+                    return paths;
+                }))));
+
         var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
                 .matching(task -> task.getName().equals("kspKotlin"));
-        var messageUsageCheck = messageUsageCheck(project);
+        var messageUsageCheck = ":" + MESSAGE_USAGE_TASK;
         project.getTasks().register("thimCheck", task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
@@ -138,7 +155,7 @@ public final class ThimPlugin implements Plugin<Project> {
     private void configureJavaProject(
             Project project,
             ThimExtension extension,
-            TaskProvider<ThimCssUsageCheck> cssUsageCheck
+            String cssUsageCheck
     ) {
         if (extension.getGenerateRoutes().get()) {
             throw new GradleException("Thim route builders currently require the Kotlin JVM plugin");
@@ -165,7 +182,7 @@ public final class ThimPlugin implements Plugin<Project> {
             configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, generatedBase, "main");
         });
         var checkBase = project.getLayout().getBuildDirectory().dir("generated/thim/check");
-        var messageUsageCheck = messageUsageCheck(project);
+        var messageUsageCheck = ":" + MESSAGE_USAGE_TASK;
         project.getTasks().register("thimCheck", ThimCompile.class, task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
@@ -271,88 +288,11 @@ public final class ThimPlugin implements Plugin<Project> {
         );
     }
 
-    @SuppressWarnings("unchecked")
-    private TaskProvider<ThimMessageUsageCheck> messageUsageCheck(Project project) {
-        var root = project.getRootProject();
-        var extras = root.getExtensions().getExtraProperties();
-        synchronized (extras) {
-            if (extras.has(MESSAGE_USAGE_TASK_KEY)) {
-                return (TaskProvider<ThimMessageUsageCheck>) extras.get(MESSAGE_USAGE_TASK_KEY);
-            }
-            var check = root.getTasks().register(MESSAGE_USAGE_TASK, ThimMessageUsageCheck.class, task -> {
-                task.setGroup("verification");
-                task.setDescription("Detects unused Thim messages across production project classes");
-                task.getReportFile().set(root.getLayout().getBuildDirectory().file("reports/thim/message-usage.json"));
-            });
-            extras.set(MESSAGE_USAGE_TASK_KEY, check);
-            root.allprojects(candidate -> candidate.getPluginManager().withPlugin("java", ignored -> {
-                var sourceSets = candidate.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
-                var main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-                check.configure(task -> {
-                    task.getProjectOutputs().from(main.getOutput());
-                    task.dependsOn(candidate.getTasks().named(JavaPlugin.CLASSES_TASK_NAME));
-                });
-            }));
-            return check;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private TaskProvider<ThimCssUsageCheck> cssUsageCheck(Project project, ThimExtension extension) {
-        var root = project.getRootProject();
-        var extras = root.getExtensions().getExtraProperties();
-        TaskProvider<ThimCssUsageCheck> check;
-        synchronized (extras) {
-            if (extras.has(CSS_USAGE_TASK_KEY)) {
-                check = (TaskProvider<ThimCssUsageCheck>) extras.get(CSS_USAGE_TASK_KEY);
-            } else {
-                check = root.getTasks().register(CSS_USAGE_TASK, ThimCssUsageCheck.class, task -> {
-                    task.setGroup("verification");
-                    task.setDescription("Detects unused first-party CSS across production source trees");
-                    task.getRootDirectory().set(root.getLayout().getProjectDirectory());
-                    task.getRuntimeClasses().convention(java.util.List.of());
-                    task.getReportFile().set(root.getLayout().getBuildDirectory().file("reports/thim/css-usage.json"));
-                });
-                extras.set(CSS_USAGE_TASK_KEY, check);
-                var registered = check;
-                root.allprojects(candidate -> registered.configure(task ->
-                        task.getUsageFiles().from(usageFiles(candidate))));
-            }
-        }
-        var registered = check;
-        registered.configure(task -> {
-            task.getCssFiles().from(project.provider(() -> {
-                if (!extension.getFailOnUnusedCss().get()) return java.util.List.of();
-                var directory = extension.getCss().get().getAsFile();
-                return directory.isDirectory() ? cssFiles(project, directory) : java.util.List.of();
-            }));
-            task.getUsageFiles().from(extension.getCssUsage());
-            task.getRuntimeClasses().addAll(extension.getRuntimeCssClasses());
-        });
-        return check;
-    }
-
     private String catalogId(Project project, File directory) {
-        var relative = project.getRootProject().relativePath(directory).replace(File.separatorChar, '/');
-        return project.getRootProject().getName() + "/" + relative;
-    }
-
-    private FileTree cssFiles(Project project, File directory) {
-        return project.fileTree(directory, files -> {
-            files.include("**/*.css");
-            files.exclude("**/vendor/**", "**/node_modules/**");
-        });
-    }
-
-    private FileTree usageFiles(Project project) {
-        var directory = project.getLayout().getProjectDirectory().dir("src/main").getAsFile();
-        return project.fileTree(directory, files -> {
-            files.include(
-                    "**/*.html", "**/*.htm", "**/*.java", "**/*.kt", "**/*.kts",
-                    "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.ts", "**/*.tsx"
-            );
-            files.exclude("**/node_modules/**");
-        });
+        var root = project.getIsolated().getRootProject();
+        var relative = root.getProjectDirectory().getAsFile().toPath().relativize(directory.toPath())
+                .toString().replace(File.separatorChar, '/');
+        return root.getName() + "/" + relative;
     }
 
     private String generatedPackage(Project project) {

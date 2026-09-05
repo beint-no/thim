@@ -26,7 +26,7 @@
                 <path d="M10 24h12" stroke="#c9841a" stroke-width="2.2"/>
             </svg>
             <strong>Thim</strong>
-            <span>0.10.2</span>
+            <span>0.11.0</span>
         </a>
         <nav class="nav" aria-label="Page">
             <a href="#opinions">Opinions</a>
@@ -164,7 +164,7 @@
 
 @GetMapping("/")
 fun home() = HomePage(
-    version = "0.10.2",
+    version = "0.11.0",
     greeting = "Typed models, compiled HTML.",
     unreadCount = 3,
     features = listOf(
@@ -392,12 +392,37 @@ salutation:
 
         <section class="wrap band" id="start">
             <p class="kicker">Get started</p>
-            <h2>One plugin. Conventional directories. Strict by default.</h2>
+            <h2>Conventional directories. Strict validation. Isolated projects.</h2>
             <p class="section-copy">
                 Templates live in <code>src/main/resources/templates</code>. Catalogs live in
                 <code>src/main/resources/i18n</code>. The default model package is
                 <code>&lt;group&gt;.page</code>. Override a directory only for a migration.
                 Requires JDK 26 or newer.
+            </p>
+            <article class="panel">
+                <div class="panel-head">
+                    <span>settings.gradle.kts</span>
+                    <button type="button" class="copy" data-copy="settings-plugin">Copy</button>
+                </div>
+                <pre id="settings-plugin">pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id("no.beint.thim.settings") version "0.11.0"
+}
+
+dependencyResolutionManagement {
+    repositories { mavenCentral() }
+}</pre>
+            </article>
+            <p class="section-copy">
+                Upgrading from 0.10 requires the settings plugin above. For Kotlin builds, add
+                <code>ksp.project.isolation.enabled=true</code> to <code>gradle.properties</code>.
+                Apply the project plugin in each rendering module:
             </p>
             <div class="install">
                 <article class="panel">
@@ -407,7 +432,7 @@ salutation:
                     </div>
                     <pre id="kotlin-plugin">plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.10.2"
+    id("no.beint.thim") version "0.11.0"
 }
 
 thim {
@@ -423,7 +448,7 @@ thim {
                     </div>
                     <pre id="java-plugin">plugins {
     java
-    id("no.beint.thim") version "0.10.2"
+    id("no.beint.thim") version "0.11.0"
 }
 
 thim {

@@ -1,10 +1,11 @@
 plugins {
     `java-gradle-plugin`
-    id("com.vanniktech.maven.publish")
+    id("thim.publishing")
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.10")
+    implementation(project(":settings-plugin"))
+    implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.11")
     testImplementation(gradleTestKit())
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")

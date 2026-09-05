@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm")
-    id("com.vanniktech.maven.publish")
+    id("thim.publishing")
 }
 
 kotlin {
@@ -11,7 +11,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
+    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.11")
     implementation("org.snakeyaml:snakeyaml-engine:3.1.1")
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))

@@ -6,6 +6,23 @@ The marketing site is at [beint-no.github.io/thim](https://beint-no.github.io/th
 
 Thim requires JDK 26 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
+## Isolated Projects
+
+Thim 0.11 uses Gradle's isolated lifecycle callbacks and published project artifacts for build-wide validation.
+Upgrading from 0.10 requires adding `no.beint.thim.settings` to the settings file, as shown below. Missing settings
+configuration fails with an actionable error; unused-message and CSS checks are never silently narrowed to one
+module. Existing `:thimMessageUsageCheck` and `:thimCssUsageCheck` task names and report locations are preserved.
+
+For Kotlin consumers, set `ksp.project.isolation.enabled=true` in `gradle.properties` so KSP uses its
+compatible source wiring even when isolation is enabled through the command-line flag. Use Gradle 9.7.1 and
+`--isolated-projects` to validate a consumer build. KSP 2.3.11 is included for compatibility
+with Gradle's current isolation property. Third-party plugins must also support isolation: Spring Boot 4.1.1's
+`bootJar` task still accesses other projects during construction, tracked in
+[spring-boot#43755](https://github.com/spring-projects/spring-boot/issues/43755). Until that is fixed, this repository's
+full build keeps isolation opt-in; plugin tests explicitly exercise it. A successful `help` invocation alone
+does not establish compatibility for packaging or IDE model creation.
+See [verification details](ISOLATED_PROJECTS.md) for the tested scenarios.
+
 ## Use
 
 Name the page model after its template. `home.html` resolves to `HomePage`:
@@ -42,12 +59,28 @@ HomePage home() {
 }
 ```
 
-Apply the plugin after the Kotlin JVM plugin in Kotlin modules:
+Apply the settings plugin once in `settings.gradle.kts`. It lets Gradle collect classes and source inputs
+through declared project dependencies, including modules that do not compile templates:
+
+```kotlin
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+plugins {
+    id("no.beint.thim.settings") version "0.11.0"
+}
+```
+
+Then apply the project plugin after the Kotlin JVM plugin in Kotlin modules:
 
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.10.2"
+    id("no.beint.thim")
 }
 ```
 
@@ -56,11 +89,11 @@ Java modules need only the Java and Thim plugins:
 ```kotlin
 plugins {
     java
-    id("no.beint.thim") version "0.10.2"
+    id("no.beint.thim")
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.10.2")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.11.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -270,6 +303,7 @@ Missing models, properties, messages and routes; unsafe nullable access; malform
 - `compiler`: build-time Java and Kotlin type analysis
 - `spring`: Java Spring MVC adapter
 - `gradle-plugin`: Java and Kotlin build integration
+- `settings-plugin`: isolated build-wide validation without a Kotlin/KSP classpath
 - `example`: Spring Boot application
 - `benchmark`: generated-renderer fixtures, regression tests, and JMH benches
 
@@ -294,7 +328,7 @@ Its default fixtures contain 100 and 1,000 fragment calls. To measure an applica
 
 ```shell
 ./gradlew :benchmark:jmhJar
-java -jar benchmark/build/libs/benchmark-0.10.2-jmh.jar TemplateCompilerBenchmark \
+java -jar benchmark/build/libs/benchmark-0.11.0-jmh.jar TemplateCompilerBenchmark \
   -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
   -f 2 -prof gc
 ```

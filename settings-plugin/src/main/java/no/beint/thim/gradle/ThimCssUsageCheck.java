@@ -48,6 +48,10 @@ public abstract class ThimCssUsageCheck extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getUsageFiles();
 
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getRuntimeClassFiles();
+
     @Input
     public abstract ListProperty<String> getRuntimeClasses();
 
@@ -64,6 +68,9 @@ public abstract class ThimCssUsageCheck extends DefaultTask {
         var usage = usage(sortedFiles(getUsageFiles().getFiles()));
         var exact = new TreeSet<>(usage.tokens());
         exact.addAll(getRuntimeClasses().get());
+        for (var file : getRuntimeClassFiles().getFiles()) {
+            exact.addAll(Files.readAllLines(file.toPath(), StandardCharsets.UTF_8));
+        }
         var used = new TreeSet<String>();
         var prefixUsed = new TreeSet<String>();
         var unused = new TreeSet<String>();
