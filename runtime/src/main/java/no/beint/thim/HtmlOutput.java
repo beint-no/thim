@@ -76,19 +76,31 @@ public final class HtmlOutput {
             raw(MIN_LONG, 0, MIN_LONG.length);
             return;
         }
-        if (value < 0) {
-            byteValue('-');
-            value = -value;
+        var negative = value < 0;
+        if (negative) value = -value;
+        var length = 1;
+        for (var limit = 10L; length < 19 && value >= limit; limit *= 10) length++;
+        if (negative) length++;
+        if (length > buffer.length) {
+            if (negative) byteValue('-');
+            var divisor = 1L;
+            for (var remaining = value; remaining >= 10; remaining /= 10) divisor *= 10;
+            do {
+                byteValue((int) ('0' + value / divisor));
+                value %= divisor;
+                divisor /= 10;
+            } while (divisor != 0);
+            return;
         }
-        var divisor = 1L;
-        while (value / divisor >= 10) {
-            divisor *= 10;
-        }
+        if (length > buffer.length - position) flushBuffer();
+        var end = position + length;
+        var index = end;
         do {
-            byteValue((int) ('0' + value / divisor));
-            value %= divisor;
-            divisor /= 10;
-        } while (divisor != 0);
+            buffer[--index] = (byte) ('0' + value % 10);
+            value /= 10;
+        } while (value != 0);
+        if (negative) buffer[position] = '-';
+        position = end;
     }
 
     public void text(float value) throws IOException {

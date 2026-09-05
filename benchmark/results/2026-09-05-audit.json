@@ -1,0 +1,164 @@
+{
+  "date": "2026-09-05",
+  "baselineCommit": "f0fe2fe",
+  "reaiCommit": "ae87edd9e",
+  "environment": "Apple M5 Max, arm64, OpenJDK 26.0.2.1, shared developer machine",
+  "corpus": {
+    "parsedTemplates": 388,
+    "expandedTemplatesWithoutFragmentDeclarations": 136
+  },
+  "runs": {
+    "compiler_before": [
+      {
+        "benchmark": "no.beint.thim.benchmark.TemplateCompilerBenchmark.expandFragments",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 11.474838934396606,
+        "error99_9Percent": 1.2338708635584408,
+        "unit": "ms/op",
+        "allocationBytesPerOperation": 33527364.30695787
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.TemplateCompilerBenchmark.parseTemplates",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 495.4873055833333,
+        "error99_9Percent": 14.4591666378163,
+        "unit": "ms/op",
+        "allocationBytesPerOperation": 37370181.6
+      }
+    ],
+    "compiler_after": [
+      {
+        "benchmark": "no.beint.thim.benchmark.TemplateCompilerBenchmark.expandFragments",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 7.970702593084653,
+        "error99_9Percent": 0.2015975751557127,
+        "unit": "ms/op",
+        "allocationBytesPerOperation": 11983625.997431329
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.TemplateCompilerBenchmark.parseTemplates",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 23.892746441357836,
+        "error99_9Percent": 1.1882840623903281,
+        "unit": "ms/op",
+        "allocationBytesPerOperation": 37593105.851269014
+      }
+    ],
+    "integers_before": [
+      {
+        "benchmark": "no.beint.thim.benchmark.HtmlOutputBenchmark.integers",
+        "forks": 3,
+        "warmupIterations": 5,
+        "measurementIterations": 5,
+        "score": 1602.7823772141433,
+        "error99_9Percent": 6.358635089470204,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 0.000651212655063756
+      }
+    ],
+    "integers_after": [
+      {
+        "benchmark": "no.beint.thim.benchmark.HtmlOutputBenchmark.integers",
+        "forks": 3,
+        "warmupIterations": 5,
+        "measurementIterations": 5,
+        "score": 802.3205834204957,
+        "error99_9Percent": 2.8865354283842377,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 0.00032591232137863505
+      }
+    ],
+    "renderers_before": [
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.catalogFifty",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 8474.994343260845,
+        "error99_9Percent": 818.6504556619226,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 1224.0034442514493
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.inboxEnglish",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 2196.098476765788,
+        "error99_9Percent": 24.66651289243189,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 24.00089272168842
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.inboxNorwegian",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 2560.314595124126,
+        "error99_9Percent": 100.70442148070545,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 72.00104000162548
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.plainStatic",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 122.09799198951153,
+        "error99_9Percent": 2.3526848464375254,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 4.963621644405577e-05
+      }
+    ],
+    "renderers_after": [
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.catalogFifty",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 7919.119544843314,
+        "error99_9Percent": 60.98916783183512,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 1224.0032202906727
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.inboxEnglish",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 2166.6148436550857,
+        "error99_9Percent": 34.628086424132036,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 24.000880342042898
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.inboxNorwegian",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 2879.3966289804384,
+        "error99_9Percent": 817.9681608741503,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 72.00117067491945
+      },
+      {
+        "benchmark": "no.beint.thim.benchmark.RendererBenchmark.plainStatic",
+        "forks": 2,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "score": 120.31675048715377,
+        "error99_9Percent": 2.0732380460273054,
+        "unit": "ns/op",
+        "allocationBytesPerOperation": 4.8903976568876495e-05
+      }
+    ]
+  }
+}

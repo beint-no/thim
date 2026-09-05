@@ -18,6 +18,12 @@ internal class TemplateParser(
 ) {
     private val roots = mutableListOf<Node>()
     private val stack = ArrayDeque<ElementNode>()
+    private val lineStarts = IntArray(source.count { it == '\n' } + 1).also { starts ->
+        var line = 1
+        source.forEachIndexed { offset, character ->
+            if (character == '\n') starts[line++] = offset + 1
+        }
+    }
     private var index = 0
 
     fun parse(): List<Node> {
@@ -126,7 +132,8 @@ internal class TemplateParser(
         val nameStart = position
         while (position < content.length && !content[position].isWhitespace()) position++
         val name = content.substring(nameStart, position).lowercase()
-        requireDiagnostic(name.matches(namePattern), "THIM-HTML-ELEMENT", location(contentOffset + nameStart)) {
+        val elementLocation = location(contentOffset + nameStart)
+        requireDiagnostic(name.matches(namePattern), "THIM-HTML-ELEMENT", elementLocation) {
             "invalid element name '$name'"
         }
 
@@ -164,23 +171,14 @@ internal class TemplateParser(
             attributes[attributeName] = value
             attributeLocations[attributeName] = attributeLocation
         }
-        return ParsedTag(name, attributes, location(contentOffset + nameStart), attributeLocations)
+        return ParsedTag(name, attributes, elementLocation, attributeLocations)
     }
 
     private fun location(offset: Int): SourceLocation {
-        var line = 1
-        var column = 1
-        var position = 0
-        while (position < offset && position < source.length) {
-            if (source[position] == '\n') {
-                line++
-                column = 1
-            } else {
-                column++
-            }
-            position++
-        }
-        return SourceLocation(templateName, line, column)
+        val position = offset.coerceIn(0, source.length)
+        val match = lineStarts.binarySearch(position)
+        val line = if (match >= 0) match else -match - 2
+        return SourceLocation(templateName, line + 1, position - lineStarts[line] + 1)
     }
 
     private companion object {
