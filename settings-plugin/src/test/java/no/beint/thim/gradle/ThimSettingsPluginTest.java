@@ -31,7 +31,7 @@ class ThimSettingsPluginTest {
                 include("consumer")
                 """.formatted(classpath));
         Files.writeString(project.resolve("build.gradle.kts"), """
-                plugins { kotlin("jvm") version "2.4.10" apply false }
+                plugins { kotlin("jvm") version "2.4.20" apply false }
                 """);
         Files.createDirectories(project.resolve("consumer/src/main/kotlin"));
         Files.writeString(project.resolve("consumer/build.gradle.kts"), """
