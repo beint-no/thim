@@ -46,7 +46,7 @@ class ThimPluginTest {
                             thim.strictTemplates.get(),
                             thim.strictModels.get(),
                             thim.failOnUnusedMessages.get(),
-                            thim.failOnUnusedFragments.get(),
+                            thim.failOnUnusedComponents.get(),
                             thim.validateRoutes.get(),
                             thim.generateMessages.get(),
                             thim.generateRoutes.get(),

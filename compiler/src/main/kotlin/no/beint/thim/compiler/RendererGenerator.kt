@@ -42,6 +42,8 @@ internal class RendererGenerator(
     private var languages = emptyMap<String, Int>()
     private var formErrors: ResolvedPath? = null
     private var hasMessageLocale = false
+    val usedComponentProperties = mutableMapOf<String, MutableSet<String>>()
+    var componentModels: Map<String, KSClassDeclaration> = emptyMap()
     private val pendingHelpers = ArrayDeque<RenderHelper>()
     val errors = mutableListOf<String>()
     private val usedRootProperties = mutableMapOf<String, MutableSet<String>>()
@@ -53,22 +55,7 @@ internal class RendererGenerator(
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
         val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
         val code = CodeWriter(staticContent, registryName)
-        val locales = if (usesMessages(nodes)) {
-            catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
-        } else {
-            emptySet()
-        }
-        val localeIds = if (locales.isEmpty()) {
-            emptyMap()
-        } else {
-            buildMap {
-                put(catalog.defaultLocale, 0)
-                locales.forEachIndexed { index, locale -> put(locale, index + 1) }
-            }
-        }
-        regionalLocales = localeIds.filterKeys { '-' in it }
-        languages = localeIds.filterKeys { '-' !in it }
-        hasMessageLocale = regionalLocales.isNotEmpty() || languages.isNotEmpty()
+        configureLocales(nodes)
         generatedVariable = 0
         generatedHelper = 0
         pendingHelpers.clear()
@@ -107,6 +94,7 @@ internal class RendererGenerator(
             code.line("}")
             while (pendingHelpers.isNotEmpty()) {
                 val helper = pendingHelpers.removeFirst()
+                formErrors = helper.formErrors
                 code.line()
                 val localeParameter = if (hasMessageLocale) ", int messageLocale" else ""
                 val capturedParameters = helper.captures.joinToString("") { ", Object ${it.code}Value" }
@@ -128,6 +116,63 @@ internal class RendererGenerator(
         return CompiledTemplate(model, rendererName, source, "context.requestDataValues()" in source)
     }
 
+    private fun configureLocales(nodes: List<Node>) {
+        val locales = if (usesMessages(nodes)) {
+            catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
+        } else {
+            emptySet()
+        }
+        val localeIds = if (locales.isEmpty()) {
+            emptyMap()
+        } else {
+            buildMap {
+                put(catalog.defaultLocale, 0)
+                locales.forEachIndexed { index, locale -> put(locale, index + 1) }
+            }
+        }
+        regionalLocales = localeIds.filterKeys { '-' in it }
+        languages = localeIds.filterKeys { '-' !in it }
+        hasMessageLocale = regionalLocales.isNotEmpty() || languages.isNotEmpty()
+    }
+
+    fun validateComponent(definition: ComponentDefinition, nodes: List<Node>) {
+        configureLocales(nodes)
+        val model = componentModels[definition.name]
+        val scope = Scope(model, recordUse = { property ->
+            usedComponentProperties.getOrPut(definition.name, ::mutableSetOf).add(property)
+        })
+        val code = CodeWriter(staticContent, registryName)
+        formErrors = scope.errorsProperty()
+        renderNodes(nodes, scope, code, definition.template)
+        while (pendingHelpers.isNotEmpty()) {
+            val helper = pendingHelpers.removeFirst()
+            formErrors = helper.formErrors
+            helper.nodes.forEach { renderNodeCollecting(it, helper.scope, code, helper.context) }
+        }
+    }
+
+    private fun renderComponent(node: ComponentNode, caller: Scope, code: CodeWriter, context: String) {
+        val model = componentModels[node.definition.name]
+        val binding = node.props?.let { expression ->
+            val resolved = caller.resolve(expression, "component props", node.location)
+            requireDiagnostic(!resolved.nullable, "THIM-COMPONENT-NULLABLE", node.location) { "component props cannot be nullable; supply a non-null component model" }
+            val expected = requireNotNull(model).asStarProjectedType()
+            requireDiagnostic(expected.isAssignableFrom(resolved.type.makeNotNullable()), "THIM-COMPONENT-TYPE", node.location) {
+                "<ui:${node.definition.name}> requires ${node.definition.modelName}, received ${resolved.type}"
+            }
+            val name = "component${generatedVariable++}"
+            code.statement("${javaType(expected)} $name = ${resolved.code};")
+            Binding(name, expected, false)
+        }
+        val scope = Scope(model, recordUse = { property ->
+            usedComponentProperties.getOrPut(node.definition.name, ::mutableSetOf).add(property)
+        }, modelBinding = binding, callers = mapOf(node.id to caller))
+        val previousErrors = formErrors
+        formErrors = scope.errorsProperty()
+        renderNodes(node.children, scope, code, context)
+        formErrors = previousErrors
+    }
+
     private fun renderNodes(nodes: List<Node>, scope: Scope, code: CodeWriter, context: String) {
         val chunks = partition(nodes)
         if (chunks == null) {
@@ -137,7 +182,7 @@ internal class RendererGenerator(
         val captures = scope.capturedBindings()
         chunks.forEach { chunk ->
             val name = "renderPart${generatedHelper++}"
-            pendingHelpers.addLast(RenderHelper(name, chunk, scope, context, captures))
+            pendingHelpers.addLast(RenderHelper(name, chunk, scope, context, captures, formErrors))
             val localeArgument = if (hasMessageLocale) ", messageLocale" else ""
             val capturedArguments = captures.joinToString("") { ", ${it.code}" }
             code.statement("$name(model, context, output$localeArgument$capturedArguments);")
@@ -165,6 +210,14 @@ internal class RendererGenerator(
 
     private fun renderNode(node: Node, scope: Scope, code: CodeWriter, context: String) {
         when (node) {
+            is ComponentNode -> renderComponent(node, scope, code, context)
+            is SlotNode -> {
+                val caller = scope.callerFor(node.owner)
+                val previousErrors = formErrors
+                formErrors = caller.errorsProperty()
+                renderNodes(node.children, caller, code, context)
+                formErrors = previousErrors
+            }
             is RawNode -> code.static(node.value)
             is ElementNode -> renderElement(node, scope, code, context)
         }
@@ -901,11 +954,8 @@ internal class RendererGenerator(
         code.close()
     }
 
-    private fun usesMessages(nodes: List<Node>): Boolean = nodes.any { node ->
-        node is ElementNode && (
-                node.attributes.values.any { it?.trim()?.startsWith("#{") == true } || usesMessages(node.children)
-                )
-    }
+    private fun usesMessages(nodes: List<Node>): Boolean = nodes.asSequence().flatMap(Node::elements)
+        .any { node -> node.attributes.values.any { it?.trim()?.startsWith("#{") == true } }
 
     private fun renderMessageValue(
         value: MessageValue,
@@ -1229,34 +1279,39 @@ internal class RendererGenerator(
         val scope: Scope,
         val context: String,
         val captures: List<Binding>,
+        val formErrors: ResolvedPath?,
     )
 
     private class Scope(
-        private val model: KSClassDeclaration,
+        private val model: KSClassDeclaration?,
         private val recordUse: (String) -> Unit = {},
         private val bindings: Map<String, Binding> = emptyMap(),
         private val selection: Binding? = null,
         private val select: Binding? = null,
+        private val modelBinding: Binding? = null,
+        private val callers: Map<Int, Scope> = emptyMap(),
     ) {
+        private val modelCode: String get() = modelBinding?.code ?: "model"
+        fun callerFor(owner: Int): Scope = callers[owner] ?: callers.values.single().callerFor(owner)
         fun withBinding(name: String, binding: Binding) =
-            Scope(model, recordUse, bindings + (name to binding), selection, select)
+            Scope(model, recordUse, bindings + (name to binding), selection, select, modelBinding, callers)
 
-        fun withSelection(binding: Binding) = Scope(model, recordUse, bindings, binding, select)
+        fun withSelection(binding: Binding) = Scope(model, recordUse, bindings, binding, select, modelBinding, callers)
 
-        fun withSelectValue(binding: Binding) = Scope(model, recordUse, bindings, selection, binding)
+        fun withSelectValue(binding: Binding) = Scope(model, recordUse, bindings, selection, binding, modelBinding, callers)
 
         fun hasSelection(): Boolean = selection != null
 
         fun capturedBindings(): List<Binding> =
-            (bindings.values + listOfNotNull(selection, select)).distinctBy(Binding::code)
+            (bindings.values + listOfNotNull(selection, select, modelBinding) + callers.values.flatMap { it.capturedBindings() }).distinctBy(Binding::code)
 
         fun selectValue(): Binding? = select
 
         fun errorsProperty(): ResolvedPath? {
-            val property = model.property("errors") ?: return null
+            val property = model?.property("errors") ?: return null
             val typeName = property.type.declaration.qualifiedName?.asString()
             if (typeName != "no.beint.thim.FormErrors" || property.type.nullability == Nullability.NULLABLE) return null
-            return ResolvedPath("model.${property.accessor}()", property.type, false)
+            return ResolvedPath("$modelCode.${property.accessor}()", property.type, false)
         }
 
         fun recordRootProperty(name: String) {
@@ -1308,16 +1363,16 @@ internal class RendererGenerator(
                 type = bound.type
                 nullable = bound.nullable
             } else {
-                val property = model.property(first.name)
+                val property = model?.property(first.name)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
-                        "'${first.name}' is not a property of ${model.qualifiedName?.asString()}${model.suggestion(first.name)}",
+                        "'${first.name}' is not a property of ${model?.qualifiedName?.asString() ?: "a component without props"}${model?.suggestion(first.name).orEmpty()}",
                     )
                 recordUse(first.name)
                 type = property.type
                 nullable = type.nullability == Nullability.NULLABLE
-                code = "model.${property.accessor}()"
+                code = "$modelCode.${property.accessor}()"
             }
 
             expression.segments.drop(1).forEach { segment ->
@@ -1482,6 +1537,8 @@ internal class RendererGenerator(
         const val MAX_RENDER_PART_WEIGHT = 1200
 
         fun Node.renderWeight(): Int = when (this) {
+            is ComponentNode -> 4 + children.sumOf { it.renderWeight() }
+            is SlotNode -> children.sumOf { it.renderWeight() }
             is RawNode -> 0
             is ElementNode -> 1 + attributes.values.sumOf { expression ->
                 when {
@@ -1515,7 +1572,6 @@ internal class RendererGenerator(
             "th:each",
             "th:if",
             "th:unless",
-            "th:fragment",
             "th:object",
             "th:field",
             "th:errors"

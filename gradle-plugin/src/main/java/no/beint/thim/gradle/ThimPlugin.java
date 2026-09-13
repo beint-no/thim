@@ -45,7 +45,7 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getModelPackages().convention(project.provider(() -> java.util.List.of(defaultModelPackage(project))));
         extension.getStrictTemplates().convention(true);
         extension.getFailOnUnusedMessages().convention(true);
-        extension.getFailOnUnusedFragments().convention(true);
+        extension.getFailOnUnusedComponents().convention(true);
         extension.getValidateRoutes().convention(true);
         extension.getGenerateRoutes().convention(false);
         extension.getRoutesName().convention(extension.getRegistryName().map(name ->
@@ -97,7 +97,7 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.modelPackages", extension.getModelPackages().map(packages -> String.join(",", packages)));
         ksp.arg("thim.strictTemplates", extension.getStrictTemplates().map(String::valueOf));
         ksp.arg("thim.failOnUnusedMessages", extension.getFailOnUnusedMessages().map(String::valueOf));
-        ksp.arg("thim.failOnUnusedFragments", extension.getFailOnUnusedFragments().map(String::valueOf));
+        ksp.arg("thim.failOnUnusedComponents", extension.getFailOnUnusedComponents().map(String::valueOf));
         ksp.arg("thim.validateRoutes", extension.getValidateRoutes().map(String::valueOf));
         ksp.arg("thim.generateRoutes", extension.getGenerateRoutes().map(String::valueOf));
         ksp.arg("thim.routesName", extension.getRoutesName());
@@ -223,7 +223,7 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getModelPackages().set(extension.getModelPackages());
         task.getStrictTemplates().set(extension.getStrictTemplates());
         task.getFailOnUnusedMessages().set(extension.getFailOnUnusedMessages());
-        task.getFailOnUnusedFragments().set(extension.getFailOnUnusedFragments());
+        task.getFailOnUnusedComponents().set(extension.getFailOnUnusedComponents());
         task.getValidateRoutes().set(extension.getValidateRoutes());
         task.getGenerateMessages().set(extension.getGenerateMessages());
         task.getMessagesName().set(extension.getMessagesName());

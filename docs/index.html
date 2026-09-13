@@ -46,7 +46,7 @@
                 <p class="lede">
                     Thim is an opinionated compile-time HTML renderer. Templates, translations,
                     and page models are compiler inputs. Missing properties, unused copy, dead
-                    fragments, CSS, and incomplete locales fail compilation. The request path is
+                    components, CSS, and incomplete locales fail compilation. The request path is
                     generated Java writing UTF-8.
                 </p>
                 <div class="actions">
@@ -96,7 +96,7 @@
                     <span class="num">01</span>
                     <h3>Dead code is a compiler error</h3>
                     <p>
-                        Unused page-model properties fail the build. Unused fragments can fail
+                        Unused page-model properties fail the build. Unused components can fail
                         the build. Unused catalog keys fail when you own the bundle. A field
                         that nothing prints is leftover surface area, not a feature.
                     </p>
@@ -188,7 +188,7 @@ fun home() = HomePage(
                 </p>
                 <ul class="checklist">
                     <li>Missing, extra, or mistyped message keys across locales</li>
-                    <li>Unused model properties, fragments, messages, and first-party CSS classes</li>
+                    <li>Unused model properties, components, messages, and first-party CSS classes</li>
                     <li>Mutable models, <code>Any</code>/<code>Object</code>, maps, lazy collections</li>
                     <li>JPA entities on a page model</li>
                     <li>Nullable dereference without <code>?.</code></li>
@@ -334,7 +334,7 @@ salutation:
                         </tr>
                         <tr>
                             <th scope="row">Layouts</th>
-                            <td>Fixed fragments, inlined at compile time</td>
+                            <td>Typed components and lexical slots, linked at compile time</td>
                             <td>Content blocks and template calls</td>
                             <td>Mustache inheritance</td>
                         </tr>
@@ -367,7 +367,7 @@ salutation:
                 The runtime, generated renderers, Spring adapter, and Gradle plugin are
                 Java. A request creates one buffered <code>HtmlOutput</code>, copies static
                 byte ranges, and encodes escaped values into that buffer. It creates no
-                intermediate escaped strings. Composition is erased when fragments are
+                intermediate escaped strings. Composition is erased when components are
                 inlined. Each template jar publishes its registry through
                 <code>ServiceLoader</code>.
             </p>

@@ -1,7 +1,6 @@
 package no.beint.thim.benchmark;
 
-import no.beint.thim.compiler.ElementNode;
-import no.beint.thim.compiler.FragmentExpander;
+import no.beint.thim.compiler.ComponentLinker;
 import no.beint.thim.compiler.Node;
 import no.beint.thim.compiler.TemplateParser;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -46,9 +45,9 @@ public class TemplateCompilerBenchmark {
     public void setup() throws IOException {
         sources = new LinkedHashMap<>();
         if (templatesDirectory.equals("synthetic")) {
-            sources.put("card", "<section th:fragment=\"card(title)\" class=\"card\"><h2 th:text=\"${title}\"></h2></section>");
+            sources.put("card", "<ui:component name=\"card\" props=\"example.Card\"><section class=\"card\"><h2 th:text=\"${title}\"></h2></section></ui:component>");
             sources.put("page", "<main>\n" +
-                    "<div th:replace=\"~{card :: card(${heading})}\"></div>\n".repeat(elements) + "</main>\n");
+                    "<ui:card props=\"${card}\"></ui:card>\n".repeat(elements) + "</main>\n");
         } else {
             var root = Path.of(templatesDirectory);
             try (var files = Files.walk(root)) {
@@ -61,7 +60,7 @@ public class TemplateCompilerBenchmark {
         if (sources.isEmpty()) throw new IllegalArgumentException("No HTML templates in " + templatesDirectory);
         parsed = new LinkedHashMap<>();
         sources.forEach((name, source) -> parsed.put(name, new TemplateParser(name, source).parse()));
-        pages = parsed.entrySet().stream().filter(entry -> !hasFragments(entry.getValue())).map(Map.Entry::getKey).toList();
+        pages = parsed.entrySet().stream().filter(entry -> !new ComponentLinker(parsed).isComponent(entry.getKey())).map(Map.Entry::getKey).toList();
     }
 
     @Benchmark
@@ -70,17 +69,10 @@ public class TemplateCompilerBenchmark {
     }
 
     @Benchmark
-    public void expandFragments(Blackhole blackhole) {
-        var expander = new FragmentExpander(parsed);
-        for (var page : pages) blackhole.consume(expander.expand(page, parsed.get(page)));
-        blackhole.consume(expander.unusedParameters());
+    public void linkComponents(Blackhole blackhole) {
+        var expander = new ComponentLinker(parsed);
+        for (var page : pages) blackhole.consume(expander.expand(parsed.get(page)));
+        blackhole.consume(expander.unusedComponents());
     }
 
-    private static boolean hasFragments(List<Node> nodes) {
-        for (var node : nodes) {
-            if (node instanceof ElementNode element && (element.getAttributes().containsKey("th:fragment") ||
-                    hasFragments(element.getChildren()))) return true;
-        }
-        return false;
-    }
 }

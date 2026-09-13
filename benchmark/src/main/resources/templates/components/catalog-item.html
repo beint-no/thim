@@ -1,0 +1,6 @@
+<ui:component name="catalog-item" props="no.beint.thim.benchmark.page.CatalogItem"><li>
+                <a href="/item/0" th:href="${href}" th:text="${name}">Name</a>
+                <span th:text="${price}">0</span>
+                <em th:if="${featured}" th:text="#{catalog.featured}">Featured</em>
+                <p th:text="${summary}">Summary</p>
+            </li></ui:component>

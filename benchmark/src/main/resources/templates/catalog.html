@@ -9,12 +9,7 @@
         <h1 th:text="#{catalog.title}">Catalog</h1>
         <p th:text="#{catalog.count(size=${size})}">N items</p>
         <ul>
-            <li th:each="item : ${items}">
-                <a href="/item/0" th:href="${item.href}" th:text="${item.name}">Name</a>
-                <span th:text="${item.price}">0</span>
-                <em th:if="${item.featured}" th:text="#{catalog.featured}">Featured</em>
-                <p th:text="${item.summary}">Summary</p>
-            </li>
+            <ui:catalog-item th:each="item : ${items}" props="${item}"/>
         </ul>
     </main>
 </body>

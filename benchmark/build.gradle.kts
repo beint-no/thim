@@ -44,7 +44,7 @@ ksp {
     arg("thim.modelPackages", "no.beint.thim.benchmark.page")
     arg("thim.strictTemplates", "true")
     arg("thim.failOnUnusedMessages", "true")
-    arg("thim.failOnUnusedFragments", "true")
+    arg("thim.failOnUnusedComponents", "true")
     arg("thim.strictModels", "true")
 }
 

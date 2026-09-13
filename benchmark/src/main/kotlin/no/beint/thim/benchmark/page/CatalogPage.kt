@@ -3,7 +3,6 @@ package no.beint.thim.benchmark.page
 import no.beint.thim.TrustedUrl
 
 data class CatalogItem(
-    val id: String,
     val name: String,
     val price: Int,
     val featured: Boolean,

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — breaking component model
+
+- Replace `th:fragment`, `th:replace`, `th:insert` and `th:include` with typed `ui:*` components.
+- Validate each component against its explicit Kotlin/Java contract, independently of callers.
+- Add required/default/named markup slots with caller scope preserved through nested forwarding.
+- Reject unknown component attributes and slots, nullable/incompatible props and recursive composition.
+- Rename `failOnUnusedFragments` to `failOnUnusedComponents`; retain strict defaults.
+- Migrate the example and catalog benchmark. See [consumer migration and rationale](COMPONENTS.md).
+- Keep consumers on their current library version until their templates and models are migrated.
+
 ## 0.11.0
 
 - Keep settings integration in a separate artifact so Kotlin and KSP load on the consumer project classpath.

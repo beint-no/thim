@@ -12,8 +12,11 @@
         <p th:text="#{home.inbox(unreadCount=${unreadCount})}">Unread messages</p>
         <ul>
             <li th:each="feature : ${features}">
-                <th:block th:replace="~{fragments/feature :: feature(${feature})}"></th:block>
-                <a href="/feature/example" th:href="@{/feature/{name}(name=${feature.name},ref='home')}" th:text="#{home.details}">Details</a>
+                <ui:feature props="${feature}">
+                    <ui:fill name="actions">
+                        <a href="/feature/example" th:href="@{/feature/{name}(name=${feature.name},ref='home')}" th:text="#{home.details}">Details</a>
+                    </ui:fill>
+                </ui:feature>
             </li>
         </ul>
         <p th:if="${showFooter}">

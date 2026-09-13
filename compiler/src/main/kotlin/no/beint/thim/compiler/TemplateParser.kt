@@ -12,6 +12,16 @@ internal data class ElementNode(
     val children: MutableList<Node> = mutableListOf(),
 ) : Node
 
+internal data class ComponentNode(
+    val id: Int,
+    val definition: ComponentDefinition,
+    val props: PathExpression?,
+    val location: SourceLocation,
+    val children: List<Node>,
+) : Node
+
+internal data class SlotNode(val owner: Int, val children: List<Node>) : Node
+
 internal class TemplateParser(
     private val templateName: String,
     private val source: String,

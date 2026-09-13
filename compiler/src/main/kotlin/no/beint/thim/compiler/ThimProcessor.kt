@@ -48,7 +48,8 @@ private class ThimProcessor(
         .filter(String::isNotEmpty)
     private val strictTemplates = environment.options["thim.strictTemplates"]?.toBoolean() ?: true
     private val failOnUnusedMessages = environment.options["thim.failOnUnusedMessages"]?.toBoolean() ?: true
-    private val failOnUnusedFragments = environment.options["thim.failOnUnusedFragments"]?.toBoolean() ?: true
+    private val legacyFragmentOption = "thim.failOnUnusedFragments" in environment.options
+    private val failOnUnusedComponents = environment.options["thim.failOnUnusedComponents"]?.toBoolean() ?: true
     private val strictModels = environment.options["thim.strictModels"]?.toBoolean() ?: true
     private val forbiddenModelAnnotations = environment.options["thim.forbiddenModelAnnotations"]
         ?.split(',')
@@ -78,12 +79,20 @@ private class ThimProcessor(
         try {
             validateConfiguration()
             val parsed = parsedTemplates()
-            val expander = FragmentExpander(parsed)
-            val templates = typedTemplates(resolver, parsed).map { template ->
-                template.copy(nodes = expander.expand(template.name, template.nodes))
+            val expander = ComponentLinker(parsed)
+            val componentModels = expander.definitions.values.mapNotNull { definition ->
+                definition.modelName?.let { name ->
+                    val model = resolver.getClassDeclarationByName(resolver.getKSNameFromString(name))
+                        ?: error("${definition.element.location} THIM-COMPONENT-MODEL model '$name' does not exist")
+                    require(model.typeParameters.isEmpty()) { "${definition.element.location} THIM-COMPONENT-MODEL component contracts must be concrete, non-generic classes" }
+                    definition.name to model
+                }
+            }.toMap()
+            val templates = typedTemplates(resolver, parsed.filterKeys { !expander.isComponent(it) }).map { template ->
+                template.copy(nodes = expander.expand(template.nodes))
             }
             val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
-            if (templates.isEmpty()) {
+            if (templates.isEmpty() && expander.definitions.isEmpty()) {
                 if (generateMessages && catalog.definitions().isNotEmpty()) {
                     generateMessages(catalog, emptyArray())
                 } else if (failOnUnusedMessages) {
@@ -99,6 +108,7 @@ private class ThimProcessor(
             if (strictModels) {
                 val checker = StrictModelChecker(forbiddenModelAnnotations)
                 templates.forEach { checker.check(it.model) }
+                componentModels.values.forEach(checker::check)
                 problems += checker.problems
             }
 
@@ -114,13 +124,29 @@ private class ThimProcessor(
             }
             val staticContent = StaticContent()
             val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName, strictModels)
+            generator.componentModels = componentModels
+            val unusedComponents = expander.unusedComponents()
+            val validation = RendererGenerator(catalog, routeCatalog, StaticContent(), registryName, strictModels)
+            validation.componentModels = componentModels
+            expander.definitions.values.forEach { definition ->
+                validation.validateComponent(definition, expander.validationNodes(definition))
+            }
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }
+            problems += validation.errors
             problems += generator.errors
             collect(problems) { if (!generateMessages && failOnUnusedMessages) catalog.requireAllUsed() }
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
-            collect(problems) { reportUnusedFragments(expander) }
+            collect(problems) { reportUnusedComponents(unusedComponents) }
+            if (strictModels) {
+                componentModels.forEach { (name, model) ->
+                    val used = validation.usedComponentProperties[name].orEmpty()
+                    modelProperties(model).filter { property -> property.aliases.none(used::contains) }.forEach {
+                        problems += "THIM-COMPONENT-PROPERTY-UNUSED $name: property '${it.name}' is not used"
+                    }
+                }
+            }
             val documentChecker = DocumentChecker(logger::warn)
             templates.forEach { documentChecker.check(it.nodes) }
             problems += documentChecker.problems
@@ -129,7 +155,7 @@ private class ThimProcessor(
                 completed = true
                 return emptyList()
             }
-            generate(compiled, staticContent.bytes(), extractedRoutes)
+            if (compiled.isNotEmpty()) generate(compiled, staticContent.bytes(), extractedRoutes, componentModels.values.mapNotNull { it.containingFile })
             if (generateMessages && catalog.definitions().isNotEmpty()) {
                 val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
                 generateMessages(catalog, files)
@@ -155,28 +181,12 @@ private class ThimProcessor(
         }
     }
 
-    private fun reportUnusedFragments(expander: FragmentExpander) {
-        val unusedParameters = expander.unusedParameters()
-        if (unusedParameters.isNotEmpty()) {
-            if (failOnUnusedFragments) {
-                diagnostic(
-                    "THIM-FRAGMENT-PARAMETER-UNUSED",
-                    null,
-                    "fragment parameters never used: ${unusedParameters.joinToString(", ")}",
-                )
-            } else {
-                unusedParameters.forEach {
-                    logger.warn("THIM-FRAGMENT-PARAMETER-UNUSED '$it' is never used by the fragment")
-                }
-            }
-        }
-        val unused = expander.unusedFragments()
-        if (unused.isNotEmpty()) {
-            if (failOnUnusedFragments) {
-                diagnostic("THIM-FRAGMENT-UNUSED", null, "fragments never used by a compiled page: ${unused.joinToString(", ")}")
-            } else {
-                unused.forEach { logger.warn("THIM-FRAGMENT-UNUSED fragment '$it' is never used by a compiled page") }
-            }
+    private fun reportUnusedComponents(unused: List<String>) {
+        if (unused.isEmpty()) return
+        if (failOnUnusedComponents) {
+            diagnostic("THIM-COMPONENT-UNUSED", null, "components never used by a compiled page: ${unused.joinToString(", ")}")
+        } else {
+            unused.forEach { logger.warn("THIM-COMPONENT-UNUSED component '$it' is never used by a compiled page") }
         }
     }
 
@@ -191,8 +201,8 @@ private class ThimProcessor(
         diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog) {
-        val files = (compiled.mapNotNull { it.model.containingFile } + routeCatalog.files).distinct().toTypedArray()
+    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog, componentFiles: List<com.google.devtools.ksp.symbol.KSFile>) {
+        val files = (compiled.mapNotNull { it.model.containingFile } + routeCatalog.files + componentFiles).distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
         codeGenerator.createNewFile(
             dependencies = dependencies,
@@ -321,7 +331,7 @@ private class ThimProcessor(
             require(models.size <= 1) { "$name: model '${conventionalModelName(name)}' exists in multiple configured packages" }
             val model = models.singleOrNull()
             if (model == null) {
-                if (strictTemplates && !nodes.hasFragments()) {
+                if (strictTemplates) {
                     error("$name: model '${conventionalModelName(name)}' does not exist in $modelPackages")
                 }
                 return@mapNotNull null
@@ -336,6 +346,7 @@ private class ThimProcessor(
         .removeSuffix(".html")
 
     private fun validateConfiguration() {
+        require(!legacyFragmentOption) { "thim.failOnUnusedFragments was removed; use thim.failOnUnusedComponents" }
         require(Files.isDirectory(templatesDirectory)) { "Template directory does not exist: $templatesDirectory" }
         require(generatedPackage.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
             "Invalid generated package '$generatedPackage'"
@@ -361,10 +372,9 @@ private class ThimProcessor(
     }
 }
 
-private fun List<Node>.hasFragments(): Boolean =
-    asSequence().flatMap(Node::elements).any { "th:fragment" in it.attributes }
-
 internal fun Node.elements(): Sequence<ElementNode> = when (this) {
     is ElementNode -> sequenceOf(this) + children.asSequence().flatMap(Node::elements)
+    is ComponentNode -> children.asSequence().flatMap(Node::elements)
+    is SlotNode -> children.asSequence().flatMap(Node::elements)
     is RawNode -> emptySequence()
 }

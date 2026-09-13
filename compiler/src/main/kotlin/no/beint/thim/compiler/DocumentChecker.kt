@@ -17,6 +17,7 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
     val problems = mutableListOf<String>()
 
     fun check(nodes: List<Node>) {
+        val nodes = nodes.flatMap(::documentNodes)
         val root = nodes.firstOrNull { it is ElementNode } as? ElementNode ?: return
         if (root.name != "html") return
         val ids = linkedMapOf<String, MutableList<DeclaredId>>()
@@ -29,6 +30,13 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
         }
         nodes.forEach { checkReferences(it, ids.keys) }
         nodes.forEach { checkNestedForms(it, inForm = false) }
+    }
+
+    private fun documentNodes(node: Node): List<Node> = when (node) {
+        is ComponentNode -> node.children.flatMap(::documentNodes)
+        is SlotNode -> node.children.flatMap(::documentNodes)
+        is ElementNode -> listOf(node.copy(children = node.children.flatMap(::documentNodes).toMutableList()))
+        is RawNode -> listOf(node)
     }
 
     private fun report(code: String, location: SourceLocation, message: String) {

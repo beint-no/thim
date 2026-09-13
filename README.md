@@ -6,6 +6,14 @@ The marketing site is at [beint-no.github.io/thim](https://beint-no.github.io/th
 
 Thim requires JDK 26 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
+## Breaking component migration (unreleased)
+
+This branch replaces fragment composition with typed HTML components. `th:fragment`,
+`th:replace`, `th:insert` and `th:include` are removed, not deprecated. Consumer templates
+must migrate together with their library upgrade. Kotlin/Java owns component model
+construction and defaults; HTML owns markup and named slots. There is no runtime
+component system. Read [COMPONENTS.md](COMPONENTS.md) before upgrading from 0.11.
+
 ## Isolated Projects
 
 Thim 0.11 uses Gradle's isolated lifecycle callbacks and published project artifacts for build-wide validation.
@@ -106,9 +114,9 @@ thim {
 
 Thim deliberately owns its default source layout: templates go in `src/main/resources/templates`, and message catalogs go in `src/main/resources/i18n`. Supported locales are inferred from the locale directories. Set `defaultLocale` only when it is not `en`. Override a source directory only for a migration or generated-source workflow.
 
-The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Fixed `th:replace` fragments and layouts are linked and inlined during compilation; fragment libraries need no page model.
+The default model package is `<project group>.page`. Nested template names are part of the class name: `error/404.html` resolves to `Error404Page`. Typed `ui:*` components and layouts are linked during compilation. Each component declares its own model, or explicitly accepts no data. See [the component contract and migration guide](COMPONENTS.md).
 
-Every page template must have a matching model by default. Unused messages, fragments and fragment parameters also fail the build by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedFragments` to `false` only for a deliberate open-world or migration boundary.
+Every page template must have a matching model by default. Unused messages, components and component properties also fail the build by default. Set `strictTemplates`, `failOnUnusedMessages`, or `failOnUnusedComponents` to `false` only for a deliberate open-world or migration boundary.
 
 Page models are strict by default: they must be immutable, render-only data. Thim rejects mutable or unused properties, `Any`/`Object`, maps, `MutableList`/`MutableSet` and other mutable collection types, raw or lazy collections, and persistence entities.
 
@@ -120,7 +128,7 @@ For gradual migration, keep the conventional template directory shared and confi
 thim {
     strictTemplates.set(false)
     failOnUnusedMessages.set(false)
-    failOnUnusedFragments.set(false)
+    failOnUnusedComponents.set(false)
 }
 ```
 
@@ -286,7 +294,7 @@ Thim accepts:
 - `th:text` of String, number, Boolean, enum, UUID, or `java.time` values
 - `th:each`
 - `th:if` and `th:unless`
-- fixed, build-time `th:fragment` and `th:replace` composition
+- typed `<ui:name props="${model}">` composition with lexical default/named slots
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
 - `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action` (not `javascript:` or blank values)
 - conditional HTML boolean attributes
@@ -295,7 +303,7 @@ Thim accepts:
 
 Every dynamic value is encoded for its output context. Use static `@{...}` expressions or `TrustedUrl` for URLs, and use `SafeHtml` only with `th:utext`. Dynamic JavaScript, CSS and event-handler content is rejected.
 
-Missing models, properties, messages and routes; unsafe nullable access; malformed HTML; nested forms; duplicate fragments; and unsupported output contexts fail compilation. Prepare computed display values in the page model.
+Missing models, properties, messages and routes; unsafe nullable access; malformed HTML; nested forms; duplicate components; and unsupported output contexts fail compilation. Prepare computed display values in the page model.
 
 ## Modules
 
@@ -323,8 +331,8 @@ For a longer local run that is better at guiding speed work:
 ./gradlew :benchmark:jmh
 ```
 
-`TemplateCompilerBenchmark` measures parsing and fragment expansion separately from KSP and Java compilation.
-Its default fixtures contain 100 and 1,000 fragment calls. To measure an application's existing templates:
+`TemplateCompilerBenchmark` measures parsing and component linking separately from KSP and Java compilation.
+Its default fixtures contain 100 and 1,000 component calls. To measure an application's existing templates:
 
 ```shell
 ./gradlew :benchmark:jmhJar
@@ -333,8 +341,8 @@ java -jar benchmark/build/libs/benchmark-0.11.0-jmh.jar TemplateCompilerBenchmar
   -f 2 -prof gc
 ```
 
-Sources are loaded before measurement. Parsing covers every HTML file; fragment expansion covers templates
-without fragment declarations, since the benchmark does not resolve page models. `elements` controls only
+Sources are loaded before measurement. Parsing covers every HTML file; component linking covers templates
+without component declarations, since the benchmark does not resolve page models. `elements` controls only
 the synthetic fixture. These measurements describe compiler phases, not total application build time.
 
 See [the September 2026 performance audit](PERFORMANCE_AUDIT.md) for measured improvements and follow-up opportunities.

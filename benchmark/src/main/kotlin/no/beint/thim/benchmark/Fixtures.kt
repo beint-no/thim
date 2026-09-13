@@ -34,7 +34,6 @@ object Fixtures {
         val items = List(itemCount) { index ->
             val id = (index + 1).toString()
             CatalogItem(
-                id = id,
                 name = "Item $id",
                 price = 199 + index,
                 featured = index % 7 == 0,

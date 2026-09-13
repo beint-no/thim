@@ -13,7 +13,7 @@ Thim optimizes for four properties:
 
 1. The Gradle plugin tracks HTML, strict YAML message catalogs and model sources.
 2. KSP resolves a page-model class from the template filename and configured model packages.
-3. The compiler links fixed layouts and fragments, then validates properties, nullability, locale/key/argument parity, plural and select rules, and supported directives.
+3. The compiler links typed components and layouts, then validates properties, nullability, locale/key/argument parity, plural and select rules, and supported directives.
 4. It emits readable Java renderers and one package-local resource containing static UTF-8 content.
 5. Each template jar publishes its generated registry through Java's service loader.
 
@@ -31,7 +31,7 @@ The generated code consists of ordinary named classes, methods and branches. Gen
 
 The template language is intentionally limited to statically resolvable property paths, conditions, iteration, attributes, URLs and messages. It has no runtime evaluator, reflective dispatch, OGNL utility objects, coercion rules or dynamic template selection. An `<html>` element without `lang` or `th:lang` receives the request locale's language at render time.
 
-Layouts and fragments link fixed templates and typed values during compilation. Composition is erased from the request path and cannot introduce runtime template lookup or a general expression language.
+Components and layouts bind explicit immutable model types and lexically scoped markup slots during compilation. Legacy fragment composition is rejected; see [COMPONENTS.md](COMPONENTS.md). Composition is erased from the request path and cannot introduce runtime template lookup or a general expression language.
 
 ## Frameworks and JDK
 
