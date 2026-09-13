@@ -105,6 +105,10 @@ internal class FragmentExpander(
     }
 
     private fun binding(value: String, origin: String, bindings: Map<String, Binding>): Binding {
+        variablePattern.matchEntire(value.trim())?.let { match ->
+            val bound = bindings[match.groupValues[1]]
+            if (bound is FragmentBinding) return bound
+        }
         val substituted = substitute(value, bindings).trim()
         return if (substituted.startsWith("~{")) {
             FragmentBinding(reference(substituted, origin, bindings))
@@ -165,6 +169,10 @@ internal class FragmentExpander(
     }
 
     private fun substituteExpression(expression: String, bindings: Map<String, Binding>): String {
+        variablePattern.matchEntire(expression)?.let { match ->
+            val bound = bindings[match.groupValues[1]]
+            if (bound is ValueBinding) return bound.value
+        }
         var result = expression
         bindings.forEach { (name, binding) ->
             if (binding is ValueBinding) {
@@ -172,7 +180,7 @@ internal class FragmentExpander(
                     .takeIf { it.startsWith("\${") && it.endsWith('}') }
                     ?.substring(2, binding.value.length - 1)
                     ?: binding.value
-                result = identifier(name).replace(result, replacement)
+                result = identifier(name).replace(result) { replacement }
             }
         }
         return result
