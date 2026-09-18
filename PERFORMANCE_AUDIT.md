@@ -359,6 +359,19 @@ templates. Measured on ReAI (344 renderers), build cache disabled, `--info`:
 | Forced `:web-app:kspKotlin` | 8.0–11.6 s | 5.5–7.9 s (within daemon noise) |
 | Static resources | 1.6 MB, deduplicated | 6.5 MB, one per template |
 
+The whole edit loop (`:web-app:classes` after touching one template, warm daemon, build
+cache disabled, three repetitions each):
+
+| Task | 0.11.2 single source | Per-template sources |
+| --- | ---: | ---: |
+| `:web-app:kspKotlin` | 3.0–4.0 s | 4.5–4.9 s |
+| `:web-app:compileKotlin` | 1.0–1.2 s | 0.06–0.09 s |
+| `:web-app:compileJava` | 6.1–6.3 s | 0.26–0.28 s |
+| Total build | 10.4–12.1 s | 5.2–5.6 s |
+
+Kotlin's incremental compilation benefits as well, because only one Java source on its
+source path changes. KSP is now the dominant cost of a template edit.
+
 The first attempt kept the `ThimRenderer` class suffix. Gradle's previous-compilation data
 still listed every renderer class under `ThimTemplates.java` after the layout change, so the
 next one-template edit deleted all 345 class files while passing two sources to javac, and
