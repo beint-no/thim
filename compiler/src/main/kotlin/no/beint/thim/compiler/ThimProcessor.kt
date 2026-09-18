@@ -84,10 +84,8 @@ private class ThimProcessor(
             }
             val catalog = MessageCatalog.load(messagesDirectory, defaultLocale, supportedLocales)
             if (templates.isEmpty()) {
-                if (generateMessages && catalog.definitions().isNotEmpty()) {
+                if (catalog.definitions().isNotEmpty()) {
                     generateMessages(catalog, emptyArray())
-                } else if (failOnUnusedMessages) {
-                    catalog.requireAllUsed()
                 }
                 completed = true
                 return emptyList()
@@ -118,7 +116,6 @@ private class ThimProcessor(
                 generator.compile(template.name, template.model, template.nodes)
             }
             problems += generator.errors
-            collect(problems) { if (!generateMessages && failOnUnusedMessages) catalog.requireAllUsed() }
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
             collect(problems) { reportUnusedFragments(expander) }
             val documentChecker = DocumentChecker(logger::warn)
@@ -130,7 +127,7 @@ private class ThimProcessor(
                 return emptyList()
             }
             generate(compiled, staticContent.bytes(), extractedRoutes)
-            if (generateMessages && catalog.definitions().isNotEmpty()) {
+            if (catalog.definitions().isNotEmpty()) {
                 val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
                 generateMessages(catalog, files)
             }
@@ -217,35 +214,56 @@ private class ThimProcessor(
             output.appendLine("public final class $registryName implements TemplateSet {")
             output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($registryName.class, \"$registryName.bin\");")
             output.appendLine()
+            output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain below only")
+            output.appendLine("    // serves subclasses of open models, matching the previous linear dispatch.")
+            output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = java.util.Map.ofEntries(")
+            output.appendLine(compiled.withIndex().joinToString(",\n") { (index, template) ->
+                "        java.util.Map.entry(${template.model.qualifiedName!!.asString()}.class, $index)"
+            })
+            output.appendLine("    );")
+            output.appendLine()
+            output.appendLine("    private static final boolean[] REQUEST_DATA_VALUES = {")
+            output.appendLine("        " + compiled.joinToString(", ") { it.usesRequestDataValues.toString() })
+            output.appendLine("    };")
+            output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public boolean supports(Class<?> modelType) {")
-            output.appendLine("        return " + compiled.joinToString(" ||\n            ") {
-                "modelType == ${it.model.qualifiedName!!.asString()}.class"
-            } + ";")
+            output.appendLine("        return INDEX.containsKey(modelType);")
             output.appendLine("    }")
             output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public boolean supportsReturnType(Class<?> returnType) {")
             output.appendLine("        // Spring supplies the runtime type when a value exists; Object chiefly represents a null return.")
-            output.appendLine("        return returnType != Object.class && (" + compiled.joinToString(" ||\n            ") {
+            output.appendLine("        if (returnType == Object.class) {")
+            output.appendLine("            return false;")
+            output.appendLine("        }")
+            output.appendLine("        if (INDEX.containsKey(returnType)) {")
+            output.appendLine("            return true;")
+            output.appendLine("        }")
+            output.appendLine("        return " + compiled.joinToString(" ||\n            ") {
                 "returnType.isAssignableFrom(${it.model.qualifiedName!!.asString()}.class)"
-            } + ");")
+            } + ";")
             output.appendLine("    }")
             output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public boolean usesRequestDataValues(Class<?> modelType) {")
-            val requestDataTemplates = compiled.filter { it.usesRequestDataValues }
-            output.appendLine(if (requestDataTemplates.isEmpty()) {
-                "        return false;"
-            } else {
-                "        return " + requestDataTemplates.joinToString(" ||\n            ") {
-                    "modelType == ${it.model.qualifiedName!!.asString()}.class"
-                } + ";"
-            })
+            output.appendLine("        var index = INDEX.get(modelType);")
+            output.appendLine("        return index != null && REQUEST_DATA_VALUES[index];")
             output.appendLine("    }")
             output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public void render(Object model, RenderContext context, HtmlOutput output) throws IOException {")
+            output.appendLine("        var index = INDEX.get(model.getClass());")
+            output.appendLine("        if (index != null) {")
+            output.appendLine("            switch (index) {")
+            compiled.forEachIndexed { index, template ->
+                val modelName = template.model.qualifiedName!!.asString()
+                output.appendLine("                case $index -> ${template.rendererName}.render(($modelName) model, context, output);")
+            }
+            output.appendLine("                default -> throw new IllegalStateException(\"Unknown template index \" + index);")
+            output.appendLine("            }")
+            output.appendLine("            return;")
+            output.appendLine("        }")
             compiled.forEach {
                 val modelName = it.model.qualifiedName!!.asString()
                 output.appendLine("        if (model instanceof $modelName typed) {")
@@ -276,16 +294,23 @@ private class ThimProcessor(
         }
     }
 
+    /**
+     * The usage manifest is written whenever a catalog exists, even when this module skips
+     * the typed factory class. Build-wide dead-key detection then sees this module's template
+     * usage, so a module can share a catalog whose factories another module generates.
+     */
     private fun generateMessages(catalog: MessageCatalog, files: Array<com.google.devtools.ksp.symbol.KSFile>) {
         val dependencies = Dependencies(aggregating = true, *files)
         val generator = MessageGenerator(catalog)
-        codeGenerator.createNewFile(
-            dependencies = dependencies,
-            packageName = generatedPackage,
-            fileName = messagesName,
-            extensionName = "java",
-        ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.append(generator.generate(generatedPackage, messagesName))
+        if (generateMessages) {
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = messagesName,
+                extensionName = "java",
+            ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+                output.append(generator.generate(generatedPackage, messagesName))
+            }
         }
         codeGenerator.createNewFileByPath(
             dependencies = dependencies,

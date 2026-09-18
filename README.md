@@ -71,7 +71,7 @@ pluginManagement {
 }
 
 plugins {
-    id("no.beint.thim.settings") version "0.11.1"
+    id("no.beint.thim.settings") version "0.11.2"
 }
 ```
 
@@ -93,7 +93,7 @@ plugins {
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.11.1")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.11.2")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -218,7 +218,7 @@ Keys, argument names, argument kinds, locale branches, selects and plural rules 
 
 Argument-free messages also expose compile-time constant references for APIs such as Jakarta Bean Validation annotations, where Java only permits constant annotation arguments. For example, `message = WebAppMessages.Validation.requiredReference` produces a generated catalog-specific `{thim:…}` reference. Framework integration can recognize it with `WebAppMessages.isReference(...)` and resolve it through `WebAppMessages.resolveReference(..., locale)`. Removing the catalog entry or adding arguments removes the generated constant and breaks the consumer at compilation.
 
-The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Generating a factory does not count as usage: a key remains dead until a template, factory call, or annotation reference actually consumes it. Set `generateMessages` to `false` only when a module intentionally wants template-only catalogs and no typed backend API.
+The generated class defaults to the registry name with a `Templates` suffix replaced by `Messages`, so `WebAppTemplates` produces `WebAppMessages`. Set `messagesName` to override it. Generating a factory does not count as usage: a key remains dead until a template, factory call, or annotation reference actually consumes it. Set `generateMessages` to `false` when a module only renders templates from a catalog whose factories another module in the same build already generates, or when it intentionally wants no typed backend API. The module still records its template usage for the build-wide dead-key check, so one catalog needs one factory class, not one per module.
 
 Catalogs use a deliberately small YAML 1.2 profile: mappings and string scalars only. The failsafe schema means plain `no`, `true`, `12` and `2026-08-08` remain text. Duplicate keys, tags, anchors, aliases, sequences, multiple documents, empty catalogs and non-YAML files are rejected. Block scalars are supported for multiline copy. Only the lowercase `.yaml` extension is accepted.
 
@@ -328,7 +328,7 @@ Its default fixtures contain 100 and 1,000 fragment calls. To measure an applica
 
 ```shell
 ./gradlew :benchmark:jmhJar
-java -jar benchmark/build/libs/benchmark-0.11.1-jmh.jar TemplateCompilerBenchmark \
+java -jar benchmark/build/libs/benchmark-0.11.2-jmh.jar TemplateCompilerBenchmark \
   -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
   -f 2 -prof gc
 ```
