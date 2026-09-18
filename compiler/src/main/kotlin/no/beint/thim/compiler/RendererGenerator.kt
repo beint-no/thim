@@ -56,7 +56,11 @@ internal class RendererGenerator(
 
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
-        val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
+        // The suffix differs from the single-file layout's "ThimRenderer" on purpose: Gradle's
+        // incremental Java compilation keeps the registry file's stale class list across the
+        // layout change, and reusing those class names made it delete every renderer class
+        // while recompiling only the edited one.
+        val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "Renderer"
         val staticContent = StaticContent()
         val code = CodeWriter(staticContent)
         val locales = if (usesMessages(nodes)) {

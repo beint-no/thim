@@ -74,7 +74,7 @@ class GeneratedRendererTest {
 
     @Test
     void partitionsLargeRenderersBelowTheHotSpotHugeMethodThreshold() throws IOException {
-        var resource = "/no/beint/thim/example/generated/no_beint_thim_example_page_LargePageThimRenderer.class";
+        var resource = "/no/beint/thim/example/generated/no_beint_thim_example_page_LargePageRenderer.class";
         byte[] bytes;
         try (var input = getClass().getResourceAsStream(resource)) {
             bytes = input.readAllBytes();
