@@ -92,11 +92,6 @@ internal class MessageCatalog private constructor(
         return definition
     }
 
-    fun requireAllUsed() {
-        val unused = definitions.keys - used
-        require(unused.isEmpty()) { "Unused messages: ${unused.sorted()}" }
-    }
-
     fun definitions(): Map<String, MessageDefinition> = definitions
 
     fun usedKeys(): Set<String> = used.toSet()

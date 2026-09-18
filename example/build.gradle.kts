@@ -37,6 +37,8 @@ ksp {
     arg("thim.package", "no.beint.thim.example.generated")
     arg("thim.registry", "ExampleTemplates")
     arg("thim.generateRoutes", "true")
+    // The example uses no typed factories, so it also exercises the manifest-only catalog path.
+    arg("thim.generateMessages", "false")
     arg("thim.modelPackages", "no.beint.thim.example.page")
 }
 

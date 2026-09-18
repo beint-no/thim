@@ -257,3 +257,88 @@ java -jar benchmark/build/libs/benchmark-0.10.2-jmh.jar MessageBenchmark \
 
 For the before run, use the same `MessageBenchmark.java` with the 0.10.1 compiler
 and regenerate the benchmark's message classes before building its JMH jar.
+
+## 0.11.2 follow-up — 18 September 2026
+
+A second pass measured the remaining runtime and build-time candidates with JMH scratch
+benchmarks (Apple M5 Max, OpenJDK 27, two forks, three one-second warmups, five one-second
+measurements) and a profiled ReAI build (422 templates, 339 compiled renderers, 9,597
+message factories). The benchmark sources are not part of the repository; the
+`DispatchBench` shape is a 422-record replica of the generated registry.
+
+### Registry dispatch (implemented)
+
+The generated `TemplateSet` resolved page models linearly: an `==` chain in `supports`,
+an `instanceof` chain in `render`, a chain in `usesRequestDataValues`, and an
+`isAssignableFrom` chain in `supportsReturnType`. Spring's return-value composite does not
+cache handler selection, so each request paid every chain.
+
+| Model position of 422 | Linear `supports` ×2 + `render` | `Map.ofEntries` index + `switch` |
+| --- | ---: | ---: |
+| first | 28.8 ± 0.8 ns | 4.3 ± 0.1 ns |
+| middle | 597.1 ± 9.8 ns | 6.0 ± 0.3 ns |
+| last | 1,165.7 ± 9.3 ns | 7.1 ± 2.0 ns |
+
+ReAI pages render in roughly 6–40 µs, so the chains were 1–15% of render time depending
+on where a page sat in the registry. The registry now keeps a `Map<Class<?>, Integer>`
+constant plus an int switch and retains the `instanceof` chain only as a fallback for
+subclasses of open models, which `supports` never accepted anyway.
+
+The index is filled imperatively in a static helper. A first version used one
+`Map.ofEntries(...)` call, and javac's inference over 344 distinct `Class` arguments took
+14.4 s for ReAI's 14.8 MB generated source; the same file with `HashMap.put` calls compiles
+in 2.8 s. The previous `instanceof` chain was also expensive for javac: ReAI's
+`:web-app:compileJava` fell from 10.8 s to 6.3 s in a profiled build, with the messages
+class removal below accounting for the rest.
+
+### Shared catalogs (implemented)
+
+ReAI's `:i18n` module generates `I18nMessages` from the web-app catalog and 414 files use
+it; `:web-app` generated a second `ThimMessages` from the same directory with three uses.
+That second 7.6 MB source cost 2.84 s of javac wall time (10.75 s CPU) and 5.3 MB of
+classes in the application jar. `generateMessages=false` was unusable for the web-app
+because the processor then skipped the usage manifest and ran a module-local unused check,
+which fails on backend-only keys. The manifest is now written whenever a catalog exists.
+
+Profiled ReAI tasks after a template edit, before this change: `:web-app:kspKotlin` 5.2 s,
+`:web-app:compileJava` 10.8 s (14.5 MB `ThimTemplates.java` plus the messages class),
+`:web-app:compileKotlin` 11.7 s, `thimCssUsageCheck` 1.1 s, `thimMessageUsageCheck`
+under 0.7 s. The two usage checks are not worth optimizing. With web-app on
+`generateMessages=false` and the new registry: `:web-app:kspKotlin` 4.1 s,
+`:web-app:compileJava` 6.3 s, `thimMessageUsageCheck` 0.6 s reporting 9,653 messages
+and 0 unused across the shared catalog.
+
+### Servlet response buffering (rejected)
+
+`ThimRenderer.renderResponse` renders through a 1 KiB `HtmlOutput` into an 8 KiB
+`ByteArrayOutputStream` and copies the body into the servlet stream. Larger buffers help
+medium pages and hurt small ones, because the cost moves from growth copies to zeroing:
+
+| Response | 8 KiB / 1 KiB (current) | 16 KiB / 4 KiB | 32 KiB / 8 KiB |
+| --- | ---: | ---: | ---: |
+| empty inbox, ~0.5 KB | 328 ± 13 ns | 426 ± 24 ns | 557 ± 7 ns |
+| static page, 3.4 KB | 387 ± 9 ns | 592 ± 4 ns | 723 ± 6 ns |
+| 50-item catalog | 7,612 ± 1,951 ns | 6,469 ± 532 ns | 6,343 ± 35 ns |
+| 300-item catalog | 41,694 ± 340 ns | 40,760 ± 618 ns | 40,552 ± 523 ns |
+
+HTMX partials dominate ReAI's request mix, so the sizes stay as they are. Rendering
+straight into the response stream measured 5.9 µs and 35.9 µs for the two catalogs, a
+12–15% ceiling that only streaming can reach; that changes Content-Length and failure
+semantics and remains separate design work.
+
+### Text encoding fast path (rejected)
+
+A run-copy fast path in `HtmlOutput.text(String)` was byte-identical to the current loop
+over 39,000 random strings at every buffer size from 4 to 40 bytes, but it only wins on
+long plain-ASCII runs and loses on the text these applications render:
+
+| Input | Current | Run-copy |
+| --- | ---: | ---: |
+| "Item 42" | 7.1 ± 0.0 ns | 7.9 ± 0.2 ns |
+| 60-char sentence with `&` and `<` | 70.2 ± 0.4 ns | 47.9 ± 0.7 ns |
+| 1.9 KB ASCII | 1,107.5 ± 15.9 ns | 961.6 ± 2.3 ns |
+| escape-heavy | 1,074.8 ± 42.9 ns | 1,384.7 ± 22.3 ns |
+| Norwegian with æøå | 634.4 ± 10.2 ns | 1,134.1 ± 4.3 ns |
+
+The current per-character loop runs at about 0.6 ns per character, close to the copy
+floor, and stays.
