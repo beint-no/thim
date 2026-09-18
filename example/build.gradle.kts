@@ -27,6 +27,7 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("thim.golden.record", System.getProperty("thim.golden.record", "false"))
 }
 
 ksp {

@@ -10,16 +10,13 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
 /**
- * One renderer class and its own static UTF-8 content. Keeping each template's output
- * independent of every other template makes the generated file for an unchanged
- * template byte-identical between builds, so Gradle's incremental Java compilation
- * recompiles only the renderer whose template changed.
+ * One renderer class. Its static UTF-8 content lives in the shared [StaticContent] of the
+ * generated source file it is grouped into, referenced through that file's holder class.
  */
 internal data class CompiledTemplate(
     val model: KSClassDeclaration,
     val rendererName: String,
     val source: String,
-    val staticContent: ByteArray,
     val usesRequestDataValues: Boolean,
 )
 
@@ -54,15 +51,25 @@ internal class RendererGenerator(
     fun usedRootProperties(model: KSClassDeclaration): Set<String> =
         usedRootProperties[model.qualifiedName?.asString()] ?: emptySet()
 
-    fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
+    /**
+     * [staticContent] and [holderName] belong to the generated source file this renderer is
+     * grouped into: static runs are appended to that file's shared content and referenced as
+     * `holderName.STATIC`.
+     */
+    fun compile(
+        templateName: String,
+        model: KSClassDeclaration,
+        nodes: List<Node>,
+        staticContent: StaticContent,
+        holderName: String,
+    ): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
         // The suffix differs from the single-file layout's "ThimRenderer" on purpose: Gradle's
         // incremental Java compilation keeps the registry file's stale class list across the
         // layout change, and reusing those class names made it delete every renderer class
         // while recompiling only the edited one.
         val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "Renderer"
-        val staticContent = StaticContent()
-        val code = CodeWriter(staticContent)
+        val code = CodeWriter(staticContent, holderName)
         val locales = if (usesMessages(nodes)) {
             catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
         } else {
@@ -85,8 +92,6 @@ internal class RendererGenerator(
 
         code.line("final class $rendererName {")
         code.indent {
-            code.line("static final byte[] STATIC = HtmlOutput.resource($rendererName.class, \"$rendererName.bin\");")
-            code.line()
             code.line("private $rendererName() {}")
             code.line()
             code.line("static void render($modelName model, RenderContext context, HtmlOutput output) throws IOException {")
@@ -137,7 +142,7 @@ internal class RendererGenerator(
         }
         code.line("}")
         val source = code.toString()
-        return CompiledTemplate(model, rendererName, source, staticContent.bytes(), "context.requestDataValues()" in source)
+        return CompiledTemplate(model, rendererName, source, "context.requestDataValues()" in source)
     }
 
     private fun renderNodes(nodes: List<Node>, scope: Scope, code: CodeWriter, context: String) {
@@ -1434,6 +1439,7 @@ internal class RendererGenerator(
 
     private class CodeWriter(
         private val staticContent: StaticContent,
+        private val holderName: String,
     ) {
         private val output = StringBuilder()
         private val pending = StringBuilder()
@@ -1475,7 +1481,7 @@ internal class RendererGenerator(
             if (pending.isEmpty()) return
             val range = staticContent.append(pending.toString())
             output.append("    ".repeat(depth))
-                .append("output.raw(STATIC, ")
+                .append("output.raw($holderName.STATIC, ")
                 .append(range.first)
                 .append(", ")
                 .append(range.last - range.first + 1)
