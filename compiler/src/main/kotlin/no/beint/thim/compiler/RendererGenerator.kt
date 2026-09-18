@@ -9,10 +9,17 @@ import com.google.devtools.ksp.symbol.Nullability
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
+/**
+ * One renderer class and its own static UTF-8 content. Keeping each template's output
+ * independent of every other template makes the generated file for an unchanged
+ * template byte-identical between builds, so Gradle's incremental Java compilation
+ * recompiles only the renderer whose template changed.
+ */
 internal data class CompiledTemplate(
     val model: KSClassDeclaration,
     val rendererName: String,
     val source: String,
+    val staticContent: ByteArray,
     val usesRequestDataValues: Boolean,
 )
 
@@ -32,8 +39,6 @@ internal class StaticContent {
 internal class RendererGenerator(
     private val catalog: MessageCatalog,
     private val routes: RouteCatalog,
-    private val staticContent: StaticContent,
-    private val registryName: String,
     private val strictModels: Boolean = false,
 ) {
     private var generatedVariable = 0
@@ -52,7 +57,8 @@ internal class RendererGenerator(
     fun compile(templateName: String, model: KSClassDeclaration, nodes: List<Node>): CompiledTemplate {
         val modelName = model.qualifiedName?.asString() ?: error("$templateName: model must have a qualified name")
         val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "ThimRenderer"
-        val code = CodeWriter(staticContent, registryName)
+        val staticContent = StaticContent()
+        val code = CodeWriter(staticContent)
         val locales = if (usesMessages(nodes)) {
             catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
         } else {
@@ -75,6 +81,8 @@ internal class RendererGenerator(
 
         code.line("final class $rendererName {")
         code.indent {
+            code.line("static final byte[] STATIC = HtmlOutput.resource($rendererName.class, \"$rendererName.bin\");")
+            code.line()
             code.line("private $rendererName() {}")
             code.line()
             code.line("static void render($modelName model, RenderContext context, HtmlOutput output) throws IOException {")
@@ -125,7 +133,7 @@ internal class RendererGenerator(
         }
         code.line("}")
         val source = code.toString()
-        return CompiledTemplate(model, rendererName, source, "context.requestDataValues()" in source)
+        return CompiledTemplate(model, rendererName, source, staticContent.bytes(), "context.requestDataValues()" in source)
     }
 
     private fun renderNodes(nodes: List<Node>, scope: Scope, code: CodeWriter, context: String) {
@@ -1422,7 +1430,6 @@ internal class RendererGenerator(
 
     private class CodeWriter(
         private val staticContent: StaticContent,
-        private val registryName: String,
     ) {
         private val output = StringBuilder()
         private val pending = StringBuilder()
@@ -1464,7 +1471,7 @@ internal class RendererGenerator(
             if (pending.isEmpty()) return
             val range = staticContent.append(pending.toString())
             output.append("    ".repeat(depth))
-                .append("output.raw($registryName.STATIC, ")
+                .append("output.raw(STATIC, ")
                 .append(range.first)
                 .append(", ")
                 .append(range.last - range.first + 1)

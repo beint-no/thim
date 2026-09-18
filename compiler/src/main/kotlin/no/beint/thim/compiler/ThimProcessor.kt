@@ -110,8 +110,7 @@ private class ThimProcessor(
             } else {
                 RouteCatalog(emptyList(), emptyList(), extractedRoutes.files)
             }
-            val staticContent = StaticContent()
-            val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName, strictModels)
+            val generator = RendererGenerator(catalog, routeCatalog, strictModels)
             val compiled = templates.map { template ->
                 generator.compile(template.name, template.model, template.nodes)
             }
@@ -126,7 +125,7 @@ private class ThimProcessor(
                 completed = true
                 return emptyList()
             }
-            generate(compiled, staticContent.bytes(), extractedRoutes)
+            generate(compiled, extractedRoutes)
             if (catalog.definitions().isNotEmpty()) {
                 val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
                 generateMessages(catalog, files)
@@ -188,15 +187,37 @@ private class ThimProcessor(
         diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog) {
+    /**
+     * Each template gets its own source file and static resource. A renderer references
+     * only its own content, never the registry or another renderer, so an unchanged
+     * template regenerates byte-identical files and Gradle's incremental Java compilation
+     * skips it. The registry is the only file that references every renderer.
+     */
+    private fun generate(compiled: List<CompiledTemplate>, routeCatalog: RouteCatalog) {
         val files = (compiled.mapNotNull { it.model.containingFile } + routeCatalog.files).distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
-        codeGenerator.createNewFile(
-            dependencies = dependencies,
-            packageName = generatedPackage,
-            fileName = registryName,
-            extensionName = "bin",
-        ).use { it.write(staticContent) }
+        compiled.forEach { template ->
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = template.rendererName,
+                extensionName = "bin",
+            ).use { it.write(template.staticContent) }
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = template.rendererName,
+                extensionName = "java",
+            ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+                output.appendLine("package $generatedPackage;")
+                output.appendLine()
+                output.appendLine("import java.io.IOException;")
+                output.appendLine("import no.beint.thim.HtmlOutput;")
+                output.appendLine("import no.beint.thim.RenderContext;")
+                output.appendLine()
+                output.append(template.source)
+            }
+        }
         codeGenerator.createNewFile(
             dependencies = dependencies,
             packageName = generatedPackage,
@@ -210,10 +231,7 @@ private class ThimProcessor(
             output.appendLine("import no.beint.thim.RenderContext;")
             output.appendLine("import no.beint.thim.TemplateSet;")
             output.appendLine()
-            compiled.forEach { output.append(it.source).appendLine() }
             output.appendLine("public final class $registryName implements TemplateSet {")
-            output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($registryName.class, \"$registryName.bin\");")
-            output.appendLine()
             output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain in render only")
             output.appendLine("    // serves subclasses of open models, matching the previous linear dispatch.")
             output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = index();")
