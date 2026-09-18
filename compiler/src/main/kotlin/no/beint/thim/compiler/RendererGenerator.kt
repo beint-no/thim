@@ -90,7 +90,9 @@ internal class RendererGenerator(
         generatedHelper = 0
         pendingHelpers.clear()
 
-        code.line("final class $rendererName {")
+        // Nested in its file's holder class: javac's auxiliary-class lint (fatal under -Werror)
+        // rejects package-private top-level classes referenced from another source file.
+        code.line("static final class $rendererName {")
         code.indent {
             code.line("private $rendererName() {}")
             code.line()

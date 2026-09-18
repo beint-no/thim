@@ -225,11 +225,11 @@ private class ThimProcessor(
                 output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($holder.class, \"$holder.bin\");")
                 output.appendLine()
                 output.appendLine("    private $holder() {}")
-                output.appendLine("}")
                 members.sortedBy { it.rendererName }.forEach { template ->
                     output.appendLine()
-                    output.append(template.source)
+                    output.append(template.source.prependIndent("    ").replace(Regex("(?m)^ +$"), ""))
                 }
+                output.appendLine("}")
             }
         }
         codeGenerator.createNewFile(
@@ -296,7 +296,7 @@ private class ThimProcessor(
             output.appendLine("            switch (index) {")
             compiled.forEachIndexed { index, template ->
                 val modelName = template.model.qualifiedName!!.asString()
-                output.appendLine("                case $index -> ${template.rendererName}.render(($modelName) model, context, output);")
+                output.appendLine("                case $index -> ${rendererReference(template)}.render(($modelName) model, context, output);")
             }
             output.appendLine("                default -> throw new IllegalStateException(\"Unknown template index \" + index);")
             output.appendLine("            }")
@@ -305,7 +305,7 @@ private class ThimProcessor(
             compiled.forEach {
                 val modelName = it.model.qualifiedName!!.asString()
                 output.appendLine("        if (model instanceof $modelName typed) {")
-                output.appendLine("            ${it.rendererName}.render(typed, context, output);")
+                output.appendLine("            ${rendererReference(it)}.render(typed, context, output);")
                 output.appendLine("            return;")
                 output.appendLine("        }")
             }
@@ -420,6 +420,9 @@ private class ThimProcessor(
         Math.floorMod(model.qualifiedName!!.asString().hashCode(), RENDERER_FILES)
 
     private fun holderName(file: Int): String = "${registryName}Part$file"
+
+    private fun rendererReference(template: CompiledTemplate): String =
+        "${holderName(rendererFile(template.model))}.${template.rendererName}"
 
     private companion object {
         /** Generated renderer source files per module; see [generate]. */

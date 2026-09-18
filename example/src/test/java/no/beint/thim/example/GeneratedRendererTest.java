@@ -74,7 +74,10 @@ class GeneratedRendererTest {
 
     @Test
     void partitionsLargeRenderersBelowTheHotSpotHugeMethodThreshold() throws IOException {
-        var resource = "/no/beint/thim/example/generated/no_beint_thim_example_page_LargePageRenderer.class";
+        // Renderers nest in a holder chosen by the same stable hash the compiler uses.
+        var file = Math.floorMod(LargePage.class.getName().hashCode(), 32);
+        var resource = "/no/beint/thim/example/generated/ExampleTemplatesPart" + file
+                + "$no_beint_thim_example_page_LargePageRenderer.class";
         byte[] bytes;
         try (var input = getClass().getResourceAsStream(resource)) {
             bytes = input.readAllBytes();
