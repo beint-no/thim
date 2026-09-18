@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1
+
+- Build with a JDK 27 toolchain and publish `--release 27` artifacts; consumers need JDK 27.
+
 ## 0.11.0
 
 - Keep settings integration in a separate artifact so Kotlin and KSP load on the consumer project classpath.
