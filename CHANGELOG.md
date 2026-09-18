@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Generate one Java source file and one static resource per template instead of a single
+  registry source with every renderer. Renderers no longer reference the registry, so an
+  unchanged template regenerates byte-identical files and Gradle's incremental Java
+  compilation recompiles only the edited renderer and the registry. In ReAI a one-template
+  edit recompiles 2 classes in about 0.4 s instead of the whole 14.8 MB source in 6.3 s, and a
+  full `compileJava` takes 2.2 s. Generated renderer classes now end in `Renderer` rather than
+  `ThimRenderer`; they are package-private and not part of the public API. Static content is
+  no longer deduplicated across templates, so ReAI's resources grow from 1.6 MB to 6.5 MB.
+
 ## 0.11.2
 
 - Dispatch generated template registries through a class index instead of linear `==` and

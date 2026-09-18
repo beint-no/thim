@@ -98,7 +98,7 @@ and allocations are recorded in [the benchmark results](benchmark/results/2026-0
 
 | Priority | Finding | Next step |
 | --- | --- | --- |
-| Highest follow-up | Generated renderers share one Java source and static resource, with aggregating KSP dependencies. ReAI's existing local output contains 314 renderer classes in a 13.49 MB source file, plus a 1.51 MB static resource. | Profile a one-model edit and a one-template edit. Consider per-template sources/resources with isolating dependencies, while retaining a separate aggregating registry. Shared layouts, message changes, additions, and deletions need explicit invalidation coverage. |
+| Highest follow-up | Generated renderers share one Java source and static resource, with aggregating KSP dependencies. ReAI's existing local output contains 314 renderer classes in a 13.49 MB source file, plus a 1.51 MB static resource. | Implemented as per-template sources and resources after 0.11.2; see the per-template section below. |
 | Medium | Each expression property lookup can walk KSP properties and supertypes again, including properties from shared layouts. | Profile symbol-resolution time, then consider a cache confined to one processor invocation. Keep missing-property diagnostics and generic/inherited property behavior intact. |
 | Medium | Generated `supports`, `supportsReturnType`, request-data checks, and render dispatch use linear checks. | Add a benchmark with hundreds of page models and the full Spring handler path before replacing dispatch with a map or `ClassValue`. Preserve custom `TemplateSet` behavior and subclass handling. |
 | Medium | Servlet rendering allocates an 8 KiB body buffer and a 1 KiB output buffer, then buffers the whole response. | Measure full pages and small HTMX responses through the Spring adapter. Tune sizing only with allocation and latency evidence. Streaming changes failure handling and content-length behavior, so it needs separate design work. |
@@ -342,3 +342,31 @@ long plain-ASCII runs and loses on the text these applications render:
 
 The current per-character loop runs at about 0.6 ns per character, close to the copy
 floor, and stays.
+
+## Per-template generated sources — 18 September 2026
+
+After 0.11.2 the compiler emits one Java source and one static resource per template, and
+the registry is the only file that references every renderer. All KSP outputs keep
+aggregating dependencies, so KSP still regenerates everything on each run; the gain comes
+from Gradle's incremental Java compilation seeing byte-identical files for unchanged
+templates. Measured on ReAI (344 renderers), build cache disabled, `--info`:
+
+| Step | 0.11.2 single source | Per-template sources |
+| --- | ---: | ---: |
+| Full `:web-app:compileJava` | 6.3 s | 2.2 s |
+| One-template edit, `:web-app:compileJava` | 6.3 s, whole file | 0.4–0.6 s, "Incremental compilation of 2 classes" |
+| Generated files changed by that edit | 1 of 1 | 2 of 690 (the renderer and its resource) |
+| Forced `:web-app:kspKotlin` | 8.0–11.6 s | 5.5–7.9 s (within daemon noise) |
+| Static resources | 1.6 MB, deduplicated | 6.5 MB, one per template |
+
+The first attempt kept the `ThimRenderer` class suffix. Gradle's previous-compilation data
+still listed every renderer class under `ThimTemplates.java` after the layout change, so the
+next one-template edit deleted all 345 class files while passing two sources to javac, and
+retrying did not recover. Renaming the generated classes to `…Renderer` sidesteps the stale
+list: the transition build, the first edit, a retry and a second edit all succeed, and the
+"346 classes" Gradle reports for an edit are two real compilations plus stale names it
+deletes as no-ops in about 0.2 s. A `clean` build reports 2 classes.
+
+Not changed: KSP still parses all templates and resolves every model on each run, Kotlin
+compilation is unaffected, and the Java-only `ThimCompile` path writes the same per-template
+files into its own output directory.
