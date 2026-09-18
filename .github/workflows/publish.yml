@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
-          distribution: liberica
+          distribution: corretto
           java-version: '27'
       - uses: gradle/actions/setup-gradle@v5
       - name: Check release version
