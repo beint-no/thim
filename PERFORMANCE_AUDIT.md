@@ -343,43 +343,50 @@ long plain-ASCII runs and loses on the text these applications render:
 The current per-character loop runs at about 0.6 ns per character, close to the copy
 floor, and stays.
 
-## Per-template generated sources — 18 September 2026
+## Grouped generated sources — 18 September 2026
 
-After 0.11.2 the compiler emits one Java source and one static resource per template, and
-the registry is the only file that references every renderer. All KSP outputs keep
-aggregating dependencies, so KSP still regenerates everything on each run; the gain comes
-from Gradle's incremental Java compilation seeing byte-identical files for unchanged
-templates. Measured on ReAI (344 renderers), build cache disabled, `--info`:
+After 0.11.2 the compiler emits renderers into 32 source files chosen by
+`floorMod(modelName.hashCode(), 32)`, each with a holder class that owns the file's static
+resource; renderers are nested in that holder and reference only its `STATIC`. The registry
+is the only file that references every renderer. KSP dependencies stay aggregating, so KSP
+regenerates everything on each run; the gain comes from Gradle's incremental Java
+compilation seeing byte-identical files for unchanged templates, and from Kotlin's
+incremental compilation seeing one changed Java source instead of one huge one.
 
-| Step | 0.11.2 single source | Per-template sources |
-| --- | ---: | ---: |
-| Full `:web-app:compileJava` | 6.3 s | 2.2 s |
-| One-template edit, `:web-app:compileJava` | 6.3 s, whole file | 0.4–0.6 s, "Incremental compilation of 2 classes" |
-| Generated files changed by that edit | 1 of 1 | 2 of 690 (the renderer and its resource) |
-| Forced `:web-app:kspKotlin` | 8.0–11.6 s | 5.5–7.9 s (within daemon noise) |
-| Static resources | 1.6 MB, deduplicated | 6.5 MB, one per template |
+Two intermediate layouts were measured and rejected on ReAI (344 renderers):
+
+| Layout | Forced `kspKotlin` | Edit `compileJava` | Resources | Note |
+| --- | ---: | ---: | ---: | --- |
+| 0.11.2, one source | 2.8–3.0 s | 6.1–6.3 s | 1.6 MB | baseline |
+| one file per template | 4.4–4.7 s | 0.26–0.28 s | 6.5 MB | KSP registers 345 generated Java files: Thim's own generation grew only 0.07 → 0.30 s, the rest is KSP; no static dedup |
+| 32 hash-assigned files | 3.6 s | 0.29–0.31 s | 2.8 MB | shipped |
 
 The whole edit loop (`:web-app:classes` after touching one template, warm daemon, build
-cache disabled, three repetitions each):
+cache disabled, two or three repetitions):
 
-| Task | 0.11.2 single source | Per-template sources |
+| Task | 0.11.2 | 32 files |
 | --- | ---: | ---: |
-| `:web-app:kspKotlin` | 3.0–4.0 s | 4.5–4.9 s |
-| `:web-app:compileKotlin` | 1.0–1.2 s | 0.06–0.09 s |
-| `:web-app:compileJava` | 6.1–6.3 s | 0.26–0.28 s |
-| Total build | 10.4–12.1 s | 5.2–5.6 s |
+| `:web-app:kspKotlin` | 3.0–4.0 s | 3.6 s |
+| `:web-app:compileKotlin` | 1.0–1.2 s | 0.09 s |
+| `:web-app:compileJava` | 6.1–6.3 s | 0.3 s |
+| Total build | 10.4–12.1 s | 4.3–4.4 s |
 
-Kotlin's incremental compilation benefits as well, because only one Java source on its
-source path changes. KSP is now the dominant cost of a template edit.
+Full `:web-app:compileJava` fell from 6.3 s to 2.8 s. Processor phases were timed with
+temporary instrumentation: parsing, expansion, catalog, strict-model checks, routes and
+compilation take 2.1–2.6 s in every layout, so the remaining KSP task time is KSP's own
+handling of generated files.
 
-The first attempt kept the `ThimRenderer` class suffix. Gradle's previous-compilation data
-still listed every renderer class under `ThimTemplates.java` after the layout change, so the
-next one-template edit deleted all 345 class files while passing two sources to javac, and
-retrying did not recover. Renaming the generated classes to `…Renderer` sidesteps the stale
-list: the transition build, the first edit, a retry and a second edit all succeed, and the
-"346 classes" Gradle reports for an edit are two real compilations plus stale names it
-deletes as no-ops in about 0.2 s. A `clean` build reports 2 classes.
+Two details matter for the upgrade. First, the renderer classes are named `…Renderer`
+instead of `…ThimRenderer`: with the old names, Gradle's previous-compilation data still
+listed every renderer under `ThimTemplates.java` after the layout change, so the next
+one-template edit deleted all class files while passing two sources to javac, and retrying
+did not recover. Second, renderers are nested in their holder rather than declared as
+package-private top-level classes, because javac's auxiliary-class lint rejects those when
+referenced from another file and one ReAI module compiles with `-Werror`. With both in
+place, the sequence 0.11.2 full build → new layout (incremental) → edit → retry → second
+edit → revert succeeds with the build cache disabled; Gradle's reported class counts for
+an edit include stale old names it deletes as no-ops in about 0.25 s.
 
-Not changed: KSP still parses all templates and resolves every model on each run, Kotlin
-compilation is unaffected, and the Java-only `ThimCompile` path writes the same per-template
-files into its own output directory.
+Output equivalence is checked by `GoldenRenderTest` in the example module: twelve renders
+(four pages, three locales, including form errors and a 64-byte output buffer) recorded
+with the 0.11.2 compiler and compared byte for byte.
