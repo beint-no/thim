@@ -284,6 +284,13 @@ on where a page sat in the registry. The registry now keeps a `Map<Class<?>, Int
 constant plus an int switch and retains the `instanceof` chain only as a fallback for
 subclasses of open models, which `supports` never accepted anyway.
 
+The index is filled imperatively in a static helper. A first version used one
+`Map.ofEntries(...)` call, and javac's inference over 344 distinct `Class` arguments took
+14.4 s for ReAI's 14.8 MB generated source; the same file with `HashMap.put` calls compiles
+in 2.8 s. The previous `instanceof` chain was also expensive for javac: ReAI's
+`:web-app:compileJava` fell from 10.8 s to 6.3 s in a profiled build, with the messages
+class removal below accounting for the rest.
+
 ### Shared catalogs (implemented)
 
 ReAI's `:i18n` module generates `I18nMessages` from the web-app catalog and 414 files use
@@ -296,7 +303,10 @@ which fails on backend-only keys. The manifest is now written whenever a catalog
 Profiled ReAI tasks after a template edit, before this change: `:web-app:kspKotlin` 5.2 s,
 `:web-app:compileJava` 10.8 s (14.5 MB `ThimTemplates.java` plus the messages class),
 `:web-app:compileKotlin` 11.7 s, `thimCssUsageCheck` 1.1 s, `thimMessageUsageCheck`
-under 0.7 s. The two usage checks are not worth optimizing.
+under 0.7 s. The two usage checks are not worth optimizing. With web-app on
+`generateMessages=false` and the new registry: `:web-app:kspKotlin` 4.1 s,
+`:web-app:compileJava` 6.3 s, `thimMessageUsageCheck` 0.6 s reporting 9,653 messages
+and 0 unused across the shared catalog.
 
 ### Servlet response buffering (rejected)
 
