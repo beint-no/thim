@@ -214,13 +214,19 @@ private class ThimProcessor(
             output.appendLine("public final class $registryName implements TemplateSet {")
             output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($registryName.class, \"$registryName.bin\");")
             output.appendLine()
-            output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain below only")
+            output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain in render only")
             output.appendLine("    // serves subclasses of open models, matching the previous linear dispatch.")
-            output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = java.util.Map.ofEntries(")
-            output.appendLine(compiled.withIndex().joinToString(",\n") { (index, template) ->
-                "        java.util.Map.entry(${template.model.qualifiedName!!.asString()}.class, $index)"
-            })
-            output.appendLine("    );")
+            output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = index();")
+            output.appendLine()
+            output.appendLine("    // Built imperatively: javac's inference over one Map.ofEntries call with hundreds of")
+            output.appendLine("    // distinct Class arguments took several seconds for a large application.")
+            output.appendLine("    private static java.util.Map<Class<?>, Integer> index() {")
+            output.appendLine("        var index = new java.util.HashMap<Class<?>, Integer>(${compiled.size * 2});")
+            compiled.forEachIndexed { index, template ->
+                output.appendLine("        index.put(${template.model.qualifiedName!!.asString()}.class, $index);")
+            }
+            output.appendLine("        return java.util.Map.copyOf(index);")
+            output.appendLine("    }")
             output.appendLine()
             output.appendLine("    private static final boolean[] REQUEST_DATA_VALUES = {")
             output.appendLine("        " + compiled.joinToString(", ") { it.usesRequestDataValues.toString() })
