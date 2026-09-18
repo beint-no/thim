@@ -10,7 +10,7 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(26)
+    jvmToolchain(27)
     compilerOptions.jvmTarget.set(JvmTarget.JVM_26)
 }
 

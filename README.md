@@ -4,7 +4,7 @@ Thim is a compile-time-safe server-side HTML renderer for Java and Kotlin applic
 
 The marketing site is at [beint-no.github.io/thim](https://beint-no.github.io/thim/).
 
-Thim requires JDK 26 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
+Thim requires JDK 27 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
 ## Isolated Projects
 

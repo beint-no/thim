@@ -37,4 +37,4 @@ Layouts and fragments link fixed templates and typed values during compilation. 
 
 The compiler and runtime do not depend on Spring. The MVC adapter recognizes page-model return types and writes the response. A non-Spring application can call its generated `TemplateSet` directly.
 
-Thim targets released JDK 26 APIs. It uses no preview or incubator feature, so applications do not need `--enable-preview` and generated classes remain compatible with future JVM AOT and startup improvements.
+Thim targets released JDK 27 APIs. It uses no preview or incubator feature, so applications do not need `--enable-preview` and generated classes remain compatible with future JVM AOT and startup improvements.
