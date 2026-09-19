@@ -390,3 +390,59 @@ an edit include stale old names it deletes as no-ops in about 0.25 s.
 Output equivalence is checked by `GoldenRenderTest` in the example module: twelve renders
 (four pages, three locales, including form errors and a 64-byte output buffer) recorded
 with the 0.11.2 compiler and compared byte for byte.
+
+
+## Small compiler improvements — 19 September 2026
+
+Compared 0.12.1 (`828994b`) with three isolated candidates on the same ReAI checkout
+and M5 Max, then tested the selected combination without profiling instrumentation.
+All builds used local composite builds, a warm Gradle daemon and `--no-build-cache`.
+No other benchmark ran concurrently; normal desktop workloads were not controlled.
+These numbers are not directly comparable to the earlier layout measurements.
+
+The selected changes touch three production files:
+
+- Generate renderer Java at its final nesting depth, including empty lines, instead
+  of splitting/copying each completed source through `prependIndent` and a regex.
+  The instrumented source-writing phase fell from about 190 ms to 50 ms.
+- Cache matching routes by the query/fragment-free path for one `RouteCatalog` lifetime.
+  4,075 route uses took roughly 100–170 ms of matching before, versus 28–40 ms with
+  reuse. Each use still validates its HTTP method and enum coverage and creates its
+  own diagnostic, so neither errors nor source locations are cached.
+
+The cache retains only route references and path strings during the compilation.
+It is not persisted, shared across builds, or used at runtime. The formatting change
+removes temporary whole-source copies. Neither changes generated file layout or JAR size.
+
+Final end-to-end measurements ran `:web-app:classes --no-build-cache --profile` after
+editing a static attribute in `banks.html`. Each variant had two blocks of six runs;
+exclude the setup build and first edit per block, retaining eight runs per variant.
+The first sequence was baseline/candidate/baseline/candidate, the second
+candidate/baseline/baseline/candidate. The first edit pattern keeps the same static
+byte length, so subsequent edits only change resource bytes. The second increases
+its length each time, changing Java offsets and exercising Java recompilation.
+
+| Edit pattern | 0.12.1 median wall time | Candidate median wall time | KSP medians |
+| --- | ---: | ---: | ---: |
+| Same-length static text | 5.597 s | 5.533 s | 4.903 → 4.843 s |
+| Different-length static text | 6.684 s | 6.151 s | 5.397 → 4.813 s |
+
+There is meaningful timing variation and overlap: baseline/candidate wall-time ranges
+are 5.423–6.624 / 5.355–5.699 s and 6.202–7.118 / 5.878–6.467 s respectively.
+The phase reductions are repeatable; the complete-loop benefit is small and workload
+dependent, not a promised percentage or a route to sub-second rebuilds. This is worth
+keeping because it removes redundant work with very little code and no generated-output
+change, not because it changes the development workflow.
+
+All 67 generated web-app files, including resources and manifests, match byte for byte
+between baseline and candidate for both edit patterns. Added regressions exercise
+repeated URLs with different HTTP methods, source locations and enum bindings. The
+existing golden render tests continue checking twelve renders against the old compiler.
+
+A third experiment skipped extracting controller parameter types when `generateRoutes`
+is false. Its instrumented forced-KSP median improved 4.983 → 4.794 s, but it adds another
+conditional extraction mode; it was left out of this patch. The IDE configuration-cache
+override was also left unchanged: ordinary Gradle builds do not validate debugger behavior.
+
+Raw measurements, including all warmups and the isolated candidates, are in
+[`2026-09-19-compiler-small-wins.json`](benchmark/results/2026-09-19-compiler-small-wins.json).
