@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1 - 2026-09-19
+
+- Cache repeated KSP property and accessor discovery within one processor invocation; generated output, diagnostics, and runtime behavior are unchanged.
+
 ## 0.12.0 - 2026-09-19
 
 - Generate renderers into a fixed set of 32 source files chosen by a stable hash of the
