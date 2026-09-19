@@ -47,6 +47,7 @@ internal class RendererGenerator(
     private val pendingHelpers = ArrayDeque<RenderHelper>()
     val errors = mutableListOf<String>()
     private val usedRootProperties = mutableMapOf<String, MutableSet<String>>()
+    private val propertyCache = mutableMapOf<PropertyKey, Property?>()
 
     fun usedRootProperties(model: KSClassDeclaration): Set<String> =
         usedRootProperties[model.qualifiedName?.asString()] ?: emptySet()
@@ -117,7 +118,7 @@ internal class RendererGenerator(
                     }
                     code.statement("var messageLocale = $resolution;")
                 }
-                val scope = Scope(model, recordUse = { property ->
+                val scope = Scope(model, propertyCache, recordUse = { property ->
                     usedRootProperties.getOrPut(modelName, ::mutableSetOf).add(property)
                 })
                 formErrors = scope.errorsProperty()
@@ -1242,6 +1243,12 @@ internal class RendererGenerator(
 
     private data class Property(val type: KSType, val accessor: String)
 
+    private data class PropertyKey(
+        val declaration: KSClassDeclaration,
+        val containingType: String,
+        val name: String,
+    )
+
     private data class RenderHelper(
         val name: String,
         val nodes: List<Node>,
@@ -1252,17 +1259,18 @@ internal class RendererGenerator(
 
     private class Scope(
         private val model: KSClassDeclaration,
+        private val propertyCache: MutableMap<PropertyKey, Property?>,
         private val recordUse: (String) -> Unit = {},
         private val bindings: Map<String, Binding> = emptyMap(),
         private val selection: Binding? = null,
         private val select: Binding? = null,
     ) {
         fun withBinding(name: String, binding: Binding) =
-            Scope(model, recordUse, bindings + (name to binding), selection, select)
+            Scope(model, propertyCache, recordUse, bindings + (name to binding), selection, select)
 
-        fun withSelection(binding: Binding) = Scope(model, recordUse, bindings, binding, select)
+        fun withSelection(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, binding, select)
 
-        fun withSelectValue(binding: Binding) = Scope(model, recordUse, bindings, selection, binding)
+        fun withSelectValue(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, selection, binding)
 
         fun hasSelection(): Boolean = selection != null
 
@@ -1272,7 +1280,7 @@ internal class RendererGenerator(
         fun selectValue(): Binding? = select
 
         fun errorsProperty(): ResolvedPath? {
-            val property = model.property("errors") ?: return null
+            val property = model.property("errors", model.asStarProjectedType()) ?: return null
             val typeName = property.type.declaration.qualifiedName?.asString()
             if (typeName != "no.beint.thim.FormErrors" || property.type.nullability == Nullability.NULLABLE) return null
             return ResolvedPath("model.${property.accessor}()", property.type, false)
@@ -1298,7 +1306,7 @@ internal class RendererGenerator(
                         location,
                         "${type.declaration.qualifiedName?.asString()} has no properties"
                     )
-                val property = declaration.property(segment.name)
+                val property = declaration.property(segment.name, type)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1327,7 +1335,7 @@ internal class RendererGenerator(
                 type = bound.type
                 nullable = bound.nullable
             } else {
-                val property = model.property(first.name)
+                val property = model.property(first.name, model.asStarProjectedType())
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1349,7 +1357,7 @@ internal class RendererGenerator(
                         location,
                         "${type.declaration.qualifiedName?.asString()} has no properties"
                     )
-                val property = declaration.property(segment.name)
+                val property = declaration.property(segment.name, type)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1368,23 +1376,25 @@ internal class RendererGenerator(
             return ResolvedPath(code, type, nullable)
         }
 
-        private fun KSClassDeclaration.property(name: String): Property? {
+        private fun KSClassDeclaration.property(name: String, containingType: KSType): Property? {
             if (name in objectMethods) return null
-            getAllProperties().firstOrNull { it.simpleName.asString() == name }?.let { property ->
-                val type = property.type.resolve()
-                return Property(type, getter(name, type))
+            return propertyCache.getOrPut(PropertyKey(this, containingType.toString(), name)) {
+                getAllProperties().firstOrNull { it.simpleName.asString() == name }?.let { property ->
+                    val type = property.type.resolve()
+                    return@getOrPut Property(type, getter(name, type))
+                }
+                val capitalized = name.replaceFirstChar(Char::uppercaseChar)
+                val accessors = listOf(name, "get$capitalized", "is$capitalized")
+                val functions = getDeclaredFunctions() + getAllSuperTypes().flatMap { type ->
+                    (type.declaration as? KSClassDeclaration)?.getDeclaredFunctions() ?: emptySequence()
+                }
+                val function = functions.firstOrNull { candidate ->
+                    candidate.simpleName.asString() in accessors &&
+                            candidate.parameters.isEmpty() &&
+                            candidate.returnType != null
+                }
+                function?.let { Property(it.returnType!!.resolve(), it.simpleName.asString()) }
             }
-            val capitalized = name.replaceFirstChar(Char::uppercaseChar)
-            val accessors = listOf(name, "get$capitalized", "is$capitalized")
-            val functions = getDeclaredFunctions() + getAllSuperTypes().flatMap { type ->
-                (type.declaration as? KSClassDeclaration)?.getDeclaredFunctions() ?: emptySequence()
-            }
-            val function = functions.firstOrNull { candidate ->
-                candidate.simpleName.asString() in accessors &&
-                        candidate.parameters.isEmpty() &&
-                        candidate.returnType != null
-            } ?: return null
-            return Property(function.returnType!!.resolve(), function.simpleName.asString())
         }
 
         private fun KSClassDeclaration.suggestion(name: String): String {
