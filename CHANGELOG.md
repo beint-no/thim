@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 - 2026-09-19
 
 - Generate renderers into a fixed set of 32 source files chosen by a stable hash of the
   page-model name, each with its own static resource, instead of one source file holding
