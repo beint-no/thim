@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2 - 2026-09-19
+
+- Avoid copying and reformatting generated renderer sources; write their final indentation directly.
+- Reuse path-to-route matches within one compilation while still validating each use's HTTP method, enum coverage, and source location. Generated output and runtime behavior are unchanged.
+
 ## 0.12.1 - 2026-09-19
 
 - Cache repeated KSP property and accessor discovery within one processor invocation; generated output, diagnostics, and runtime behavior are unchanged.

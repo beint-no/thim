@@ -35,6 +35,7 @@ internal class RouteCatalog(
      */
     val files: List<KSFile> = emptyList(),
 ) {
+    private val matchingRoutes = mutableMapOf<String, List<Route>>()
     private val trustedPatterns: List<List<RouteSegment>> = trustedPaths.map(::trustedPattern)
 
     fun isEmpty(): Boolean = routes.isEmpty()
@@ -52,7 +53,7 @@ internal class RouteCatalog(
         val parts = pathParts(plain)
         if (trustedPatterns.any { matches(it, parts) }) return
         if (parts.lastOrNull()?.let { !it.variable && isStaticAsset(it.value) } == true) return
-        val matching = routes.filter { matches(it.segments, parts) }
+        val matching = matchingRoutes.getOrPut(plain) { routes.filter { matches(it.segments, parts) } }
         if (matching.isEmpty() && enumVariables.isNotEmpty()) {
             checkEnumExpansion(parts, enumVariables, httpMethod, location, subject)
             return

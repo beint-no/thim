@@ -227,7 +227,7 @@ private class ThimProcessor(
                 output.appendLine("    private $holder() {}")
                 members.sortedBy { it.rendererName }.forEach { template ->
                     output.appendLine()
-                    output.append(template.source.prependIndent("    ").replace(Regex("(?m)^ +$"), ""))
+                    output.append(template.source)
                 }
                 output.appendLine("}")
             }

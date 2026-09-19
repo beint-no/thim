@@ -1,0 +1,1573 @@
+{
+  "baseline": "828994b (0.12.1)",
+  "hardware": "Apple M5 Max",
+  "comparison": "Same ReAI checkout, sequential local composite builds; build cache disabled; warm Gradle daemon; desktop workload not controlled.",
+  "phase_probes": {
+    "small": {
+      "results": [
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 27.546,
+          "ksp": "16.304s",
+          "phases": [
+            "w: [ksp] PROFILE parse 133.542708 ms",
+            "w: [ksp] PROFILE models+expand 339.842542 ms",
+            "w: [ksp] PROFILE catalog 355.032666 ms",
+            "w: [ksp] PROFILE strict-models 2819.2405 ms",
+            "w: [ksp] PROFILE route-extraction 4648.517208 ms",
+            "w: [ksp] PROFILE renderer-compilation 1307.651208 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=182.945772",
+            "w: [ksp] PROFILE checks 72.330834 ms",
+            "w: [ksp] PROFILE write-renderers 216.063 ms",
+            "w: [ksp] PROFILE messages 56.169541 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 7.903,
+          "ksp": "6.930s",
+          "phases": [
+            "w: [ksp] PROFILE parse 144.499083 ms",
+            "w: [ksp] PROFILE models+expand 165.542208 ms",
+            "w: [ksp] PROFILE catalog 250.301667 ms",
+            "w: [ksp] PROFILE strict-models 997.422125 ms",
+            "w: [ksp] PROFILE route-extraction 1433.346709 ms",
+            "w: [ksp] PROFILE renderer-compilation 937.005875 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=137.53809",
+            "w: [ksp] PROFILE checks 84.888667 ms",
+            "w: [ksp] PROFILE write-renderers 181.870708 ms",
+            "w: [ksp] PROFILE messages 47.700084 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 6.135,
+          "ksp": "5.447s",
+          "phases": [
+            "w: [ksp] PROFILE parse 113.470666 ms",
+            "w: [ksp] PROFILE models+expand 150.517959 ms",
+            "w: [ksp] PROFILE catalog 197.814166 ms",
+            "w: [ksp] PROFILE strict-models 667.038709 ms",
+            "w: [ksp] PROFILE route-extraction 919.090583 ms",
+            "w: [ksp] PROFILE renderer-compilation 737.759042 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=103.580295",
+            "w: [ksp] PROFILE checks 87.55625 ms",
+            "w: [ksp] PROFILE write-renderers 181.817458 ms",
+            "w: [ksp] PROFILE messages 48.903584 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.831,
+          "ksp": "5.100s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.44525 ms",
+            "w: [ksp] PROFILE models+expand 175.396875 ms",
+            "w: [ksp] PROFILE catalog 198.365042 ms",
+            "w: [ksp] PROFILE strict-models 584.385 ms",
+            "w: [ksp] PROFILE route-extraction 841.749625 ms",
+            "w: [ksp] PROFILE renderer-compilation 757.923959 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=103.99053",
+            "w: [ksp] PROFILE checks 81.6635 ms",
+            "w: [ksp] PROFILE write-renderers 175.364791 ms",
+            "w: [ksp] PROFILE messages 43.485333 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 0,
+          "wall": 21.899,
+          "ksp": "7.807s",
+          "phases": [
+            "w: [ksp] PROFILE parse 1.870584 ms",
+            "w: [ksp] PROFILE models+expand 1.787042 ms",
+            "w: [ksp] PROFILE catalog 612.356416 ms",
+            "w: [ksp] PROFILE parse 37.32975 ms",
+            "w: [ksp] PROFILE models+expand 25.278625 ms",
+            "w: [ksp] PROFILE catalog 55.519125 ms",
+            "w: [ksp] PROFILE strict-models 565.763458 ms",
+            "w: [ksp] PROFILE route-extraction 523.874583 ms",
+            "w: [ksp] PROFILE renderer-compilation 116.135625 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=0.643074",
+            "w: [ksp] PROFILE checks 12.439167 ms",
+            "w: [ksp] PROFILE write-renderers 28.897459 ms",
+            "w: [ksp] PROFILE messages 17.33925 ms",
+            "w: [ksp] PROFILE parse 177.089458 ms",
+            "w: [ksp] PROFILE models+expand 237.08175 ms",
+            "w: [ksp] PROFILE catalog 240.72075 ms",
+            "w: [ksp] PROFILE strict-models 1085.034042 ms",
+            "w: [ksp] PROFILE route-extraction 2111.348708 ms",
+            "w: [ksp] PROFILE renderer-compilation 945.646208 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=63.666282",
+            "w: [ksp] PROFILE checks 88.483792 ms",
+            "w: [ksp] PROFILE write-renderers 180.128834 ms",
+            "w: [ksp] PROFILE messages 46.264709 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 1,
+          "wall": 5.924,
+          "ksp": "5.220s",
+          "phases": [
+            "w: [ksp] PROFILE parse 123.25275 ms",
+            "w: [ksp] PROFILE models+expand 153.351375 ms",
+            "w: [ksp] PROFILE catalog 200.8495 ms",
+            "w: [ksp] PROFILE strict-models 693.442792 ms",
+            "w: [ksp] PROFILE route-extraction 871.985166 ms",
+            "w: [ksp] PROFILE renderer-compilation 726.100708 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=33.571835",
+            "w: [ksp] PROFILE checks 70.2785 ms",
+            "w: [ksp] PROFILE write-renderers 178.830291 ms",
+            "w: [ksp] PROFILE messages 48.188875 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 2,
+          "wall": 5.768,
+          "ksp": "5.133s",
+          "phases": [
+            "w: [ksp] PROFILE parse 114.985792 ms",
+            "w: [ksp] PROFILE models+expand 172.272791 ms",
+            "w: [ksp] PROFILE catalog 200.428708 ms",
+            "w: [ksp] PROFILE strict-models 651.475334 ms",
+            "w: [ksp] PROFILE route-extraction 780.979833 ms",
+            "w: [ksp] PROFILE renderer-compilation 748.741667 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=40.485054",
+            "w: [ksp] PROFILE checks 99.989917 ms",
+            "w: [ksp] PROFILE write-renderers 181.224458 ms",
+            "w: [ksp] PROFILE messages 47.631583 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 3,
+          "wall": 5.748,
+          "ksp": "5.061s",
+          "phases": [
+            "w: [ksp] PROFILE parse 113.217208 ms",
+            "w: [ksp] PROFILE models+expand 157.059625 ms",
+            "w: [ksp] PROFILE catalog 205.155458 ms",
+            "w: [ksp] PROFILE strict-models 627.647417 ms",
+            "w: [ksp] PROFILE route-extraction 808.347375 ms",
+            "w: [ksp] PROFILE renderer-compilation 729.497792 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=27.701515",
+            "w: [ksp] PROFILE checks 85.007166 ms",
+            "w: [ksp] PROFILE write-renderers 194.146333 ms",
+            "w: [ksp] PROFILE messages 46.500208 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 10.445,
+          "ksp": "5.032s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.5955 ms",
+            "w: [ksp] PROFILE models+expand 0.7315 ms",
+            "w: [ksp] PROFILE catalog 321.915417 ms",
+            "w: [ksp] PROFILE parse 43.944792 ms",
+            "w: [ksp] PROFILE models+expand 16.235 ms",
+            "w: [ksp] PROFILE catalog 56.005 ms",
+            "w: [ksp] PROFILE strict-models 96.331167 ms",
+            "w: [ksp] PROFILE route-extraction 126.906459 ms",
+            "w: [ksp] PROFILE renderer-compilation 138.772917 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=2.214926",
+            "w: [ksp] PROFILE checks 56.670458 ms",
+            "w: [ksp] PROFILE write-renderers 18.837833 ms",
+            "w: [ksp] PROFILE messages 32.014166 ms",
+            "w: [ksp] PROFILE parse 128.773958 ms",
+            "w: [ksp] PROFILE models+expand 154.141292 ms",
+            "w: [ksp] PROFILE catalog 204.289458 ms",
+            "w: [ksp] PROFILE strict-models 598.437042 ms",
+            "w: [ksp] PROFILE route-extraction 802.978 ms",
+            "w: [ksp] PROFILE renderer-compilation 804.3805 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=133.551893",
+            "w: [ksp] PROFILE checks 84.5315 ms",
+            "w: [ksp] PROFILE write-renderers 176.862084 ms",
+            "w: [ksp] PROFILE messages 47.941 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 5.802,
+          "ksp": "5.164s",
+          "phases": [
+            "w: [ksp] PROFILE parse 131.723583 ms",
+            "w: [ksp] PROFILE models+expand 151.881875 ms",
+            "w: [ksp] PROFILE catalog 202.19725 ms",
+            "w: [ksp] PROFILE strict-models 574.398417 ms",
+            "w: [ksp] PROFILE route-extraction 844.913084 ms",
+            "w: [ksp] PROFILE renderer-compilation 823.557334 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=138.43557",
+            "w: [ksp] PROFILE checks 98.607542 ms",
+            "w: [ksp] PROFILE write-renderers 197.863333 ms",
+            "w: [ksp] PROFILE messages 49.585084 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 5.934,
+          "ksp": "5.174s",
+          "phases": [
+            "w: [ksp] PROFILE parse 111.604542 ms",
+            "w: [ksp] PROFILE models+expand 152.8605 ms",
+            "w: [ksp] PROFILE catalog 205.061958 ms",
+            "w: [ksp] PROFILE strict-models 624.700708 ms",
+            "w: [ksp] PROFILE route-extraction 826.435125 ms",
+            "w: [ksp] PROFILE renderer-compilation 855.494125 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=171.624428",
+            "w: [ksp] PROFILE checks 81.657291 ms",
+            "w: [ksp] PROFILE write-renderers 176.828292 ms",
+            "w: [ksp] PROFILE messages 47.344 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.795,
+          "ksp": "5.156s",
+          "phases": [
+            "w: [ksp] PROFILE parse 133.531 ms",
+            "w: [ksp] PROFILE models+expand 176.506334 ms",
+            "w: [ksp] PROFILE catalog 207.690167 ms",
+            "w: [ksp] PROFILE strict-models 640.663541 ms",
+            "w: [ksp] PROFILE route-extraction 770.898083 ms",
+            "w: [ksp] PROFILE renderer-compilation 838.326125 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=161.9416",
+            "w: [ksp] PROFILE checks 87.49925 ms",
+            "w: [ksp] PROFILE write-renderers 175.832417 ms",
+            "w: [ksp] PROFILE messages 46.54875 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 0,
+          "wall": 10.86,
+          "ksp": "4.745s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.754167 ms",
+            "w: [ksp] PROFILE models+expand 0.741459 ms",
+            "w: [ksp] PROFILE catalog 281.77525 ms",
+            "w: [ksp] PROFILE parse 32.01375 ms",
+            "w: [ksp] PROFILE models+expand 16.286792 ms",
+            "w: [ksp] PROFILE catalog 57.617333 ms",
+            "w: [ksp] PROFILE strict-models 130.984 ms",
+            "w: [ksp] PROFILE route-extraction 145.245583 ms",
+            "w: [ksp] PROFILE renderer-compilation 115.554416 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=1.033435",
+            "w: [ksp] PROFILE checks 30.00725 ms",
+            "w: [ksp] PROFILE write-renderers 23.856875 ms",
+            "w: [ksp] PROFILE messages 57.908417 ms",
+            "w: [ksp] PROFILE parse 130.109084 ms",
+            "w: [ksp] PROFILE models+expand 150.626792 ms",
+            "w: [ksp] PROFILE catalog 199.855917 ms",
+            "w: [ksp] PROFILE strict-models 587.854541 ms",
+            "w: [ksp] PROFILE route-extraction 737.253208 ms",
+            "w: [ksp] PROFILE renderer-compilation 739.822042 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=38.432137",
+            "w: [ksp] PROFILE checks 79.627041 ms",
+            "w: [ksp] PROFILE write-renderers 172.115584 ms",
+            "w: [ksp] PROFILE messages 45.817417 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 1,
+          "wall": 5.975,
+          "ksp": "5.346s",
+          "phases": [
+            "w: [ksp] PROFILE parse 136.527125 ms",
+            "w: [ksp] PROFILE models+expand 153.457083 ms",
+            "w: [ksp] PROFILE catalog 196.118334 ms",
+            "w: [ksp] PROFILE strict-models 686.74575 ms",
+            "w: [ksp] PROFILE route-extraction 1174.671209 ms",
+            "w: [ksp] PROFILE renderer-compilation 695.187084 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=34.257889",
+            "w: [ksp] PROFILE checks 81.930542 ms",
+            "w: [ksp] PROFILE write-renderers 172.590333 ms",
+            "w: [ksp] PROFILE messages 45.214542 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 2,
+          "wall": 5.329,
+          "ksp": "4.754s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.166167 ms",
+            "w: [ksp] PROFILE models+expand 150.122792 ms",
+            "w: [ksp] PROFILE catalog 209.670666 ms",
+            "w: [ksp] PROFILE strict-models 542.340458 ms",
+            "w: [ksp] PROFILE route-extraction 772.506667 ms",
+            "w: [ksp] PROFILE renderer-compilation 680.617917 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=34.280694",
+            "w: [ksp] PROFILE checks 81.386709 ms",
+            "w: [ksp] PROFILE write-renderers 187.375625 ms",
+            "w: [ksp] PROFILE messages 44.935834 ms"
+          ]
+        },
+        {
+          "variant": "small-wins",
+          "iteration": 3,
+          "wall": 5.64,
+          "ksp": "5.028s",
+          "phases": [
+            "w: [ksp] PROFILE parse 120.407792 ms",
+            "w: [ksp] PROFILE models+expand 152.899666 ms",
+            "w: [ksp] PROFILE catalog 198.919583 ms",
+            "w: [ksp] PROFILE strict-models 583.086125 ms",
+            "w: [ksp] PROFILE route-extraction 792.805042 ms",
+            "w: [ksp] PROFILE renderer-compilation 754.345125 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=36.175455",
+            "w: [ksp] PROFILE checks 92.494 ms",
+            "w: [ksp] PROFILE write-renderers 184.77375 ms",
+            "w: [ksp] PROFILE messages 49.214084 ms"
+          ]
+        }
+      ],
+      "equal": true
+    },
+    "param": {
+      "results": [
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 10.551,
+          "ksp": "5.136s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.580792 ms",
+            "w: [ksp] PROFILE models+expand 0.688542 ms",
+            "w: [ksp] PROFILE catalog 289.585583 ms",
+            "w: [ksp] PROFILE parse 31.374334 ms",
+            "w: [ksp] PROFILE models+expand 35.412584 ms",
+            "w: [ksp] PROFILE catalog 55.045833 ms",
+            "w: [ksp] PROFILE strict-models 92.914458 ms",
+            "w: [ksp] PROFILE route-extraction 113.492042 ms",
+            "w: [ksp] PROFILE renderer-compilation 124.670208 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=3.399544",
+            "w: [ksp] PROFILE checks 15.990417 ms",
+            "w: [ksp] PROFILE write-renderers 27.73275 ms",
+            "w: [ksp] PROFILE messages 24.981584 ms",
+            "w: [ksp] PROFILE parse 140.594209 ms",
+            "w: [ksp] PROFILE models+expand 166.248125 ms",
+            "w: [ksp] PROFILE catalog 216.266083 ms",
+            "w: [ksp] PROFILE strict-models 608.276833 ms",
+            "w: [ksp] PROFILE route-extraction 816.301583 ms",
+            "w: [ksp] PROFILE renderer-compilation 924.787167 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=161.450817",
+            "w: [ksp] PROFILE checks 99.386792 ms",
+            "w: [ksp] PROFILE write-renderers 199.843708 ms",
+            "w: [ksp] PROFILE messages 49.78 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 5.669,
+          "ksp": "5.065s",
+          "phases": [
+            "w: [ksp] PROFILE parse 119.920291 ms",
+            "w: [ksp] PROFILE models+expand 150.999917 ms",
+            "w: [ksp] PROFILE catalog 197.713875 ms",
+            "w: [ksp] PROFILE strict-models 550.540208 ms",
+            "w: [ksp] PROFILE route-extraction 736.266667 ms",
+            "w: [ksp] PROFILE renderer-compilation 977.963709 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=146.366313",
+            "w: [ksp] PROFILE checks 118.819333 ms",
+            "w: [ksp] PROFILE write-renderers 176.408583 ms",
+            "w: [ksp] PROFILE messages 49.406792 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 5.464,
+          "ksp": "4.868s",
+          "phases": [
+            "w: [ksp] PROFILE parse 112.913833 ms",
+            "w: [ksp] PROFILE models+expand 151.946917 ms",
+            "w: [ksp] PROFILE catalog 194.44925 ms",
+            "w: [ksp] PROFILE strict-models 539.13475 ms",
+            "w: [ksp] PROFILE route-extraction 726.695667 ms",
+            "w: [ksp] PROFILE renderer-compilation 799.399916 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=152.547766",
+            "w: [ksp] PROFILE checks 91.683083 ms",
+            "w: [ksp] PROFILE write-renderers 199.086709 ms",
+            "w: [ksp] PROFILE messages 52.825667 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.645,
+          "ksp": "5.009s",
+          "phases": [
+            "w: [ksp] PROFILE parse 126.64275 ms",
+            "w: [ksp] PROFILE models+expand 160.45275 ms",
+            "w: [ksp] PROFILE catalog 204.089583 ms",
+            "w: [ksp] PROFILE strict-models 566.792917 ms",
+            "w: [ksp] PROFILE route-extraction 722.11275 ms",
+            "w: [ksp] PROFILE renderer-compilation 784.640458 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=134.555161",
+            "w: [ksp] PROFILE checks 93.288041 ms",
+            "w: [ksp] PROFILE write-renderers 176.536209 ms",
+            "w: [ksp] PROFILE messages 47.961333 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 0,
+          "wall": 15.508,
+          "ksp": "5.049s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.772708 ms",
+            "w: [ksp] PROFILE models+expand 0.758917 ms",
+            "w: [ksp] PROFILE catalog 324.047917 ms",
+            "w: [ksp] PROFILE parse 38.325958 ms",
+            "w: [ksp] PROFILE models+expand 22.749125 ms",
+            "w: [ksp] PROFILE catalog 59.247042 ms",
+            "w: [ksp] PROFILE strict-models 103.382333 ms",
+            "w: [ksp] PROFILE route-extraction 76.913208 ms",
+            "w: [ksp] PROFILE renderer-compilation 113.265542 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=2.779036",
+            "w: [ksp] PROFILE checks 12.601708 ms",
+            "w: [ksp] PROFILE write-renderers 19.446417 ms",
+            "w: [ksp] PROFILE messages 18.649292 ms",
+            "w: [ksp] PROFILE parse 131.91425 ms",
+            "w: [ksp] PROFILE models+expand 168.825834 ms",
+            "w: [ksp] PROFILE catalog 198.207709 ms",
+            "w: [ksp] PROFILE strict-models 605.8345 ms",
+            "w: [ksp] PROFILE route-extraction 686.897625 ms",
+            "w: [ksp] PROFILE renderer-compilation 888.820458 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=168.231994",
+            "w: [ksp] PROFILE checks 164.419125 ms",
+            "w: [ksp] PROFILE write-renderers 195.246875 ms",
+            "w: [ksp] PROFILE messages 47.653541 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 1,
+          "wall": 5.428,
+          "ksp": "4.764s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.364833 ms",
+            "w: [ksp] PROFILE models+expand 150.754375 ms",
+            "w: [ksp] PROFILE catalog 219.715917 ms",
+            "w: [ksp] PROFILE strict-models 524.660416 ms",
+            "w: [ksp] PROFILE route-extraction 637.184875 ms",
+            "w: [ksp] PROFILE renderer-compilation 779.149375 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=133.593867",
+            "w: [ksp] PROFILE checks 72.230208 ms",
+            "w: [ksp] PROFILE write-renderers 192.482333 ms",
+            "w: [ksp] PROFILE messages 47.781125 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 2,
+          "wall": 5.445,
+          "ksp": "4.822s",
+          "phases": [
+            "w: [ksp] PROFILE parse 125.572542 ms",
+            "w: [ksp] PROFILE models+expand 162.344042 ms",
+            "w: [ksp] PROFILE catalog 223.024958 ms",
+            "w: [ksp] PROFILE strict-models 536.085083 ms",
+            "w: [ksp] PROFILE route-extraction 650.660208 ms",
+            "w: [ksp] PROFILE renderer-compilation 825.980375 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=164.809444",
+            "w: [ksp] PROFILE checks 83.536833 ms",
+            "w: [ksp] PROFILE write-renderers 200.122291 ms",
+            "w: [ksp] PROFILE messages 66.296917 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 3,
+          "wall": 5.658,
+          "ksp": "5.059s",
+          "phases": [
+            "w: [ksp] PROFILE parse 122.236958 ms",
+            "w: [ksp] PROFILE models+expand 154.531208 ms",
+            "w: [ksp] PROFILE catalog 316.200041 ms",
+            "w: [ksp] PROFILE strict-models 637.165416 ms",
+            "w: [ksp] PROFILE route-extraction 662.956458 ms",
+            "w: [ksp] PROFILE renderer-compilation 799.757166 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=140.878512",
+            "w: [ksp] PROFILE checks 92.643417 ms",
+            "w: [ksp] PROFILE write-renderers 177.468542 ms",
+            "w: [ksp] PROFILE messages 49.125375 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 10.576,
+          "ksp": "4.848s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.602 ms",
+            "w: [ksp] PROFILE models+expand 0.697542 ms",
+            "w: [ksp] PROFILE catalog 291.938 ms",
+            "w: [ksp] PROFILE parse 34.424042 ms",
+            "w: [ksp] PROFILE models+expand 22.006958 ms",
+            "w: [ksp] PROFILE catalog 65.363334 ms",
+            "w: [ksp] PROFILE strict-models 102.939375 ms",
+            "w: [ksp] PROFILE route-extraction 93.173667 ms",
+            "w: [ksp] PROFILE renderer-compilation 98.12675 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=2.789928",
+            "w: [ksp] PROFILE checks 12.245125 ms",
+            "w: [ksp] PROFILE write-renderers 23.363917 ms",
+            "w: [ksp] PROFILE messages 30.80025 ms",
+            "w: [ksp] PROFILE parse 130.442625 ms",
+            "w: [ksp] PROFILE models+expand 152.149042 ms",
+            "w: [ksp] PROFILE catalog 200.201584 ms",
+            "w: [ksp] PROFILE strict-models 558.14475 ms",
+            "w: [ksp] PROFILE route-extraction 750.099625 ms",
+            "w: [ksp] PROFILE renderer-compilation 794.524125 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=111.446602",
+            "w: [ksp] PROFILE checks 83.273334 ms",
+            "w: [ksp] PROFILE write-renderers 174.596208 ms",
+            "w: [ksp] PROFILE messages 61.27 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 5.652,
+          "ksp": "4.956s",
+          "phases": [
+            "w: [ksp] PROFILE parse 124.567334 ms",
+            "w: [ksp] PROFILE models+expand 151.889 ms",
+            "w: [ksp] PROFILE catalog 193.430417 ms",
+            "w: [ksp] PROFILE strict-models 556.739083 ms",
+            "w: [ksp] PROFILE route-extraction 778.342792 ms",
+            "w: [ksp] PROFILE renderer-compilation 836.26275 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=129.03048",
+            "w: [ksp] PROFILE checks 82.468417 ms",
+            "w: [ksp] PROFILE write-renderers 191.786708 ms",
+            "w: [ksp] PROFILE messages 46.567542 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 5.458,
+          "ksp": "4.871s",
+          "phases": [
+            "w: [ksp] PROFILE parse 135.638958 ms",
+            "w: [ksp] PROFILE models+expand 173.6255 ms",
+            "w: [ksp] PROFILE catalog 197.138542 ms",
+            "w: [ksp] PROFILE strict-models 529.037167 ms",
+            "w: [ksp] PROFILE route-extraction 779.534875 ms",
+            "w: [ksp] PROFILE renderer-compilation 806.020875 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=106.558445",
+            "w: [ksp] PROFILE checks 79.138083 ms",
+            "w: [ksp] PROFILE write-renderers 175.471708 ms",
+            "w: [ksp] PROFILE messages 48.360792 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.596,
+          "ksp": "5.014s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.992875 ms",
+            "w: [ksp] PROFILE models+expand 148.928 ms",
+            "w: [ksp] PROFILE catalog 193.606583 ms",
+            "w: [ksp] PROFILE strict-models 565.806792 ms",
+            "w: [ksp] PROFILE route-extraction 699.672584 ms",
+            "w: [ksp] PROFILE renderer-compilation 915.851291 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=128.661343",
+            "w: [ksp] PROFILE checks 88.337 ms",
+            "w: [ksp] PROFILE write-renderers 171.47875 ms",
+            "w: [ksp] PROFILE messages 46.568792 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 0,
+          "wall": 9.297,
+          "ksp": "4.688s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.950291 ms",
+            "w: [ksp] PROFILE models+expand 0.992667 ms",
+            "w: [ksp] PROFILE catalog 354.654166 ms",
+            "w: [ksp] PROFILE parse 37.285416 ms",
+            "w: [ksp] PROFILE models+expand 32.649708 ms",
+            "w: [ksp] PROFILE catalog 69.942125 ms",
+            "w: [ksp] PROFILE strict-models 105.244333 ms",
+            "w: [ksp] PROFILE route-extraction 89.536083 ms",
+            "w: [ksp] PROFILE renderer-compilation 102.007833 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=2.396738",
+            "w: [ksp] PROFILE checks 11.909167 ms",
+            "w: [ksp] PROFILE write-renderers 15.967833 ms",
+            "w: [ksp] PROFILE messages 17.879375 ms",
+            "w: [ksp] PROFILE parse 134.869875 ms",
+            "w: [ksp] PROFILE models+expand 151.336333 ms",
+            "w: [ksp] PROFILE catalog 197.177583 ms",
+            "w: [ksp] PROFILE strict-models 558.221084 ms",
+            "w: [ksp] PROFILE route-extraction 589.789791 ms",
+            "w: [ksp] PROFILE renderer-compilation 819.022792 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=141.945192",
+            "w: [ksp] PROFILE checks 91.951125 ms",
+            "w: [ksp] PROFILE write-renderers 170.905791 ms",
+            "w: [ksp] PROFILE messages 46.319583 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 1,
+          "wall": 5.373,
+          "ksp": "4.766s",
+          "phases": [
+            "w: [ksp] PROFILE parse 123.775167 ms",
+            "w: [ksp] PROFILE models+expand 179.584875 ms",
+            "w: [ksp] PROFILE catalog 212.769375 ms",
+            "w: [ksp] PROFILE strict-models 559.130417 ms",
+            "w: [ksp] PROFILE route-extraction 645.329667 ms",
+            "w: [ksp] PROFILE renderer-compilation 789.208125 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=147.769575",
+            "w: [ksp] PROFILE checks 83.047291 ms",
+            "w: [ksp] PROFILE write-renderers 171.005583 ms",
+            "w: [ksp] PROFILE messages 47.030916 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 2,
+          "wall": 5.468,
+          "ksp": "4.872s",
+          "phases": [
+            "w: [ksp] PROFILE parse 118.886916 ms",
+            "w: [ksp] PROFILE models+expand 150.605959 ms",
+            "w: [ksp] PROFILE catalog 192.684833 ms",
+            "w: [ksp] PROFILE strict-models 539.980667 ms",
+            "w: [ksp] PROFILE route-extraction 660.323 ms",
+            "w: [ksp] PROFILE renderer-compilation 863.096875 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=157.609521",
+            "w: [ksp] PROFILE checks 98.810291 ms",
+            "w: [ksp] PROFILE write-renderers 183.473125 ms",
+            "w: [ksp] PROFILE messages 50.014417 ms"
+          ]
+        },
+        {
+          "variant": "route-parameters",
+          "iteration": 3,
+          "wall": 5.254,
+          "ksp": "4.638s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.448791 ms",
+            "w: [ksp] PROFILE models+expand 151.457917 ms",
+            "w: [ksp] PROFILE catalog 194.855417 ms",
+            "w: [ksp] PROFILE strict-models 529.222209 ms",
+            "w: [ksp] PROFILE route-extraction 563.771334 ms",
+            "w: [ksp] PROFILE renderer-compilation 814.711791 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=154.57931",
+            "w: [ksp] PROFILE checks 81.891042 ms",
+            "w: [ksp] PROFILE write-renderers 171.602417 ms",
+            "w: [ksp] PROFILE messages 46.322 ms"
+          ]
+        }
+      ],
+      "equal": true,
+      "files": 67
+    },
+    "format": {
+      "results": [
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 7.643,
+          "ksp": "4.767s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.556333 ms",
+            "w: [ksp] PROFILE models+expand 0.62825 ms",
+            "w: [ksp] PROFILE catalog 197.881459 ms",
+            "w: [ksp] PROFILE parse 21.517583 ms",
+            "w: [ksp] PROFILE models+expand 10.985708 ms",
+            "w: [ksp] PROFILE catalog 33.735583 ms",
+            "w: [ksp] PROFILE strict-models 56.560625 ms",
+            "w: [ksp] PROFILE route-extraction 75.542209 ms",
+            "w: [ksp] PROFILE renderer-compilation 73.157583 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=1.856952",
+            "w: [ksp] PROFILE checks 8.788375 ms",
+            "w: [ksp] PROFILE write-renderers 39.213917 ms",
+            "w: [ksp] PROFILE messages 13.865292 ms",
+            "w: [ksp] PROFILE parse 143.2935 ms",
+            "w: [ksp] PROFILE models+expand 147.423291 ms",
+            "w: [ksp] PROFILE catalog 195.08975 ms",
+            "w: [ksp] PROFILE strict-models 519.25325 ms",
+            "w: [ksp] PROFILE route-extraction 715.747125 ms",
+            "w: [ksp] PROFILE renderer-compilation 835.598042 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=162.879142",
+            "w: [ksp] PROFILE checks 79.966291 ms",
+            "w: [ksp] PROFILE write-renderers 198.000042 ms",
+            "w: [ksp] PROFILE messages 69.06975 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 5.329,
+          "ksp": "4.746s",
+          "phases": [
+            "w: [ksp] PROFILE parse 122.612 ms",
+            "w: [ksp] PROFILE models+expand 149.614042 ms",
+            "w: [ksp] PROFILE catalog 205.373917 ms",
+            "w: [ksp] PROFILE strict-models 559.71725 ms",
+            "w: [ksp] PROFILE route-extraction 718.756209 ms",
+            "w: [ksp] PROFILE renderer-compilation 770.888833 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=106.331501",
+            "w: [ksp] PROFILE checks 82.6085 ms",
+            "w: [ksp] PROFILE write-renderers 171.683833 ms",
+            "w: [ksp] PROFILE messages 48.602541 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 5.533,
+          "ksp": "4.959s",
+          "phases": [
+            "w: [ksp] PROFILE parse 118.972584 ms",
+            "w: [ksp] PROFILE models+expand 148.637667 ms",
+            "w: [ksp] PROFILE catalog 194.101417 ms",
+            "w: [ksp] PROFILE strict-models 547.833125 ms",
+            "w: [ksp] PROFILE route-extraction 780.377375 ms",
+            "w: [ksp] PROFILE renderer-compilation 921.476708 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=158.821267",
+            "w: [ksp] PROFILE checks 82.562125 ms",
+            "w: [ksp] PROFILE write-renderers 185.679 ms",
+            "w: [ksp] PROFILE messages 45.332833 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.463,
+          "ksp": "4.883s",
+          "phases": [
+            "w: [ksp] PROFILE parse 131.942875 ms",
+            "w: [ksp] PROFILE models+expand 150.291083 ms",
+            "w: [ksp] PROFILE catalog 192.831375 ms",
+            "w: [ksp] PROFILE strict-models 540.56625 ms",
+            "w: [ksp] PROFILE route-extraction 728.268083 ms",
+            "w: [ksp] PROFILE renderer-compilation 905.344 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=144.738683",
+            "w: [ksp] PROFILE checks 86.438291 ms",
+            "w: [ksp] PROFILE write-renderers 193.115584 ms",
+            "w: [ksp] PROFILE messages 45.719791 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 0,
+          "wall": 24.425,
+          "ksp": "7.275s",
+          "phases": [
+            "w: [ksp] PROFILE parse 1.039084 ms",
+            "w: [ksp] PROFILE models+expand 1.100583 ms",
+            "w: [ksp] PROFILE catalog 349.14475 ms",
+            "w: [ksp] PROFILE parse 32.347459 ms",
+            "w: [ksp] PROFILE models+expand 20.655583 ms",
+            "w: [ksp] PROFILE catalog 46.95825 ms",
+            "w: [ksp] PROFILE strict-models 495.810375 ms",
+            "w: [ksp] PROFILE route-extraction 647.7275 ms",
+            "w: [ksp] PROFILE renderer-compilation 133.26125 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=3.552821",
+            "w: [ksp] PROFILE checks 11.222334 ms",
+            "w: [ksp] PROFILE write-renderers 15.873458 ms",
+            "w: [ksp] PROFILE messages 15.627541 ms",
+            "w: [ksp] PROFILE parse 145.352167 ms",
+            "w: [ksp] PROFILE models+expand 293.987166 ms",
+            "w: [ksp] PROFILE catalog 260.230583 ms",
+            "w: [ksp] PROFILE strict-models 1082.932292 ms",
+            "w: [ksp] PROFILE route-extraction 1666.471666 ms",
+            "w: [ksp] PROFILE renderer-compilation 880.605792 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=129.372729",
+            "w: [ksp] PROFILE checks 63.655584 ms",
+            "w: [ksp] PROFILE write-renderers 53.651625 ms",
+            "w: [ksp] PROFILE messages 44.137084 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 1,
+          "wall": 5.624,
+          "ksp": "4.984s",
+          "phases": [
+            "w: [ksp] PROFILE parse 125.696875 ms",
+            "w: [ksp] PROFILE models+expand 152.25375 ms",
+            "w: [ksp] PROFILE catalog 196.583458 ms",
+            "w: [ksp] PROFILE strict-models 627.988166 ms",
+            "w: [ksp] PROFILE route-extraction 802.921083 ms",
+            "w: [ksp] PROFILE renderer-compilation 826.64575 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=117.816067",
+            "w: [ksp] PROFILE checks 65.978791 ms",
+            "w: [ksp] PROFILE write-renderers 56.372125 ms",
+            "w: [ksp] PROFILE messages 42.80675 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 2,
+          "wall": 5.433,
+          "ksp": "4.820s",
+          "phases": [
+            "w: [ksp] PROFILE parse 111.515541 ms",
+            "w: [ksp] PROFILE models+expand 178.116542 ms",
+            "w: [ksp] PROFILE catalog 199.875292 ms",
+            "w: [ksp] PROFILE strict-models 550.014083 ms",
+            "w: [ksp] PROFILE route-extraction 837.729916 ms",
+            "w: [ksp] PROFILE renderer-compilation 763.711583 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=125.546136",
+            "w: [ksp] PROFILE checks 81.147542 ms",
+            "w: [ksp] PROFILE write-renderers 53.230833 ms",
+            "w: [ksp] PROFILE messages 44.961458 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 3,
+          "wall": 5.619,
+          "ksp": "5.018s",
+          "phases": [
+            "w: [ksp] PROFILE parse 117.866875 ms",
+            "w: [ksp] PROFILE models+expand 149.80925 ms",
+            "w: [ksp] PROFILE catalog 210.007 ms",
+            "w: [ksp] PROFILE strict-models 729.722625 ms",
+            "w: [ksp] PROFILE route-extraction 769.500375 ms",
+            "w: [ksp] PROFILE renderer-compilation 812.917291 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=133.136973",
+            "w: [ksp] PROFILE checks 107.977459 ms",
+            "w: [ksp] PROFILE write-renderers 53.298708 ms",
+            "w: [ksp] PROFILE messages 47.893625 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 0,
+          "wall": 10.402,
+          "ksp": "4.845s",
+          "phases": [
+            "w: [ksp] PROFILE parse 0.886917 ms",
+            "w: [ksp] PROFILE models+expand 1.276042 ms",
+            "w: [ksp] PROFILE catalog 330.010208 ms",
+            "w: [ksp] PROFILE parse 34.105666 ms",
+            "w: [ksp] PROFILE models+expand 17.47375 ms",
+            "w: [ksp] PROFILE catalog 55.717292 ms",
+            "w: [ksp] PROFILE strict-models 90.844417 ms",
+            "w: [ksp] PROFILE route-extraction 76.727291 ms",
+            "w: [ksp] PROFILE renderer-compilation 89.478917 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=2.278289",
+            "w: [ksp] PROFILE checks 10.109166 ms",
+            "w: [ksp] PROFILE write-renderers 32.528167 ms",
+            "w: [ksp] PROFILE messages 17.978833 ms",
+            "w: [ksp] PROFILE parse 134.672833 ms",
+            "w: [ksp] PROFILE models+expand 150.072667 ms",
+            "w: [ksp] PROFILE catalog 200.4905 ms",
+            "w: [ksp] PROFILE strict-models 545.388083 ms",
+            "w: [ksp] PROFILE route-extraction 814.792959 ms",
+            "w: [ksp] PROFILE renderer-compilation 799.648875 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=137.307023",
+            "w: [ksp] PROFILE checks 90.985958 ms",
+            "w: [ksp] PROFILE write-renderers 171.394458 ms",
+            "w: [ksp] PROFILE messages 43.951667 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 1,
+          "wall": 5.581,
+          "ksp": "4.988s",
+          "phases": [
+            "w: [ksp] PROFILE parse 120.97075 ms",
+            "w: [ksp] PROFILE models+expand 152.533834 ms",
+            "w: [ksp] PROFILE catalog 199.278125 ms",
+            "w: [ksp] PROFILE strict-models 583.314458 ms",
+            "w: [ksp] PROFILE route-extraction 751.553833 ms",
+            "w: [ksp] PROFILE renderer-compilation 801.083375 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=157.693589",
+            "w: [ksp] PROFILE checks 70.120709 ms",
+            "w: [ksp] PROFILE write-renderers 194.402917 ms",
+            "w: [ksp] PROFILE messages 61.26025 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 2,
+          "wall": 5.557,
+          "ksp": "4.955s",
+          "phases": [
+            "w: [ksp] PROFILE parse 112.923042 ms",
+            "w: [ksp] PROFILE models+expand 149.742333 ms",
+            "w: [ksp] PROFILE catalog 225.57925 ms",
+            "w: [ksp] PROFILE strict-models 557.405791 ms",
+            "w: [ksp] PROFILE route-extraction 836.018416 ms",
+            "w: [ksp] PROFILE renderer-compilation 814.084583 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=151.25733",
+            "w: [ksp] PROFILE checks 70.822875 ms",
+            "w: [ksp] PROFILE write-renderers 190.333083 ms",
+            "w: [ksp] PROFILE messages 41.893792 ms"
+          ]
+        },
+        {
+          "variant": "small-baseline",
+          "iteration": 3,
+          "wall": 5.547,
+          "ksp": "4.938s",
+          "phases": [
+            "w: [ksp] PROFILE parse 133.125833 ms",
+            "w: [ksp] PROFILE models+expand 148.954875 ms",
+            "w: [ksp] PROFILE catalog 202.691583 ms",
+            "w: [ksp] PROFILE strict-models 576.566583 ms",
+            "w: [ksp] PROFILE route-extraction 717.851834 ms",
+            "w: [ksp] PROFILE renderer-compilation 814.172 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=167.785508",
+            "w: [ksp] PROFILE checks 112.903125 ms",
+            "w: [ksp] PROFILE write-renderers 186.886667 ms",
+            "w: [ksp] PROFILE messages 74.059583 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 0,
+          "wall": 10.191,
+          "ksp": "4.666s",
+          "phases": [
+            "w: [ksp] PROFILE parse 1.263625 ms",
+            "w: [ksp] PROFILE models+expand 1.208042 ms",
+            "w: [ksp] PROFILE catalog 311.023375 ms",
+            "w: [ksp] PROFILE parse 25.69675 ms",
+            "w: [ksp] PROFILE models+expand 16.162333 ms",
+            "w: [ksp] PROFILE catalog 54.564958 ms",
+            "w: [ksp] PROFILE strict-models 81.080375 ms",
+            "w: [ksp] PROFILE route-extraction 67.660458 ms",
+            "w: [ksp] PROFILE renderer-compilation 86.577875 ms",
+            "w: [ksp] PROFILE route checks=667 matchesMs=1.916373",
+            "w: [ksp] PROFILE checks 9.761958 ms",
+            "w: [ksp] PROFILE write-renderers 10.952625 ms",
+            "w: [ksp] PROFILE messages 15.99 ms",
+            "w: [ksp] PROFILE parse 117.18325 ms",
+            "w: [ksp] PROFILE models+expand 153.200125 ms",
+            "w: [ksp] PROFILE catalog 194.024042 ms",
+            "w: [ksp] PROFILE strict-models 538.648875 ms",
+            "w: [ksp] PROFILE route-extraction 726.050875 ms",
+            "w: [ksp] PROFILE renderer-compilation 861.7615 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=152.171759",
+            "w: [ksp] PROFILE checks 77.05325 ms",
+            "w: [ksp] PROFILE write-renderers 76.198084 ms",
+            "w: [ksp] PROFILE messages 41.706375 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 1,
+          "wall": 5.238,
+          "ksp": "4.657s",
+          "phases": [
+            "w: [ksp] PROFILE parse 120.366167 ms",
+            "w: [ksp] PROFILE models+expand 149.463958 ms",
+            "w: [ksp] PROFILE catalog 214.542084 ms",
+            "w: [ksp] PROFILE strict-models 570.927375 ms",
+            "w: [ksp] PROFILE route-extraction 723.610708 ms",
+            "w: [ksp] PROFILE renderer-compilation 764.27725 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=119.649361",
+            "w: [ksp] PROFILE checks 67.402458 ms",
+            "w: [ksp] PROFILE write-renderers 51.639541 ms",
+            "w: [ksp] PROFILE messages 43.869542 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 2,
+          "wall": 5.22,
+          "ksp": "4.636s",
+          "phases": [
+            "w: [ksp] PROFILE parse 128.822333 ms",
+            "w: [ksp] PROFILE models+expand 148.153458 ms",
+            "w: [ksp] PROFILE catalog 238.438792 ms",
+            "w: [ksp] PROFILE strict-models 572.202834 ms",
+            "w: [ksp] PROFILE route-extraction 672.873125 ms",
+            "w: [ksp] PROFILE renderer-compilation 784.214792 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=128.264459",
+            "w: [ksp] PROFILE checks 69.840167 ms",
+            "w: [ksp] PROFILE write-renderers 50.379167 ms",
+            "w: [ksp] PROFILE messages 41.801583 ms"
+          ]
+        },
+        {
+          "variant": "source-format",
+          "iteration": 3,
+          "wall": 5.284,
+          "ksp": "4.655s",
+          "phases": [
+            "w: [ksp] PROFILE parse 121.044333 ms",
+            "w: [ksp] PROFILE models+expand 170.88 ms",
+            "w: [ksp] PROFILE catalog 192.749708 ms",
+            "w: [ksp] PROFILE strict-models 533.041 ms",
+            "w: [ksp] PROFILE route-extraction 753.1325 ms",
+            "w: [ksp] PROFILE renderer-compilation 793.592334 ms",
+            "w: [ksp] PROFILE route checks=4075 matchesMs=131.249613",
+            "w: [ksp] PROFILE checks 91.251959 ms",
+            "w: [ksp] PROFILE write-renderers 52.08975 ms",
+            "w: [ksp] PROFILE messages 42.132375 ms"
+          ]
+        }
+      ],
+      "equal": true,
+      "files": 67
+    }
+  },
+  "template_edits": {
+    "combined": {
+      "results": [
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 0,
+          "wall": 6.723,
+          "tasks": {
+            "kspKotlin": "4.704s",
+            "compileKotlin": "0.071s",
+            "compileJava": "0.023s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 1,
+          "wall": 7.307,
+          "tasks": {
+            "kspKotlin": "4.793s",
+            "compileKotlin": "0.642s",
+            "compileJava": "1.276s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 2,
+          "wall": 5.515,
+          "tasks": {
+            "kspKotlin": "4.840s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 3,
+          "wall": 5.444,
+          "tasks": {
+            "kspKotlin": "4.753s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 4,
+          "wall": 5.423,
+          "tasks": {
+            "kspKotlin": "4.749s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 0,
+          "iteration": 5,
+          "wall": 5.529,
+          "tasks": {
+            "kspKotlin": "4.845s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 0,
+          "wall": 11.834,
+          "tasks": {
+            "kspKotlin": "4.805s",
+            "compileKotlin": "0.206s",
+            "compileJava": "1.064s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 1,
+          "wall": 5.924,
+          "tasks": {
+            "kspKotlin": "4.614s",
+            "compileKotlin": "0.154s",
+            "compileJava": "0.535s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 2,
+          "wall": 5.516,
+          "tasks": {
+            "kspKotlin": "4.829s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 3,
+          "wall": 5.504,
+          "tasks": {
+            "kspKotlin": "4.770s",
+            "compileKotlin": "0.016s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 4,
+          "wall": 5.699,
+          "tasks": {
+            "kspKotlin": "5.005s",
+            "compileKotlin": "0.017s",
+            "compileJava": "0.006s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 1,
+          "iteration": 5,
+          "wall": 5.55,
+          "tasks": {
+            "kspKotlin": "4.856s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 0,
+          "wall": 10.871,
+          "tasks": {
+            "kspKotlin": "4.797s",
+            "compileKotlin": "0.210s",
+            "compileJava": "1.016s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 1,
+          "wall": 6.363,
+          "tasks": {
+            "kspKotlin": "5.111s",
+            "compileKotlin": "0.147s",
+            "compileJava": "0.504s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 2,
+          "wall": 5.674,
+          "tasks": {
+            "kspKotlin": "5.006s",
+            "compileKotlin": "0.016s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 3,
+          "wall": 5.9,
+          "tasks": {
+            "kspKotlin": "5.211s",
+            "compileKotlin": "0.016s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 4,
+          "wall": 6.624,
+          "tasks": {
+            "kspKotlin": "5.932s",
+            "compileKotlin": "0.018s",
+            "compileJava": "0.006s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 5,
+          "wall": 5.665,
+          "tasks": {
+            "kspKotlin": "4.961s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 0,
+          "wall": 14.001,
+          "tasks": {
+            "kspKotlin": "5.066s",
+            "compileKotlin": "0.231s",
+            "compileJava": "2.094s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 1,
+          "wall": 6.394,
+          "tasks": {
+            "kspKotlin": "4.975s",
+            "compileKotlin": "0.151s",
+            "compileJava": "0.559s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 2,
+          "wall": 5.355,
+          "tasks": {
+            "kspKotlin": "4.667s",
+            "compileKotlin": "0.016s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 3,
+          "wall": 5.679,
+          "tasks": {
+            "kspKotlin": "4.985s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 4,
+          "wall": 5.392,
+          "tasks": {
+            "kspKotlin": "4.684s",
+            "compileKotlin": "0.015s",
+            "compileJava": "0.005s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 5,
+          "wall": 5.657,
+          "tasks": {
+            "kspKotlin": "4.951s",
+            "compileKotlin": "0.018s",
+            "compileJava": "0.006s"
+          }
+        }
+      ],
+      "equal": true,
+      "files": 67
+    },
+    "length": {
+      "results": [
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 0,
+          "wall": 5.997,
+          "tasks": {
+            "kspKotlin": "4.654s",
+            "compileKotlin": "0.146s",
+            "compileJava": "0.560s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 1,
+          "wall": 9.185,
+          "tasks": {
+            "kspKotlin": "7.521s",
+            "compileKotlin": "0.289s",
+            "compileJava": "0.525s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 2,
+          "wall": 6.143,
+          "tasks": {
+            "kspKotlin": "4.803s",
+            "compileKotlin": "0.169s",
+            "compileJava": "0.517s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 3,
+          "wall": 6.159,
+          "tasks": {
+            "kspKotlin": "4.813s",
+            "compileKotlin": "0.185s",
+            "compileJava": "0.548s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 4,
+          "wall": 6.467,
+          "tasks": {
+            "kspKotlin": "5.158s",
+            "compileKotlin": "0.158s",
+            "compileJava": "0.491s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 0,
+          "iteration": 5,
+          "wall": 6.166,
+          "tasks": {
+            "kspKotlin": "4.855s",
+            "compileKotlin": "0.156s",
+            "compileJava": "0.482s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 0,
+          "wall": 12.652,
+          "tasks": {
+            "kspKotlin": "5.226s",
+            "compileKotlin": "0.152s",
+            "compileJava": "0.540s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 1,
+          "wall": 6.79,
+          "tasks": {
+            "kspKotlin": "5.366s",
+            "compileKotlin": "0.158s",
+            "compileJava": "0.527s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 2,
+          "wall": 6.318,
+          "tasks": {
+            "kspKotlin": "5.040s",
+            "compileKotlin": "0.146s",
+            "compileJava": "0.468s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 3,
+          "wall": 6.538,
+          "tasks": {
+            "kspKotlin": "5.215s",
+            "compileKotlin": "0.158s",
+            "compileJava": "0.527s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 4,
+          "wall": 6.202,
+          "tasks": {
+            "kspKotlin": "4.941s",
+            "compileKotlin": "0.141s",
+            "compileJava": "0.473s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 1,
+          "iteration": 5,
+          "wall": 6.227,
+          "tasks": {
+            "kspKotlin": "4.973s",
+            "compileKotlin": "0.162s",
+            "compileJava": "0.460s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 0,
+          "wall": 6.576,
+          "tasks": {
+            "kspKotlin": "5.351s",
+            "compileKotlin": "0.157s",
+            "compileJava": "0.468s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 1,
+          "wall": 7.385,
+          "tasks": {
+            "kspKotlin": "6.075s",
+            "compileKotlin": "0.148s",
+            "compileJava": "0.491s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 2,
+          "wall": 6.833,
+          "tasks": {
+            "kspKotlin": "5.579s",
+            "compileKotlin": "0.142s",
+            "compileJava": "0.481s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 3,
+          "wall": 7.031,
+          "tasks": {
+            "kspKotlin": "5.703s",
+            "compileKotlin": "0.152s",
+            "compileJava": "0.508s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 4,
+          "wall": 7.118,
+          "tasks": {
+            "kspKotlin": "5.736s",
+            "compileKotlin": "0.142s",
+            "compileJava": "0.476s"
+          }
+        },
+        {
+          "variant": "small-baseline",
+          "block": 2,
+          "iteration": 5,
+          "wall": 6.83,
+          "tasks": {
+            "kspKotlin": "5.582s",
+            "compileKotlin": "0.141s",
+            "compileJava": "0.480s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 0,
+          "wall": 12.96,
+          "tasks": {
+            "kspKotlin": "4.958s",
+            "compileKotlin": "0.139s",
+            "compileJava": "0.522s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 1,
+          "wall": 6.505,
+          "tasks": {
+            "kspKotlin": "5.191s",
+            "compileKotlin": "0.153s",
+            "compileJava": "0.526s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 2,
+          "wall": 6.171,
+          "tasks": {
+            "kspKotlin": "4.920s",
+            "compileKotlin": "0.141s",
+            "compileJava": "0.495s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 3,
+          "wall": 5.977,
+          "tasks": {
+            "kspKotlin": "4.738s",
+            "compileKotlin": "0.137s",
+            "compileJava": "0.483s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 4,
+          "wall": 6.058,
+          "tasks": {
+            "kspKotlin": "4.812s",
+            "compileKotlin": "0.141s",
+            "compileJava": "0.497s"
+          }
+        },
+        {
+          "variant": "small-wins",
+          "block": 3,
+          "iteration": 5,
+          "wall": 5.878,
+          "tasks": {
+            "kspKotlin": "4.653s",
+            "compileKotlin": "0.149s",
+            "compileJava": "0.455s"
+          }
+        }
+      ],
+      "equal": true,
+      "files": 67
+    }
+  }
+}

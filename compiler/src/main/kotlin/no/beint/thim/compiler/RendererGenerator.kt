@@ -1455,7 +1455,7 @@ internal class RendererGenerator(
     ) {
         private val output = StringBuilder()
         private val pending = StringBuilder()
-        private var depth = 0
+        private var depth = 1
 
         fun static(value: String) {
             pending.append(value)
@@ -1468,7 +1468,8 @@ internal class RendererGenerator(
 
         fun line(value: String = "") {
             flushStatic()
-            output.append("    ".repeat(depth)).append(value).append('\n')
+            if (value.isNotBlank()) output.append("    ".repeat(depth)).append(value)
+            output.append('\n')
         }
 
         fun open(header: String) {
