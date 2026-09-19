@@ -110,10 +110,11 @@ private class ThimProcessor(
             } else {
                 RouteCatalog(emptyList(), emptyList(), extractedRoutes.files)
             }
-            val staticContent = StaticContent()
-            val generator = RendererGenerator(catalog, routeCatalog, staticContent, registryName, strictModels)
+            val generator = RendererGenerator(catalog, routeCatalog, strictModels)
+            val statics = List(RENDERER_FILES) { StaticContent() }
             val compiled = templates.map { template ->
-                generator.compile(template.name, template.model, template.nodes)
+                val file = rendererFile(template.model)
+                generator.compile(template.name, template.model, template.nodes, statics[file], holderName(file))
             }
             problems += generator.errors
             collect(problems) { if (strictModels) reportUnusedProperties(templates, generator) }
@@ -126,7 +127,7 @@ private class ThimProcessor(
                 completed = true
                 return emptyList()
             }
-            generate(compiled, staticContent.bytes(), extractedRoutes)
+            generate(compiled, statics, extractedRoutes)
             if (catalog.definitions().isNotEmpty()) {
                 val files = (compiled.mapNotNull { it.model.containingFile } + extractedRoutes.files).distinct().toTypedArray()
                 generateMessages(catalog, files)
@@ -188,15 +189,49 @@ private class ThimProcessor(
         diagnostic("THIM-MODEL-UNUSED-PROPERTY", null, unused.joinToString("; "))
     }
 
-    private fun generate(compiled: List<CompiledTemplate>, staticContent: ByteArray, routeCatalog: RouteCatalog) {
+    /**
+     * Renderers are grouped into a fixed number of source files by a stable hash of the
+     * page-model name, each with its own static resource. A renderer references only its
+     * file's holder class, never the registry or another file, so an unchanged file
+     * regenerates byte-identical output and Gradle's incremental Java compilation recompiles
+     * only the file whose template changed plus the registry. A fixed count keeps KSP's
+     * per-file overhead small; membership depends on the model name alone, so adding or
+     * removing a template touches one file.
+     */
+    private fun generate(compiled: List<CompiledTemplate>, statics: List<StaticContent>, routeCatalog: RouteCatalog) {
         val files = (compiled.mapNotNull { it.model.containingFile } + routeCatalog.files).distinct().toTypedArray()
         val dependencies = Dependencies(aggregating = true, *files)
-        codeGenerator.createNewFile(
-            dependencies = dependencies,
-            packageName = generatedPackage,
-            fileName = registryName,
-            extensionName = "bin",
-        ).use { it.write(staticContent) }
+        compiled.groupBy { rendererFile(it.model) }.toSortedMap().forEach { (file, members) ->
+            val holder = holderName(file)
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = holder,
+                extensionName = "bin",
+            ).use { it.write(statics[file].bytes()) }
+            codeGenerator.createNewFile(
+                dependencies = dependencies,
+                packageName = generatedPackage,
+                fileName = holder,
+                extensionName = "java",
+            ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
+                output.appendLine("package $generatedPackage;")
+                output.appendLine()
+                output.appendLine("import java.io.IOException;")
+                output.appendLine("import no.beint.thim.HtmlOutput;")
+                output.appendLine("import no.beint.thim.RenderContext;")
+                output.appendLine()
+                output.appendLine("final class $holder {")
+                output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($holder.class, \"$holder.bin\");")
+                output.appendLine()
+                output.appendLine("    private $holder() {}")
+                members.sortedBy { it.rendererName }.forEach { template ->
+                    output.appendLine()
+                    output.append(template.source.prependIndent("    ").replace(Regex("(?m)^ +$"), ""))
+                }
+                output.appendLine("}")
+            }
+        }
         codeGenerator.createNewFile(
             dependencies = dependencies,
             packageName = generatedPackage,
@@ -210,10 +245,7 @@ private class ThimProcessor(
             output.appendLine("import no.beint.thim.RenderContext;")
             output.appendLine("import no.beint.thim.TemplateSet;")
             output.appendLine()
-            compiled.forEach { output.append(it.source).appendLine() }
             output.appendLine("public final class $registryName implements TemplateSet {")
-            output.appendLine("    static final byte[] STATIC = HtmlOutput.resource($registryName.class, \"$registryName.bin\");")
-            output.appendLine()
             output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain in render only")
             output.appendLine("    // serves subclasses of open models, matching the previous linear dispatch.")
             output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = index();")
@@ -264,7 +296,7 @@ private class ThimProcessor(
             output.appendLine("            switch (index) {")
             compiled.forEachIndexed { index, template ->
                 val modelName = template.model.qualifiedName!!.asString()
-                output.appendLine("                case $index -> ${template.rendererName}.render(($modelName) model, context, output);")
+                output.appendLine("                case $index -> ${rendererReference(template)}.render(($modelName) model, context, output);")
             }
             output.appendLine("                default -> throw new IllegalStateException(\"Unknown template index \" + index);")
             output.appendLine("            }")
@@ -273,7 +305,7 @@ private class ThimProcessor(
             compiled.forEach {
                 val modelName = it.model.qualifiedName!!.asString()
                 output.appendLine("        if (model instanceof $modelName typed) {")
-                output.appendLine("            ${it.rendererName}.render(typed, context, output);")
+                output.appendLine("            ${rendererReference(it)}.render(typed, context, output);")
                 output.appendLine("            return;")
                 output.appendLine("        }")
             }
@@ -384,7 +416,18 @@ private class ThimProcessor(
     private fun requiredPath(environment: SymbolProcessorEnvironment, key: String): Path =
         Path.of(requireNotNull(environment.options[key]) { "Missing KSP option '$key'" }).toAbsolutePath().normalize()
 
+    private fun rendererFile(model: KSClassDeclaration): Int =
+        Math.floorMod(model.qualifiedName!!.asString().hashCode(), RENDERER_FILES)
+
+    private fun holderName(file: Int): String = "${registryName}Part$file"
+
+    private fun rendererReference(template: CompiledTemplate): String =
+        "${holderName(rendererFile(template.model))}.${template.rendererName}"
+
     private companion object {
+        /** Generated renderer source files per module; see [generate]. */
+        const val RENDERER_FILES = 32
+
         fun conventionalModelName(templateName: String): String = templateName
             .split(Regex("[^A-Za-z0-9]+"))
             .filter(String::isNotEmpty)

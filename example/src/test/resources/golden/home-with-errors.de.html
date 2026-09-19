@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Thim 0.11.0</title>
+</head>
+<body>
+    <main data-config="{&quot;value&quot;:&quot;id&quot;,&quot;title&quot;:&quot;A&amp;B&quot;,&quot;markup&quot;:&quot;&lt;b&gt;&quot;}">
+        <h1>Thim 0.11.0</h1>
+        <p>Typed models, compiled HTML, no runtime engine.</p>
+        <p>3 unread messages</p>
+        <ul>
+            <li>
+                
+    <strong>Safe</strong>
+    <span>Properties and messages are checked while the application compiles.</span>
+
+                <a href="/app/feature/Safe?ref=home">Details</a>
+            </li><li>
+                
+    <strong>Small</strong>
+    <span>The runtime is dependency-free Java.</span>
+
+                <a href="/app/feature/Small?ref=home">Details</a>
+            </li><li>
+                
+    <strong>Fast</strong>
+    <span>Generated code writes directly to the HTTP response.</span>
+
+                <a href="/app/feature/Fast?ref=home">Details</a>
+            </li>
+        </ul>
+        <p>
+            <a href="/app/health">Health check</a>
+            <button hx-post="/feedback">Send feedback</button>
+        </p>
+        <form method="post" action="/app/feedback">
+            <label for="author">Author</label>
+            <input type="text" id="author" name="author" value="">
+            <span>Author is required</span>
+            <textarea id="message" name="message">Message &amp; &lt;text&gt;</textarea>
+            <input type="number" id="rating" name="rating" value="4">
+            <input type="checkbox" id="subscribe" name="subscribe" value="true" checked><input type="hidden" name="_subscribe" value="on">
+            <input type="radio" value="normal" id="priority.normal" name="priority">
+            <input type="radio" value="high" id="priority.high" name="priority" checked>
+            <select id="category" name="category">
+                <option value="general">General</option>
+                <option value="bug" selected>Bug</option>
+                <option value="idea">Idea</option>
+            </select>
+            <button type="submit">Send</button>
+        </form>
+    </main>
+</body>
+</html>

@@ -14,7 +14,7 @@ Thim optimizes for four properties:
 1. The Gradle plugin tracks HTML, strict YAML message catalogs and model sources.
 2. KSP resolves a page-model class from the template filename and configured model packages.
 3. The compiler links fixed layouts and fragments, then validates properties, nullability, locale/key/argument parity, plural and select rules, and supported directives.
-4. It emits readable Java renderers and one package-local resource containing static UTF-8 content.
+4. It emits readable Java renderers grouped into a fixed set of source files by a stable hash of the page-model name, each file with its own package-local resource of static UTF-8 content, plus a registry that maps page-model classes to renderers. A renderer depends only on its file's resource, so an unchanged file regenerates byte-identical output and Gradle's incremental Java compilation skips it.
 5. Each template jar publishes its generated registry through Java's service loader.
 
 Kotlin modules use the KSP Gradle integration. Java modules run KSP2 directly against Java sources, including records and bean accessors. Both paths call the same compiler and generate the same runtime code.

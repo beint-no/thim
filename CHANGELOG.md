@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Generate renderers into a fixed set of 32 source files chosen by a stable hash of the
+  page-model name, each with its own static resource, instead of one source file holding
+  every renderer. Renderers no longer reference the registry, so an unchanged file
+  regenerates byte-identical output and Gradle's incremental Java compilation recompiles
+  only the file whose template changed plus the registry. In ReAI a one-template edit now
+  takes 4.3 s end to end instead of 10.4–12.1 s (`compileJava` 6.2 s → 0.3 s, `compileKotlin`
+  1.1 s → 0.09 s), and a full `compileJava` takes 2.8 s. Rendered HTML is byte-identical to
+  0.11.2, checked by recorded golden renders. Generated renderer classes are now nested in
+  `<Registry>Part<n>` holders and end in `Renderer`; they are package-private, not API.
+  Static content is deduplicated per file rather than per module, so ReAI's resources grow
+  from 1.6 MB to 2.8 MB.
+
 ## 0.11.2
 
 - Dispatch generated template registries through a class index instead of linear `==` and
