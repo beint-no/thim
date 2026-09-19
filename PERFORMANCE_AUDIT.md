@@ -400,7 +400,7 @@ All builds used local composite builds, a warm Gradle daemon and `--no-build-cac
 No other benchmark ran concurrently; normal desktop workloads were not controlled.
 These numbers are not directly comparable to the earlier layout measurements.
 
-The selected production change is five changed/added lines:
+The selected changes touch three production files:
 
 - Generate renderer Java at its final nesting depth, including empty lines, instead
   of splitting/copying each completed source through `prependIndent` and a regex.
