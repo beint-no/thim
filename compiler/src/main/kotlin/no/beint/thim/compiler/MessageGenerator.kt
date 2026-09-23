@@ -288,7 +288,7 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         return javaIdentifier(candidate, "message")
     }
 
-    private fun words(value: String): List<String> = value.split(Regex("[^A-Za-z0-9]+"))
+    private fun words(value: String): List<String> = value.split(NON_ALPHANUMERIC)
         .filter(String::isNotEmpty)
 
     private fun javaIdentifier(value: String, fallback: String): String {

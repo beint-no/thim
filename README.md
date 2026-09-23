@@ -71,7 +71,7 @@ pluginManagement {
 }
 
 plugins {
-    id("no.beint.thim.settings") version "0.11.2"
+    id("no.beint.thim.settings") version "0.13.0"
 }
 ```
 
@@ -93,7 +93,7 @@ plugins {
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.11.2")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.13.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -328,7 +328,7 @@ Its default fixtures contain 100 and 1,000 fragment calls. To measure an applica
 
 ```shell
 ./gradlew :benchmark:jmhJar
-java -jar benchmark/build/libs/benchmark-0.11.2-jmh.jar TemplateCompilerBenchmark \
+java -jar benchmark/build/libs/benchmark-0.13.0-jmh.jar TemplateCompilerBenchmark \
   -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
   -f 2 -prof gc
 ```

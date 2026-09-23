@@ -26,7 +26,7 @@
                 <path d="M10 24h12" stroke="#c9841a" stroke-width="2.2"/>
             </svg>
             <strong>Thim</strong>
-            <span>0.11.1</span>
+            <span>0.13.0</span>
         </a>
         <nav class="nav" aria-label="Page">
             <a href="#opinions">Opinions</a>
@@ -41,7 +41,7 @@
     <main id="main">
         <section class="wrap hero">
             <div>
-                <p class="kicker">Java · Kotlin · JDK 26</p>
+                <p class="kicker">Java · Kotlin · JDK 27</p>
                 <h1>Fail the build. Never the request.</h1>
                 <p class="lede">
                     Thim is an opinionated compile-time HTML renderer. Templates, translations,
@@ -164,7 +164,7 @@
 
 @GetMapping("/")
 fun home() = HomePage(
-    version = "0.11.1",
+    version = "0.13.0",
     greeting = "Typed models, compiled HTML.",
     unreadCount = 3,
     features = listOf(
@@ -397,7 +397,7 @@ salutation:
                 Templates live in <code>src/main/resources/templates</code>. Catalogs live in
                 <code>src/main/resources/i18n</code>. The default model package is
                 <code>&lt;group&gt;.page</code>. Override a directory only for a migration.
-                Requires JDK 26 or newer.
+                Requires JDK 27 or newer.
             </p>
             <article class="panel">
                 <div class="panel-head">
@@ -412,7 +412,7 @@ salutation:
 }
 
 plugins {
-    id("no.beint.thim.settings") version "0.11.1"
+    id("no.beint.thim.settings") version "0.13.0"
 }
 
 dependencyResolutionManagement {
@@ -432,7 +432,7 @@ dependencyResolutionManagement {
                     </div>
                     <pre id="kotlin-plugin">plugins {
     kotlin("jvm")
-    id("no.beint.thim") version "0.11.1"
+    id("no.beint.thim") version "0.13.0"
 }
 
 thim {
@@ -448,7 +448,7 @@ thim {
                     </div>
                     <pre id="java-plugin">plugins {
     java
-    id("no.beint.thim") version "0.11.1"
+    id("no.beint.thim") version "0.13.0"
 }
 
 thim {

@@ -238,80 +238,10 @@ private class ThimProcessor(
             fileName = registryName,
             extensionName = "java",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
-            output.appendLine("package $generatedPackage;")
-            output.appendLine()
-            output.appendLine("import java.io.IOException;")
-            output.appendLine("import no.beint.thim.HtmlOutput;")
-            output.appendLine("import no.beint.thim.RenderContext;")
-            output.appendLine("import no.beint.thim.TemplateSet;")
-            output.appendLine()
-            output.appendLine("public final class $registryName implements TemplateSet {")
-            output.appendLine("    // Exact page-model classes resolve in constant time; the instanceof chain in render only")
-            output.appendLine("    // serves subclasses of open models, matching the previous linear dispatch.")
-            output.appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = index();")
-            output.appendLine()
-            output.appendLine("    // Built imperatively: javac's inference over one Map.ofEntries call with hundreds of")
-            output.appendLine("    // distinct Class arguments took several seconds for a large application.")
-            output.appendLine("    private static java.util.Map<Class<?>, Integer> index() {")
-            output.appendLine("        var index = new java.util.HashMap<Class<?>, Integer>(${compiled.size * 2});")
-            compiled.forEachIndexed { index, template ->
-                output.appendLine("        index.put(${template.model.qualifiedName!!.asString()}.class, $index);")
+            val entries = compiled.map {
+                RegistryEntry(it.model.qualifiedName!!.asString(), rendererReference(it), it.usesRequestDataValues)
             }
-            output.appendLine("        return java.util.Map.copyOf(index);")
-            output.appendLine("    }")
-            output.appendLine()
-            output.appendLine("    private static final boolean[] REQUEST_DATA_VALUES = {")
-            output.appendLine("        " + compiled.joinToString(", ") { it.usesRequestDataValues.toString() })
-            output.appendLine("    };")
-            output.appendLine()
-            output.appendLine("    @Override")
-            output.appendLine("    public boolean supports(Class<?> modelType) {")
-            output.appendLine("        return INDEX.containsKey(modelType);")
-            output.appendLine("    }")
-            output.appendLine()
-            output.appendLine("    @Override")
-            output.appendLine("    public boolean supportsReturnType(Class<?> returnType) {")
-            output.appendLine("        // Spring supplies the runtime type when a value exists; Object chiefly represents a null return.")
-            output.appendLine("        if (returnType == Object.class) {")
-            output.appendLine("            return false;")
-            output.appendLine("        }")
-            output.appendLine("        if (INDEX.containsKey(returnType)) {")
-            output.appendLine("            return true;")
-            output.appendLine("        }")
-            output.appendLine("        return " + compiled.joinToString(" ||\n            ") {
-                "returnType.isAssignableFrom(${it.model.qualifiedName!!.asString()}.class)"
-            } + ";")
-            output.appendLine("    }")
-            output.appendLine()
-            output.appendLine("    @Override")
-            output.appendLine("    public boolean usesRequestDataValues(Class<?> modelType) {")
-            output.appendLine("        var index = INDEX.get(modelType);")
-            output.appendLine("        return index != null && REQUEST_DATA_VALUES[index];")
-            output.appendLine("    }")
-            output.appendLine()
-            output.appendLine("    @Override")
-            output.appendLine("    public void render(Object model, RenderContext context, HtmlOutput output) throws IOException {")
-            output.appendLine("        var index = INDEX.get(model.getClass());")
-            output.appendLine("        if (index != null) {")
-            output.appendLine("            switch (index) {")
-            compiled.forEachIndexed { index, template ->
-                val modelName = template.model.qualifiedName!!.asString()
-                output.appendLine("                case $index -> ${rendererReference(template)}.render(($modelName) model, context, output);")
-            }
-            output.appendLine("                default -> throw new IllegalStateException(\"Unknown template index \" + index);")
-            output.appendLine("            }")
-            output.appendLine("            return;")
-            output.appendLine("        }")
-            compiled.forEach {
-                val modelName = it.model.qualifiedName!!.asString()
-                output.appendLine("        if (model instanceof $modelName typed) {")
-                output.appendLine("            ${rendererReference(it)}.render(typed, context, output);")
-                output.appendLine("            return;")
-                output.appendLine("        }")
-            }
-            output.appendLine("        throw new IllegalArgumentException(\"No compiled template for \" + model.getClass().getName());")
-            output.appendLine("    }")
-            output.appendLine("}")
+            output.append(RegistryGenerator(entries).generate(generatedPackage, registryName))
         }
         codeGenerator.createNewFileByPath(
             dependencies = dependencies,
@@ -429,7 +359,7 @@ private class ThimProcessor(
         const val RENDERER_FILES = 32
 
         fun conventionalModelName(templateName: String): String = templateName
-            .split(Regex("[^A-Za-z0-9]+"))
+            .split(NON_ALPHANUMERIC)
             .filter(String::isNotEmpty)
             .joinToString("") { it.replaceFirstChar(Char::uppercaseChar) } + "Page"
     }
@@ -442,3 +372,6 @@ internal fun Node.elements(): Sequence<ElementNode> = when (this) {
     is ElementNode -> sequenceOf(this) + children.asSequence().flatMap(Node::elements)
     is RawNode -> emptySequence()
 }
+
+/** Word separators for generated identifiers, compiled once rather than per catalog key or template. */
+internal val NON_ALPHANUMERIC = Regex("[^A-Za-z0-9]+")

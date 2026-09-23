@@ -69,7 +69,7 @@ internal class RendererGenerator(
         // incremental Java compilation keeps the registry file's stale class list across the
         // layout change, and reusing those class names made it delete every renderer class
         // while recompiling only the edited one.
-        val rendererName = modelName.replace(Regex("[^A-Za-z0-9_]"), "_") + "Renderer"
+        val rendererName = modelName.replace(NON_IDENTIFIER_CHARACTER, "_") + "Renderer"
         val code = CodeWriter(staticContent, holderName)
         val locales = if (usesMessages(nodes)) {
             catalog.supportedLocales.filterTo(linkedSetOf()) { it != catalog.defaultLocale }
@@ -1646,3 +1646,5 @@ private fun KSType.isBoolean(): Boolean =
 
 private fun KSType.isEnum(): Boolean =
     (declaration as? KSClassDeclaration)?.classKind == ClassKind.ENUM_CLASS
+
+private val NON_IDENTIFIER_CHARACTER = Regex("[^A-Za-z0-9_]")

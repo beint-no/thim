@@ -58,10 +58,6 @@ public final class HtmlOutput {
         raw(bytes, 0, bytes.length);
     }
 
-    public void url(TrustedUrl value) throws IOException {
-        text(value.value());
-    }
-
     public void text(boolean value) throws IOException {
         var bytes = value ? TRUE : FALSE;
         raw(bytes, 0, bytes.length);

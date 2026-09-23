@@ -121,7 +121,7 @@ internal class RouteGenerator(private val catalog: RouteCatalog) {
         appendLine()
     }
 
-    private fun words(value: String): List<String> = value.split(Regex("[^A-Za-z0-9]+"))
+    private fun words(value: String): List<String> = value.split(NON_ALPHANUMERIC)
         .filter(String::isNotEmpty)
 
     private fun camelWord(value: String): String = words(value).joinToString("") {

@@ -25,14 +25,6 @@ final class SpringRequestDataValues implements RequestDataValues {
         return new SpringRequestDataValues(request, response, processor, resourceUrlProvider);
     }
 
-    SpringRequestDataValues(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            RequestDataValueProcessor processor
-    ) {
-        this(request, response, processor, resourceUrlProvider(request));
-    }
-
     private SpringRequestDataValues(
             HttpServletRequest request,
             HttpServletResponse response,
