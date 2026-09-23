@@ -12,6 +12,8 @@
   skipped the context-path resolution that `TrustedUrl` values receive in templates.
 - Compile identifier and route-joining regular expressions once instead of once per catalog key,
   template or route.
+- Update KSP to 2.3.12 (the version the Gradle plugin applies to consumers), Spring Framework to
+  7.0.9 and Spring Boot to 4.1.1, matching the consumers' Boot version, and JUnit to 6.1.3.
 
 ## 0.12.2 - 2026-09-19
 

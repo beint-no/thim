@@ -11,10 +11,10 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.11")
+    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.12")
     implementation("org.snakeyaml:snakeyaml-engine:3.1.1")
 
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation(kotlin("test-junit5"))
     testImplementation(project(":runtime"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

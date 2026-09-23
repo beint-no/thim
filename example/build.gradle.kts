@@ -17,10 +17,10 @@ kotlin {
 dependencies {
     implementation(kotlin("reflect"))
     implementation(project(":spring"))
-    implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.0")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.1")
     ksp(project(":compiler"))
 
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
