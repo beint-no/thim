@@ -258,7 +258,7 @@ class ThimPluginTest {
     void springBootBeforeThimAddsTheSpringAdapter() throws IOException {
         var project = dependencyProject("boot-before-thim", """
                 id 'java'
-                id 'org.springframework.boot' version '4.1.0'
+                id 'org.springframework.boot' version '4.1.1'
                 id 'no.beint.thim'
                 """);
 
@@ -270,7 +270,7 @@ class ThimPluginTest {
         var project = dependencyProject("boot-after-thim", """
                 id 'java'
                 id 'no.beint.thim'
-                id 'org.springframework.boot' version '4.1.0'
+                id 'org.springframework.boot' version '4.1.1'
                 """);
 
         assertEquals(List.of("runtime", "spring"), thimDependencies(project));

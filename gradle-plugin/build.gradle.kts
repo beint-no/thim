@@ -5,9 +5,9 @@ plugins {
 
 dependencies {
     implementation(project(":settings-plugin"))
-    implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.11")
+    implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.12")
     testImplementation(gradleTestKit())
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

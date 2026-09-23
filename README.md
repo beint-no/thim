@@ -15,7 +15,7 @@ module. Existing `:thimMessageUsageCheck` and `:thimCssUsageCheck` task names an
 
 For Kotlin consumers, set `ksp.project.isolation.enabled=true` in `gradle.properties` so KSP uses its
 compatible source wiring even when isolation is enabled through the command-line flag. Use Gradle 9.7.1 and
-`--isolated-projects` to validate a consumer build. KSP 2.3.11 is included for compatibility
+`--isolated-projects` to validate a consumer build. KSP 2.3.12 is included for compatibility
 with Gradle's current isolation property. Third-party plugins must also support isolation: Spring Boot 4.1.1's
 `bootJar` task still accesses other projects during construction, tracked in
 [spring-boot#43755](https://github.com/spring-projects/spring-boot/issues/43755). Until that is fixed, this repository's
