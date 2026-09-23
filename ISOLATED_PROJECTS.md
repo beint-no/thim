@@ -84,21 +84,16 @@ See [Gradle's migration guide](https://docs.gradle.org/9.7.1/userguide/isolated_
 [Eteo #833](https://github.com/beint-no/eteo/pull/833), and
 [Ecomtools #380](https://github.com/beint-no/ecomtools/pull/380).
 
-[Gradle #39057](https://github.com/gradle/gradle/pull/39057) proposes an isolated-projects regression test and API
-contract clarification for `ResolvedComponentResult.moduleVersion` through the lazy resolution result. It covers
-late producer versions, renamed archives, unrelated explicit capabilities and included-build identity. Both targeted
-integration tests, CodeNarc and Checkstyle pass. Maintainer confirmation of that contract is still required.
+[Gradle #39057](https://github.com/gradle/gradle/pull/39057), an isolated-projects regression test and API
+contract clarification for `ResolvedComponentResult.moduleVersion`, was closed without merging on 2026-09-10.
 
 [The Spring Boot follow-up](https://github.com/spring-projects/spring-boot/issues/43755#issuecomment-5551490296)
 links this evidence and asks how the existing public custom-archive API should preserve compatibility when supplied
 only an artifact provider. The previously closed capability-based patch has not been resubmitted.
 
-[KSP #3189](https://github.com/google/ksp/pull/3189) uses Gradle's effective `BuildFeatures` state, including CLI
-precedence, while preserving explicit KSP opt-in and older Gradle support. Six focused tests pass, including actual
-generated-source compilation and configuration-cache reuse. Plugin validation and formatting checks pass too.
-Keep `ksp.project.isolation.enabled=true` until a release containing the fix is adopted.
+[KSP #3189](https://github.com/google/ksp/pull/3189), which would have read Gradle's effective `BuildFeatures`
+state, was closed without merging on 2026-09-05. Keep `ksp.project.isolation.enabled=true`.
 
-Both contributions disclose AI assistance. The Gradle draft needs human review and DCO sign-off; the KSP draft needs
-Google's contributor agreement. These are pending upstream contributions, not released fixes. Once accepted and
-released, retest normal and isolated `bootJar`, custom layer coordinates, included builds, IDE import and cache reuse
-before enabling isolation globally. No forked Spring Boot or KSP artifact is used by the consumers.
+No forked Spring Boot or KSP artifact is used by the consumers. If upstream support lands, retest normal and
+isolated `bootJar`, custom layer coordinates, included builds, IDE import and cache reuse before enabling
+isolation globally.

@@ -208,7 +208,7 @@ class ThimRendererTest {
                 return "encoded:" + url;
             }
         };
-        var values = new SpringRequestDataValues(request, response, new PrefixingRequestDataValueProcessor());
+        var values = SpringRequestDataValues.create(request, response, new PrefixingRequestDataValueProcessor());
 
         assertEquals("encoded:processed:/asset.js", values.processUrl("/asset.js"));
     }

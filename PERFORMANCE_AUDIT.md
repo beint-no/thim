@@ -98,10 +98,10 @@ and allocations are recorded in [the benchmark results](benchmark/results/2026-0
 
 | Priority | Finding | Next step |
 | --- | --- | --- |
-| Highest follow-up | Generated renderers share one Java source and static resource, with aggregating KSP dependencies. ReAI's existing local output contains 314 renderer classes in a 13.49 MB source file, plus a 1.51 MB static resource. | Implemented as per-template sources and resources after 0.11.2; see the per-template section below. |
-| Medium | Each expression property lookup can walk KSP properties and supertypes again, including properties from shared layouts. | Profile symbol-resolution time, then consider a cache confined to one processor invocation. Keep missing-property diagnostics and generic/inherited property behavior intact. |
-| Medium | Generated `supports`, `supportsReturnType`, request-data checks, and render dispatch use linear checks. | Add a benchmark with hundreds of page models and the full Spring handler path before replacing dispatch with a map or `ClassValue`. Preserve custom `TemplateSet` behavior and subclass handling. |
-| Medium | Servlet rendering allocates an 8 KiB body buffer and a 1 KiB output buffer, then buffers the whole response. | Measure full pages and small HTMX responses through the Spring adapter. Tune sizing only with allocation and latency evidence. Streaming changes failure handling and content-length behavior, so it needs separate design work. |
+| Highest follow-up | Generated renderers share one Java source and static resource, with aggregating KSP dependencies. ReAI's existing local output contains 314 renderer classes in a 13.49 MB source file, plus a 1.51 MB static resource. | Implemented in 0.12.0 as 32 hash-assigned source files, each with its own resource; one file per template was measured and rejected. See the per-template section below. |
+| Medium | Each expression property lookup can walk KSP properties and supertypes again, including properties from shared layouts. | Implemented in 0.12.1 as a cache confined to one processor invocation. |
+| Medium | Generated `supports`, `supportsReturnType`, request-data checks, and render dispatch use linear checks. | Implemented in 0.11.2 as a class index; 0.13.0 splits the dispatch so it stays JIT-compilable. See the 0.11.2 follow-up and 0.13.0 sections below. |
+| Medium | Servlet rendering allocates an 8 KiB body buffer and a 1 KiB output buffer, then buffers the whole response. | Measured in the 0.11.2 follow-up and left unchanged: larger buffers cost 30–70% on small HTMX responses. Streaming changes failure handling and content-length behavior, so it needs separate design work. |
 | Lower | CSS and message-usage checks scan production sources/classes across all modules. | Measure their actual task time and cache hit rates in ReAI. Both tasks are already cacheable; reducing scope must preserve cross-module validation. |
 
 The existing local generated-file sizes are supporting evidence of compilation scope,
@@ -245,7 +245,7 @@ replacing the form-error stream with a loop, and using a linear string join for 
 source arguments. None has evidence of a substantial benefit in these consumers;
 the Java-only compilation path is not used by these four Kotlin applications. The
 larger property-resolution, dispatch, response-buffering, and incremental-compilation
-ideas above still need dedicated profiling and compatibility work.
+ideas were followed up in the later sections.
 
 Reproduce the message measurements with:
 
@@ -446,3 +446,40 @@ override was also left unchanged: ordinary Gradle builds do not validate debugge
 
 Raw measurements, including all warmups and the isolated candidates, are in
 [`2026-09-19-compiler-small-wins.json`](benchmark/results/2026-09-19-compiler-small-wins.json).
+
+## 0.13.0 — registry dispatch below the JIT limit — 23 September 2026
+
+The 0.11.2 index made dispatch constant time in a replica benchmark, but the shipped
+registry kept the subclass `instanceof` chain in the same `render` method as the index
+switch. That costs about 37 bytes of bytecode per template, so from roughly 215 templates
+the method exceeds HotSpot's 8000-byte `HugeMethodLimit` and, with the default
+`-XX:+DontCompileHugeMethods`, is never JIT-compiled. ReAI's web-app registry is 353
+templates with a 13,137-byte `render`, and production uses default JIT flags. Bedri
+(1,334 bytes) and Eteo (1,001 bytes) were below the limit.
+
+JMH replica of the generated shape at 353 templates (Apple M5 Max, OpenJDK 27, three
+forks, five one-second warmups and measurements, models visited in a stride-7 cycle; the
+host was under unrelated load, which widens the interpreted error):
+
+| Registry shape | ns/op |
+| --- | ---: |
+| 0.12.2: index switch and `instanceof` chain in `render` | 195.1 ± 142.9 |
+| 0.12.2 with `-XX:-DontCompileHugeMethods` | 11.9 ± 0.6 |
+| 0.13.0: dispatcher, 256-template chunks, separate fallback | 10.2 ± 0.2 |
+
+The control run attributes the whole difference to the method being interpreted. The
+generated registry now has a small `render` that switches on `index / 256` to private
+chunk methods (about 4 KB each at most), while the unchanged `instanceof` chain lives in
+`renderSubtype` and the `isAssignableFrom` chain in `isSupertypeOfModel`. Both are off the
+exact-class hot path. The fallback chain keeps every model because KSP's `isOpen()` cannot
+see all-open compiler plugins or Java library classes, so dropping "final" models would
+not be provably safe. With ReAI compiled against the candidate, the largest methods are
+`renderSubtype` at 6,727 bytes, `render0` at 4,127 bytes and `isSupertypeOfModel` at 3,419 bytes;
+`render` is 108 bytes.
+
+Validation: ReAI's web-app generated output against 0.12.2 differs only in
+`ThimTemplates.java`; all 32 renderer part sources, their resources and the message usage
+manifest are byte-identical. ReAI (web-app, bedri), Utin, Eteo and Ecomtools compile
+against the candidate via `-PthimBuild`. `RegistryGeneratorTest` compiles a 600-template
+registry with an open model and a subclass, renders every model, and keeps each
+per-request method below 8000 bytes; the example golden renders are unchanged.

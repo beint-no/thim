@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 - 2026-09-23
+
+- Split the generated registry's `render` dispatch into chunks of at most 256 templates and move the
+  subclass `instanceof` fallback and the `supportsReturnType` supertype chain into their own methods.
+  With about 215 or more templates, the single dispatch method exceeded HotSpot's 8000-byte limit for
+  JIT compilation and stayed interpreted: ReAI's web-app registry (353 templates, 13,137 bytes) paid
+  about 190 ns per render versus about 10 ns for the split form. Every dispatch method is now far
+  below the limit at any application size. Rendered output is unchanged.
+- Remove `HtmlOutput.url(TrustedUrl)`. Generated renderers never called it, and calling it directly
+  skipped the context-path resolution that `TrustedUrl` values receive in templates.
+- Compile identifier and route-joining regular expressions once instead of once per catalog key,
+  template or route.
+
 ## 0.12.2 - 2026-09-19
 
 - Avoid copying and reformatting generated renderer sources; write their final indentation directly.

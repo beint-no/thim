@@ -38,8 +38,6 @@ internal class RouteCatalog(
     private val matchingRoutes = mutableMapOf<String, List<Route>>()
     private val trustedPatterns: List<List<RouteSegment>> = trustedPaths.map(::trustedPattern)
 
-    fun isEmpty(): Boolean = routes.isEmpty()
-
     fun check(
         path: String,
         httpMethod: String,
@@ -299,7 +297,7 @@ internal class RouteCatalog(
         }.takeIf { !it.isNullOrBlank() }
 
         private fun combine(prefix: String, path: String): String {
-            val joined = "/${prefix.trim('/')}/${path.trim('/')}".replace(Regex("/+"), "/")
+            val joined = "/${prefix.trim('/')}/${path.trim('/')}".replace(REPEATED_SLASHES, "/")
             return if (joined.length > 1) joined.trimEnd('/') else joined
         }
 
@@ -361,3 +359,5 @@ internal class RouteCatalog(
 
     }
 }
+
+private val REPEATED_SLASHES = Regex("/+")
