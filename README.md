@@ -14,7 +14,7 @@ configuration fails with an actionable error; unused-message and CSS checks are 
 module. Existing `:thimMessageUsageCheck` and `:thimCssUsageCheck` task names and report locations are preserved.
 
 For Kotlin consumers, set `ksp.project.isolation.enabled=true` in `gradle.properties` so KSP uses its
-compatible source wiring even when isolation is enabled through the command-line flag. Use Gradle 9.7.1 and
+compatible source wiring even when isolation is enabled through the command-line flag. Use Gradle 9.8.1 and
 `--isolated-projects` to validate a consumer build. KSP 2.3.12 is included for compatibility
 with Gradle's current isolation property. Third-party plugins must also support isolation: Spring Boot 4.1.1's
 `bootJar` task still accesses other projects during construction, tracked in
