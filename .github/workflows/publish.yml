@@ -22,7 +22,7 @@ jobs:
         with:
           distribution: corretto
           java-version: '27'
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - name: Check release version
         run: |
           version="$(./gradlew -q printReleaseVersion)"
