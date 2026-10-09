@@ -21,6 +21,6 @@ jobs:
         with:
           distribution: corretto
           java-version: '27'
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew clean build
       - run: ./gradlew :runtime:check :compiler:check :spring:check :gradle-plugin:check :settings-plugin:check :example:classes :benchmark:classes --isolated-projects
