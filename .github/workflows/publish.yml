@@ -23,6 +23,8 @@ jobs:
           distribution: corretto
           java-version: '27'
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
       - name: Check release version
         run: |
           version="$(./gradlew -q printReleaseVersion)"
