@@ -31,7 +31,7 @@ class ThimSettingsPluginTest {
                 include("consumer")
                 """.formatted(classpath));
         Files.writeString(project.resolve("build.gradle.kts"), """
-                plugins { kotlin("jvm") version "2.4.20" apply false }
+                plugins { kotlin("jvm") version "2.4.21" apply false }
                 """);
         Files.writeString(project.resolve("gradle.properties"), "kotlin.jvm.target.validation.mode=warning\n");
         Files.createDirectories(project.resolve("consumer/src/main/kotlin"));
