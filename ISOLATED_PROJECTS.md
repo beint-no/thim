@@ -4,6 +4,41 @@ Verified on 2026-09-05 with Gradle 9.7.1 and JDK 26. The published 0.11.0 releas
 an explicit settings plugin and project artifact exchange. This is a migration from 0.10: consumers must apply
 `no.beint.thim.settings` in their settings file. The project plugin fails clearly if it is absent.
 
+## Spring Boot 4.2.0-RC1 reassessment (2026-10-23)
+
+Gradle 9.8.2 and JDK 27 still reject isolated Spring Boot packaging. In a fresh two-project fixture with
+Boot 4.2.0-RC1 and no dependency-management plugin, normal `:app:bootJar :app:bootWar` succeeds. Each archive task
+with `--isolated-projects --dry-run` fails during construction because `ResolvedDependencies.projectCoordinatesByPath`
+reads another project's `group`. RC1 still collects coordinates through `rootProject.allprojects`, keyed only by project path.
+Disabling layers does not remove this constructor-time lookup. Keep isolation opt-in; do not suppress violations.
+
+There has been useful upstream progress:
+
+- [Gradle confirmed the resolved-project GAV contract on October 8](https://github.com/gradle/gradle/issues/31973#issuecomment-6066456319).
+  For components identified by `ProjectComponentIdentifier`, `ResolvedComponentResult.moduleVersion` reliably returns
+  the project's group/name/version, including under isolation. These are project coordinates, not publication coordinates.
+  Synthetic graph roots must be treated separately: Gradle 10 will give normal configuration roots an anonymous GAV too.
+- [Boot #43755](https://github.com/spring-projects/spring-boot/issues/43755) remains open, blocked, and in General Backlog.
+  The confirmed contract supports lazily joining resolved artifacts to graph components by full component identity,
+  including transitive and included-build dependencies. Boot still needs implementation and a compatibility decision for
+  the public artifact-only `BootArchive.resolvedArtifacts(...)` method. [PR #51311](https://github.com/spring-projects/spring-boot/pull/51311)
+  was closed without merging; capability inference is not a reliable replacement for project GAV.
+- [The October 8 Boot reproduction](https://github.com/spring-projects/spring-boot/issues/43755#issuecomment-6062517028)
+  also demonstrates incorrect custom-layer coordinates when main and included builds both have `:library` projects.
+  RC1 retains the path-only lookup responsible for that report; full component identity must distinguish those projects.
+- [Dependency-management #380](https://github.com/spring-gradle-plugins/dependency-management-plugin/issues/380) remains
+  a separate pre-resolution blocker. Its local-project exclusion rule cannot consume the completed graph of the same
+  resolution. Our application builds use Gradle-native BOM platforms, so that plugin is not required for their failure.
+- [KSP #3215](https://github.com/google/ksp/pull/3215) merged on September 22 and fixed effective CLI isolation detection.
+  It postdates the latest published [KSP 2.3.12](https://github.com/google/ksp/releases/tag/2.3.12), used here.
+  Retain `ksp.project.isolation.enabled=true` until a released upgrade is verified.
+
+[Gradle 9.8.2's guide](https://docs.gradle.org/9.8.2/userguide/isolated_projects.html) still describes isolation as incubating.
+It parallelizes configuration; configuration-cache hits already skip that work. Tooling-model caching remains disabled
+because of correctness problems. Measure configuration misses and IDE sync separately before claiming a speedup.
+After Boot support lands, retest normal and isolated JAR/WAR packaging, custom layers, composite identities, IDE import,
+and configuration-cache reuse before enabling isolation by default.
+
 ## Design
 
 The settings plugin collects immutable project paths from settings descriptors and registers an isolated
@@ -66,7 +101,7 @@ rendered login/landing pages. Utin and Ecomtools also return health status UP.
 
 ## Remaining ecosystem blocker
 
-Full isolated Spring Boot packaging still fails when Boot 4.1.1 constructs its `BootJar` task and reads other projects'
+The September verification found isolated Spring Boot packaging failed when Boot 4.1.1 constructed its `BootJar` task and read other projects'
 mutable group/version in `ResolvedDependencies`. The same code exists in 4.2.0-M1.
 [spring-boot#43755](https://github.com/spring-projects/spring-boot/issues/43755) is open and the proposed
 [PR #51311](https://github.com/spring-projects/spring-boot/pull/51311) was closed without merging.
