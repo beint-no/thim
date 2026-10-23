@@ -6,22 +6,10 @@ The marketing site is at [beint-no.github.io/thim](https://beint-no.github.io/th
 
 Thim requires JDK 27 or newer. Its optional MVC adapter targets Spring Framework 7 and Spring Boot 4.
 
-## Isolated Projects
+## Build setup
 
-Thim 0.11 uses Gradle's isolated lifecycle callbacks and published project artifacts for build-wide validation.
-Upgrading from 0.10 requires adding `no.beint.thim.settings` to the settings file, as shown below. Missing settings
-configuration fails with an actionable error; unused-message and CSS checks are never silently narrowed to one
-module. Existing `:thimMessageUsageCheck` and `:thimCssUsageCheck` task names and report locations are preserved.
-
-For Kotlin consumers, set `ksp.project.isolation.enabled=true` in `gradle.properties` so KSP uses its
-compatible source wiring even when isolation is enabled through the command-line flag. Use Gradle 9.8.2 and
-`--isolated-projects` to validate a consumer build. KSP 2.3.12 is included for compatibility
-with Gradle's current isolation property. Third-party plugins must also support isolation: Spring Boot 4.2.0-RC1's
-`bootJar` task still accesses other projects during construction, tracked in
-[spring-boot#43755](https://github.com/spring-projects/spring-boot/issues/43755). Until that is fixed, this repository's
-full build keeps isolation opt-in; plugin tests explicitly exercise it. A successful `help` invocation alone
-does not establish compatibility for packaging or IDE model creation.
-See [verification details](ISOLATED_PROJECTS.md) for the tested scenarios.
+Apply `no.beint.thim.settings` in the settings file, as shown below, to enable build-wide message and CSS validation.
+For Kotlin consumers, set `ksp.project.isolation.enabled=true` in `gradle.properties` so KSP uses compatible source wiring.
 
 ## Use
 
