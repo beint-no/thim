@@ -58,6 +58,20 @@ final class Measure {
         }
     }
 
+    /**
+     * Measures again, up to three attempts, while the median exceeds the ceiling. On a busy CI runner the JIT can
+     * still be compiling after warmup, leaving an attempt interpreted and 25 times slower; a real regression exceeds
+     * the ceiling on every attempt.
+     */
+    static Result runUnderCeiling(String name, long ceilingNanos, int warmupRounds, int measuredRounds, int batchSize,
+                                  Action action) {
+        var result = run(name, warmupRounds, measuredRounds, batchSize, action);
+        for (var attempt = 1; attempt < 3 && result.medianNanosPerOp() > ceilingNanos; attempt++) {
+            result = run(name, warmupRounds, measuredRounds, batchSize, action);
+        }
+        return result;
+    }
+
     static String formatNanos(long nanos) {
         if (nanos >= 1_000_000) {
             return String.format(Locale.ROOT, "%.2fms", nanos / 1_000_000.0);

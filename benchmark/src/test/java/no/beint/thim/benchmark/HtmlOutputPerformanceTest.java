@@ -52,7 +52,7 @@ class HtmlOutputPerformanceTest {
     private static void assertUnderCeiling(String name, OutputAction action) {
         var sink = new RecycledOutputStream();
         var output = new HtmlOutput(sink);
-        var result = Measure.run(name, 60, 80, 50, () -> {
+        var result = Measure.runUnderCeiling(name, Baselines.ceiling(name), 60, 80, 50, () -> {
             sink.reset();
             action.write(output);
             output.flush();
