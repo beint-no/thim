@@ -483,3 +483,49 @@ manifest are byte-identical. ReAI (web-app, bedri), Utin, Eteo and Ecomtools com
 against the candidate via `-PthimBuild`. `RegistryGeneratorTest` compiles a 600-template
 registry with an open model and a subclass, renders every model, and keeps each
 per-request method below 8000 bytes; the example golden renders are unchanged.
+
+## Constant messages without lambdas — 31 October 2026
+
+Every argument-free text message was a non-capturing lambda. For each lambda javac builds two
+synthetic functional-interface classes (`Attr.setFunctionalInfo`, `LambdaToMethod.bridges`).
+They share an empty name and therefore a type hash code, so `Types.CandidatesCache`, a
+`WeakHashMap` keyed by site type, chains them in one bucket until a GC clears the keys. Each
+lookup walks the chain with `isSameType`, and compilation time grows quadratically with the
+lambdas per outermost class. A synthetic class of single-lambda factories compiled in 0.64 s
+with 4,000 lambdas, 5.3 s with 16,000 and 10.7 s with 32,000.
+
+ReAI's `I18nMessages` has 10,743 constant factories in one outer class. Standalone javac 27
+spent two thirds of its main thread in that cache. In the Gradle daemon, where GCs are rare,
+`:i18n:compileJava` took 5.1–31.7 s; every module that depends on `:i18n` waits for it.
+
+Constant messages are now static `ConstantMessage` instances holding one text per supported
+locale, selected through the existing `messageLocale` switch. Parameterized messages keep their
+lambdas (954 in ReAI).
+
+| ReAI measurement (M5 Max, JDK 27) | Lambdas | `ConstantMessage` |
+| --- | ---: | ---: |
+| Standalone javac, `I18nMessages.java` | 4.4 s | 1.6 s |
+| `:i18n:compileJava --rerun`, 8 in-process runs | 6.0–11.5 s | 0.71–0.81 s |
+| Edit one message, `:web-app:bootJar`, 8 runs: median (range) | 20 s (12.6–42.4) | 9.4 s (8.0–17.7) |
+| Resolve all 10,743 constants once: loaded classes / metaspace | 11,986 / 31.8 MB | 1,240 / 7.6 MB |
+| Generated source | 9.25 MB | 7.27 MB |
+
+Full no-cache rebuilds are throughput-bound and stayed around 60 s in both versions.
+
+`MessageBenchmark` (four forks, two runs each) shows reference resolution unchanged at
+7.0–8.6 ns in both versions, apart from noisy forks in both (12.4 ± 6.2 ns before; 18.3 ns
+after in an earlier two-fork run), and constant resolution still allocation-free. Constant resolution
+is about 0.1 ns slower (0.65–0.69 → 0.73–0.75 ns English, 0.80–0.81 → 0.92–0.94 ns Norwegian):
+a lambda returns its literal directly, while `ConstantMessage` loads a field. Generated
+templates resolve messages at compile time, so this applies only to direct factory use.
+
+Validation: ReAI's generated class resolves all 10,743 factories in nine locales, all 10,743
+references, and null locales identically to 0.13.1 (same SHA-256 digest), and each factory
+still returns the same instance on every call. ReAI, Utin, Eteo and Ecomtools assemble against
+the candidate through `-PthimBuild`. In ReAI's largest namespace the static initializer is
+14,656 bytes for 916 constant messages (16 bytes each with two locales), while the existing
+`resolveReference` switch is 37,350 bytes, so the initializer does not lower the namespace size limit.
+
+The javac cache collision itself is a JDK issue. Including the site's class symbol in
+`CandidatesCache.Entry.hashCode` compiles the lambda version of `I18nMessages` in 2.0 s
+instead of 4.4 s with byte-identical class files, and the 32,000-lambda class in 1.3 s.

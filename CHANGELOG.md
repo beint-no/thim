@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Generate argument-free text messages as static instances of one private `ConstantMessage` class
+  instead of one lambda each. javac's lambda handling is superlinear in the number of lambdas per
+  class: ReAI's 10,743 constant messages compiled in 5.1–31.7 s in the Gradle daemon and now take
+  0.8–2.6 s, roughly halving a build after a message edit. Resolving every message once loads
+  10,746 fewer classes and uses 24 MB less metaspace. Factories, references, locale fallback and
+  null-locale checks are unchanged; each factory still returns one shared, allocation-free instance.
+
 ## 0.13.1 - 2026-10-11
 
 - Update Kotlin to 2.4.21. In projects without the Kotlin JVM plugin, the Gradle plugin now runs

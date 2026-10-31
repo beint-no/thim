@@ -14,6 +14,8 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
                 methodName(key.substringAfter('.', missingDelimiterValue = key))
             }
         }
+        val constantMessageClass = generateSequence("ConstantMessage") { "${it}_" }
+            .first { it != className && it !in groupNames.values }
 
         return buildString {
             appendLine("package $packageName;")
@@ -22,6 +24,10 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             appendLine("    private $className() {}")
             appendLine()
             appendLocaleResolver()
+            if (definitions.values.any(::isConstant)) {
+                appendLine()
+                appendConstantMessageClass(constantMessageClass)
+            }
             appendLine()
             appendReferenceResolver(packageName, className, groups, groupNames)
             groups.forEach { (namespace, entries) ->
@@ -37,7 +43,11 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
                     appendLine()
                     val methodName = methodNames.getValue(namespace).getValue(key)
                     if (definition.arguments.isEmpty()) appendMessageReference(packageName, className, methodName, key)
-                    appendMessageMethod(methodName, definition)
+                    if (isConstant(definition)) {
+                        appendConstantMessageMethod(constantMessageClass, methodName, definition)
+                    } else {
+                        appendMessageMethod(methodName, definition)
+                    }
                 }
                 appendLine("    }")
             }
@@ -151,10 +161,59 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         appendLine("    }")
     }
 
-    private fun StringBuilder.appendMessageMethod(name: String, definition: MessageDefinition) {
-        val constant = definition.values.values.all { value ->
-            value is MessagePattern && (value.parts.isEmpty() || value.parts.singleOrNull() is MessageText)
+    /**
+     * Argument-free text messages are instances of one shared class rather than one lambda each. javac spends
+     * superlinear time on many lambdas in one class, and every lambda becomes a hidden class on first use.
+     */
+    private fun StringBuilder.appendConstantMessageClass(name: String) {
+        val textCount = catalog.supportedLocales.count { it != catalog.defaultLocale } + 1
+        val texts = (0 until textCount).map { "text$it" }
+        appendLine("    private static final class $name implements no.beint.thim.CompiledMessage {")
+        texts.forEach { appendLine("        private final String $it;") }
+        appendLine()
+        appendLine("        private $name(${texts.joinToString(", ") { "String $it" }}) {")
+        texts.forEach { appendLine("            this.$it = $it;") }
+        appendLine("        }")
+        appendLine()
+        appendLine("        @Override")
+        appendLine("        public String resolve(java.util.Locale locale) {")
+        if (textCount == 1) {
+            appendLine("            java.util.Objects.requireNonNull(locale, \"locale\");")
+            appendLine("            return text0;")
+        } else {
+            appendLine("            return switch (messageLocale(locale)) {")
+            texts.drop(1).forEachIndexed { index, text -> appendLine("                case ${index + 1} -> $text;") }
+            appendLine("                default -> text0;")
+            appendLine("            };")
         }
+        appendLine("        }")
+        appendLine("    }")
+    }
+
+    private fun StringBuilder.appendConstantMessageMethod(className: String, name: String, definition: MessageDefinition) {
+        val defaultText = constantText(definition.values.getValue(catalog.defaultLocale))
+        val texts = listOf(defaultText) + catalog.supportedLocales.filter { it != catalog.defaultLocale }.map { locale ->
+            definition.values[locale]?.let(::constantText) ?: defaultText
+        }
+        appendLine("        private static final no.beint.thim.CompiledMessage ${name}Message =")
+        appendLine("            new $className(${texts.joinToString(", ") { "\"${javaString(it)}\"" }});")
+        appendLine()
+        appendLine("        public static no.beint.thim.CompiledMessage $name() {")
+        appendLine("            return ${name}Message;")
+        appendLine("        }")
+    }
+
+    private fun isConstant(definition: MessageDefinition): Boolean =
+        definition.arguments.isEmpty() && definition.values.values.all(::isConstantValue)
+
+    private fun isConstantValue(value: MessageValue): Boolean =
+        value is MessagePattern && (value.parts.isEmpty() || value.parts.singleOrNull() is MessageText)
+
+    private fun constantText(value: MessageValue): String =
+        ((value as MessagePattern).parts.singleOrNull() as? MessageText)?.value.orEmpty()
+
+    private fun StringBuilder.appendMessageMethod(name: String, definition: MessageDefinition) {
+        val constant = definition.values.values.all(::isConstantValue)
         val parameterNames = parameterNames(definition.arguments.keys)
         val parameters = definition.arguments.entries.joinToString(", ") { (argument, kind) ->
             "${parameterType(kind)} ${parameterNames.getValue(argument)}"
