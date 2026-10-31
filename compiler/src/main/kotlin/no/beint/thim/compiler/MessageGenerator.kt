@@ -22,6 +22,12 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             appendLine("    private $className() {}")
             appendLine()
             appendLocaleResolver()
+            if (definitions.values.any { it.isConstant() }) {
+                appendLine()
+                appendLine("    private static no.beint.thim.CompiledMessage \$constantMessage(String... values) {")
+                appendLine("        return locale -> values[messageLocale(locale)];")
+                appendLine("    }")
+            }
             appendLine()
             appendReferenceResolver(packageName, className, groups, groupNames)
             groups.forEach { (namespace, entries) ->
@@ -152,8 +158,20 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
     }
 
     private fun StringBuilder.appendMessageMethod(name: String, definition: MessageDefinition) {
-        val constant = definition.values.values.all { value ->
-            value is MessagePattern && (value.parts.isEmpty() || value.parts.singleOrNull() is MessageText)
+        val constant = definition.isConstant()
+        if (constant) {
+            val locales = listOf(catalog.defaultLocale) + catalog.supportedLocales.filter { it != catalog.defaultLocale }
+            val values = locales.joinToString(", ") { locale ->
+                val pattern = definition.values.getValue(locale) as MessagePattern
+                val text = (pattern.parts.singleOrNull() as? MessageText)?.value.orEmpty()
+                "\"${javaString(text)}\""
+            }
+            // Share the lambda implementation across fixed messages rather than compiling one per translation key.
+            appendLine("        private static final no.beint.thim.CompiledMessage \$message\$$name = \$constantMessage($values);")
+            appendLine("        public static no.beint.thim.CompiledMessage $name() {")
+            appendLine("            return \$message\$$name;")
+            appendLine("        }")
+            return
         }
         val parameterNames = parameterNames(definition.arguments.keys)
         val parameters = definition.arguments.entries.joinToString(", ") { (argument, kind) ->
@@ -168,11 +186,11 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
         }
         appendLine("            return locale -> {")
         appendLine("                java.util.Objects.requireNonNull(locale, \"locale\");")
-        if (!constant) appendLine("                var output = new java.lang.StringBuilder();")
+        appendLine("                var output = new java.lang.StringBuilder();")
         val defaultValue = definition.values.getValue(catalog.defaultLocale)
         val localized = definition.values.filterKeys { it != catalog.defaultLocale }
         if (localized.isEmpty()) {
-            appendMessageResult(defaultValue, parameterNames, catalog.defaultLocale, "                ", constant)
+            appendMessageValue(defaultValue, parameterNames, catalog.defaultLocale, "                ")
         } else {
             val localeIds = catalog.supportedLocales
                 .filter { it != catalog.defaultLocale }
@@ -181,32 +199,21 @@ internal class MessageGenerator(private val catalog: MessageCatalog) {
             appendLine("                switch (messageLocale(locale)) {")
             localized.forEach { (locale, value) ->
                 appendLine("                    case ${localeIds.getValue(locale)} -> {")
-                appendMessageResult(value, parameterNames, locale, "                        ", constant)
+                appendMessageValue(value, parameterNames, locale, "                        ")
                 appendLine("                    }")
             }
             appendLine("                    default -> {")
-            appendMessageResult(defaultValue, parameterNames, catalog.defaultLocale, "                        ", constant)
+            appendMessageValue(defaultValue, parameterNames, catalog.defaultLocale, "                        ")
             appendLine("                    }")
             appendLine("                }")
         }
-        if (!constant) appendLine("                return output.toString();")
+        appendLine("                return output.toString();")
         appendLine("            };")
         appendLine("        }")
     }
 
-    private fun StringBuilder.appendMessageResult(
-        value: MessageValue,
-        parameters: Map<String, String>,
-        locale: String,
-        indentation: String,
-        constant: Boolean,
-    ) {
-        if (constant) {
-            val text = ((value as MessagePattern).parts.singleOrNull() as? MessageText)?.value.orEmpty()
-            appendLine("${indentation}return \"${javaString(text)}\";")
-        } else {
-            appendMessageValue(value, parameters, locale, indentation)
-        }
+    private fun MessageDefinition.isConstant(): Boolean = values.values.all { value ->
+        value is MessagePattern && (value.parts.isEmpty() || value.parts.singleOrNull() is MessageText)
     }
 
     private fun StringBuilder.appendMessageValue(
