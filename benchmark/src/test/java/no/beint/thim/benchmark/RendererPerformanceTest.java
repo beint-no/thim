@@ -126,7 +126,7 @@ class RendererPerformanceTest {
 
     private static void assertUnderCeiling(String name, SessionAction action) {
         var session = new RenderSession();
-        var result = Measure.run(name, 50, 80, 40, () -> action.run(session));
+        var result = Measure.runUnderCeiling(name, Baselines.ceiling(name), 50, 80, 40, () -> action.run(session));
         assertTrue(
                 result.medianNanosPerOp() <= Baselines.ceiling(name),
                 () -> name + " median " + result.medianNanosPerOp() + " ns/op exceeds ceiling "
