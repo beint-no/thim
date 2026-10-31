@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Run the standalone template compiler (projects without the Kotlin JVM plugin) with `kotlin-stdlib`
+  2.5.0-Beta2, the Kotlin version Thim is built with; 0.13.2 still used 2.4.21. Kotlin and KSP versions
+  now come from `gradle.properties` for both the build and the Gradle plugin, so they cannot drift apart.
+
 ## 0.13.2 - 2026-10-31
 
 - Share locale-selection code across fixed-message factories, keeping one cached resolver per message.
