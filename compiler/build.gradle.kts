@@ -11,7 +11,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.12")
+    implementation("com.google.devtools.ksp:symbol-processing-api:${providers.gradleProperty("kspVersion").get()}")
     implementation("org.snakeyaml:snakeyaml-engine:3.1.1")
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))

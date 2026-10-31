@@ -4,7 +4,7 @@ import org.gradle.api.tasks.PathSensitivity
 
 plugins {
     kotlin("jvm")
-    kotlin("plugin.spring") version "2.5.0-Beta2"
+    kotlin("plugin.spring")
     id("com.google.devtools.ksp")
     id("org.springframework.boot")
 }

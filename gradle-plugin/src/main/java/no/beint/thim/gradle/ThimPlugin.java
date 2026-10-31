@@ -19,13 +19,16 @@ import org.gradle.language.jvm.tasks.ProcessResources;
 
 import javax.lang.model.SourceVersion;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
 
 public final class ThimPlugin implements Plugin<Project> {
-    private static final String KSP_VERSION = "2.3.12";
-    private static final String KOTLIN_VERSION = "2.4.21";
+    private static final Properties TOOL_VERSIONS = toolVersions();
+    private static final String KSP_VERSION = TOOL_VERSIONS.getProperty("ksp");
+    private static final String KOTLIN_VERSION = TOOL_VERSIONS.getProperty("kotlin");
     private static final String MESSAGE_USAGE_TASK = "thimMessageUsageCheck";
     private static final String CSS_USAGE_TASK = "thimCssUsageCheck";
 
@@ -330,5 +333,16 @@ public final class ThimPlugin implements Plugin<Project> {
             output.insert(0, '_');
         }
         return output.toString();
+    }
+
+    private static Properties toolVersions() {
+        var versions = new Properties();
+        try (var input = ThimPlugin.class.getResourceAsStream("tool-versions.properties")) {
+            if (input == null) throw new IllegalStateException("Missing generated Thim tool versions");
+            versions.load(input);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Cannot read generated Thim tool versions", exception);
+        }
+        return versions;
     }
 }

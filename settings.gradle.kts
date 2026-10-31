@@ -1,8 +1,15 @@
 pluginManagement {
+    val kotlinVersion = providers.gradleProperty("kotlinVersion").get()
+    val kspVersion = providers.gradleProperty("kspVersion").get()
     includeBuild("build-logic")
     repositories {
         gradlePluginPortal()
         mavenCentral()
+    }
+    plugins {
+        kotlin("jvm") version kotlinVersion
+        kotlin("plugin.spring") version kotlinVersion
+        id("com.google.devtools.ksp") version kspVersion
     }
 }
 
