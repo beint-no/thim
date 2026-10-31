@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.2 - 2026-10-31
+
+- Share locale-selection code across fixed-message factories, keeping one cached resolver per message.
+  ReAI translation-edit builds measured 15.1 s → 9.1 s; generated message bytecode shrank by 12%.
+  Public factories, annotation references, translations and locale fallbacks are unchanged.
+
 ## 0.13.1 - 2026-10-11
 
 - Update Kotlin to 2.4.21. In projects without the Kotlin JVM plugin, the Gradle plugin now runs
