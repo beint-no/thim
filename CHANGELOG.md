@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.2 - 2026-10-31
 
 - Generate argument-free text messages as static instances of one private `ConstantMessage` class
   instead of one lambda each. javac's lambda handling is superlinear in the number of lambdas per
@@ -8,6 +8,9 @@
   0.8–2.6 s, roughly halving a build after a message edit. Resolving every message once loads
   10,746 fewer classes and uses 24 MB less metaspace. Factories, references, locale fallback and
   null-locale checks are unchanged; each factory still returns one shared, allocation-free instance.
+- Build with Kotlin 2.5.0-Beta2. In projects without the Kotlin JVM plugin, the Gradle plugin now runs
+  the standalone template compiler with `kotlin-stdlib` 2.5.0-Beta2.
+- Update Spring Boot to 4.2.0-RC1 and Gradle to 9.8.2.
 
 ## 0.13.1 - 2026-10-11
 

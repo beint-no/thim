@@ -25,7 +25,7 @@ import java.util.Locale;
 
 public final class ThimPlugin implements Plugin<Project> {
     private static final String KSP_VERSION = "2.3.12";
-    private static final String KOTLIN_VERSION = "2.4.21";
+    private static final String KOTLIN_VERSION = "2.5.0-Beta2";
     private static final String MESSAGE_USAGE_TASK = "thimMessageUsageCheck";
     private static final String CSS_USAGE_TASK = "thimCssUsageCheck";
 
