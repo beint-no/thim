@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.13.3 - 2026-11-01
 
+- Resolve each application URL with one Spring resource lookup instead of two when the dispatcher
+  servlet has no path prefix (the Spring Boot default). Links that are not static resources, the
+  common case, were matched against every resource handler pattern twice; ReAI's production profile
+  spent 1.7% of its CPU in these lookups. Servlet path mappings keep the previous resolution.
 - Run the standalone template compiler (projects without the Kotlin JVM plugin) with `kotlin-stdlib`
   2.5.0-Beta2, the Kotlin version Thim is built with; 0.13.2 still used 2.4.21. Kotlin and KSP versions
   now come from `gradle.properties` for both the build and the Gradle plugin, so they cannot drift apart.
