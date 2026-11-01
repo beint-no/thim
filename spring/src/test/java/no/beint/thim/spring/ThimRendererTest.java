@@ -2,6 +2,7 @@ package no.beint.thim.spring;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.MappingMatch;
 import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
 import no.beint.thim.RequestDataValues;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.mock.web.MockHttpServletMapping;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.HandlerMapping;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -200,6 +203,47 @@ class ThimRendererTest {
     }
 
     @Test
+    void resolvesWithOneLookupWhenTheServletHasNoPathPrefix() throws Exception {
+        var lookups = new AtomicInteger();
+        var request = new MockHttpServletRequest();
+        request.setContextPath("/app");
+        request.setRequestURI("/app/page");
+        request.setHttpServletMapping(new MockHttpServletMapping("", "/", "dispatcher", MappingMatch.DEFAULT));
+        request.setAttribute(
+                ResourceUrlProviderExposingInterceptor.RESOURCE_URL_PROVIDER_ATTR,
+                contentVersionResources(new ClassPathResource("static/"), lookups).provider()
+        );
+        var values = SpringRequestDataValues.create(request, new MockHttpServletResponse(), null);
+
+        assertEquals(
+                "/app/assets/app-bf072e9119077b4e76437a93986787ef.js?theme=dark",
+                values.processUrl("/app/assets/app.js?theme=dark")
+        );
+        assertEquals(1, lookups.getAndSet(0));
+        assertEquals("/app/assets/missing.js", values.processUrl("/app/assets/missing.js"));
+        assertEquals(1, lookups.get());
+    }
+
+    @Test
+    void resolvesWithinTheServletPathOfAPathMapping() throws Exception {
+        var request = new MockHttpServletRequest();
+        request.setContextPath("/app");
+        request.setServletPath("/web");
+        request.setRequestURI("/app/web/page");
+        request.setHttpServletMapping(new MockHttpServletMapping("page", "/web/*", "dispatcher", MappingMatch.PATH));
+        request.setAttribute(
+                ResourceUrlProviderExposingInterceptor.RESOURCE_URL_PROVIDER_ATTR,
+                contentVersionResourceUrlProvider()
+        );
+        var values = SpringRequestDataValues.create(request, new MockHttpServletResponse(), null);
+
+        assertEquals(
+                "/app/web/assets/app-bf072e9119077b4e76437a93986787ef.js",
+                values.processUrl("/app/web/assets/app.js")
+        );
+    }
+
+    @Test
     void responseEncodesTheUrlAfterRequestDataValueProcessing() {
         var request = new MockHttpServletRequest();
         var response = new MockHttpServletResponse() {
@@ -339,9 +383,15 @@ class ThimRendererTest {
 
     private static ContentVersionResources contentVersionResources(Resource location)
             throws Exception {
+        return contentVersionResources(location, new AtomicInteger());
+    }
+
+    private static ContentVersionResources contentVersionResources(Resource location, AtomicInteger lookups)
+            throws Exception {
         var resourceHandler = new ResourceHttpRequestHandler();
         resourceHandler.setLocations(List.of(location));
         resourceHandler.setResourceResolvers(List.of(
+                new CountingResourceResolver(lookups),
                 new VersionResourceResolver().addContentVersionStrategy("/**"),
                 new PathResourceResolver()
         ));
@@ -367,6 +417,28 @@ class ThimRendererTest {
         var response = new MockHttpServletResponse();
         handler.handleRequest(request, response);
         return response;
+    }
+
+    private record CountingResourceResolver(AtomicInteger urlPathLookups) implements ResourceResolver {
+        @Override
+        public Resource resolveResource(
+                HttpServletRequest request,
+                @NonNull String requestPath,
+                @NonNull List<? extends Resource> locations,
+                @NonNull ResourceResolverChain chain
+        ) {
+            return chain.resolveResource(request, requestPath, locations);
+        }
+
+        @Override
+        public String resolveUrlPath(
+                @NonNull String resourcePath,
+                @NonNull List<? extends Resource> locations,
+                @NonNull ResourceResolverChain chain
+        ) {
+            urlPathLookups.incrementAndGet();
+            return chain.resolveUrlPath(resourcePath, locations);
+        }
     }
 
     private record ContentVersionResources(

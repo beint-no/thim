@@ -2,6 +2,7 @@ package no.beint.thim.spring;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.MappingMatch;
 import no.beint.thim.RequestDataValues;
 import org.springframework.web.servlet.resource.ResourceUrlProvider;
 import org.springframework.web.servlet.resource.ResourceUrlProviderExposingInterceptor;
@@ -15,6 +16,7 @@ final class SpringRequestDataValues implements RequestDataValues {
     private final HttpServletResponse response;
     private final RequestDataValueProcessor processor;
     private final ResourceUrlProvider resourceUrlProvider;
+    private final boolean lookupPathIsWithinApplication;
 
     static RequestDataValues create(
             HttpServletRequest request,
@@ -35,6 +37,7 @@ final class SpringRequestDataValues implements RequestDataValues {
         this.response = Objects.requireNonNull(response);
         this.processor = processor;
         this.resourceUrlProvider = resourceUrlProvider;
+        this.lookupPathIsWithinApplication = lookupPathIsWithinApplication(request);
     }
 
     @Override
@@ -42,7 +45,9 @@ final class SpringRequestDataValues implements RequestDataValues {
         var processed = processor == null ? url : processor.processUrl(request, url);
         if (processed == null) processed = url;
         if (resourceUrlProvider != null && isApplicationUrl(processed)) {
-            var resolved = resourceUrlProvider.getForRequestUrl(request, processed);
+            // Without a servlet path, Spring's lookup path is the path within the application, which the
+            // context-path boundary gives directly; getForRequestUrl would only repeat the same lookup.
+            var resolved = lookupPathIsWithinApplication ? null : resourceUrlProvider.getForRequestUrl(request, processed);
             // A root lookup path ("/") can match the first slash in a context-prefixed
             // request URL. Thim application URLs have a known context-path boundary.
             if (resolved == null) resolved = resolveApplicationUrl(processed);
@@ -65,6 +70,13 @@ final class SpringRequestDataValues implements RequestDataValues {
         if (!isApplicationUrl(url)) return null;
         var resolved = resourceUrlProvider.getForLookupPath(url.substring(contextPath.length(), pathEnd));
         return resolved == null ? null : contextPath + resolved + url.substring(pathEnd);
+    }
+
+    // Mirrors UrlPathHelper, which skips servlet path determination for these mappings.
+    private static boolean lookupPathIsWithinApplication(HttpServletRequest request) {
+        var mapping = request.getHttpServletMapping();
+        var match = mapping == null ? null : mapping.getMappingMatch();
+        return match != null && (match != MappingMatch.PATH || "/*".equals(mapping.getPattern()));
     }
 
     private static ResourceUrlProvider resourceUrlProvider(HttpServletRequest request) {
