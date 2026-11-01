@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     kotlin("jvm")
     id("thim.publishing")
@@ -7,7 +5,6 @@ plugins {
 
 kotlin {
     jvmToolchain(27)
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_26)
 }
 
 dependencies {

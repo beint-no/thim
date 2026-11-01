@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Update KSP to 2.3.13, the version the Gradle plugin applies to consumers and uses for the
+  standalone compiler. It keeps library caches between KSP rounds and speeds up incremental
+  classpath scanning.
+- Compile Thim's Kotlin for JVM 27, matching its Java code; Kotlin 2.5 adds the JVM 27 target.
+
 ## 0.13.3 - 2026-11-01
 
 - Resolve each application URL with one Spring resource lookup instead of two when the dispatcher

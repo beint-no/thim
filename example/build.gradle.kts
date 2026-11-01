@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import com.google.devtools.ksp.gradle.KspAATask
 import org.gradle.api.tasks.PathSensitivity
 
@@ -11,7 +10,6 @@ plugins {
 
 kotlin {
     jvmToolchain(27)
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_26)
 }
 
 dependencies {
