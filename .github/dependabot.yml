@@ -1,6 +1,20 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    time: 04:00
+  groups:
+    github-actions-updates:
+      patterns:
+      - '*'
+- package-ecosystem: gradle
+  directory: /
+  schedule:
+    interval: weekly
+    time: 04:00
+  groups:
+    gradle-updates:
+      patterns:
+      - '*'
