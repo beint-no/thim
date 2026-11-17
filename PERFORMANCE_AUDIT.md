@@ -483,3 +483,65 @@ manifest are byte-identical. ReAI (web-app, bedri), Utin, Eteo and Ecomtools com
 against the candidate via `-PthimBuild`. `RegistryGeneratorTest` compiles a 600-template
 registry with an open model and a subclass, renders every model, and keeps each
 per-request method below 8000 bytes; the example golden renders are unchanged.
+
+
+## 2026-11-17: compiled server components (0.14.0)
+
+Components are expanded at build time. At request time, generated renderers bind a
+props getter to a local variable and write the same HTML as equivalent direct markup.
+There is no runtime component registry, reflective props lookup, slot closure, or
+browser hydration. Existing helper partitioning captures props and caller bindings
+when a large renderer needs multiple Java methods.
+
+### Runtime comparison
+
+`ComponentBenchmark` renders identical items through a component or direct HTML.
+Each item has a name requiring escaping, a TrustedUrl and a Boolean attribute. Both
+fixtures consume the same preconstructed immutable item list. Four correctness cases
+(0/1/100/1000 items) assert byte-identical output; regression timing checks cover
+1/100/1000 items. Those tests use a generous relative ceiling for noisy CI; the forked
+JMH results below are the performance evidence, not an absolute speed guarantee.
+
+Measured locally on the development Mac, JDK 27, with two forks, three one-second
+warmup iterations and five one-second measurement iterations per fork, using the GC
+profiler. The application and Gradle builds were stopped during this run.
+
+| Items | Component ns/op | Direct HTML ns/op | Component B/op | Direct HTML B/op |
+|---|---:|---:|---:|---:|
+| 1 | 38.58 ± 1.00 | 38.84 ± 1.02 | 24.000 | 24.000 |
+| 100 | 3654.39 ± 47.12 | 3663.91 ± 43.07 | 2424.001 | 2424.001 |
+| 1000 | 40021.04 ± 878.42 | 39973.63 ± 703.97 | 24024.016 | 24024.016 |
+
+Errors are JMH's reported confidence intervals. The timings overlap and measured
+allocations match: this fixture shows no measurable component abstraction overhead.
+The allocations include the existing render context and URL resolution; composition
+does not eliminate those costs. This is a synthetic rendering comparison, not an
+end-to-end ReAI request or network benchmark.
+
+Raw output: [render comparison](benchmark/results/2026-11-17-components-render.json).
+
+### Build-time linking
+
+`TemplateCompilerBenchmark.expandFragments` now compares component and fragment
+composition with 100 and 1000 calls. Sources are parsed before measurement; each
+operation constructs the linker and expands the page. This measures linking only,
+not KSP type analysis, Java compilation, or the complete Gradle build.
+
+| Calls | Fragment ms/op | Component ms/op | Fragment B/op | Component B/op |
+|---|---:|---:|---:|---:|
+| 100 | 0.0663 | 0.0541 | 440440 | 432736 |
+| 1000 | 0.6383 | 0.5595 | 4256473 | 4261627 |
+
+Both scale approximately with the number of calls in this fixture. These results do
+not establish a universal compiler speedup; components and fragments have different
+binding work. Raw output: [link comparison](benchmark/results/2026-11-17-components-link.json).
+
+Reproduce after `./gradlew :benchmark:jmhJar`:
+
+```sh
+java -jar benchmark/build/libs/benchmark-0.14.0-jmh.jar ComponentBenchmark \
+  -wi 3 -i 5 -w 1s -r 1s -f 2 -prof gc -rf json -rff components-render.json
+java -jar benchmark/build/libs/benchmark-0.14.0-jmh.jar TemplateCompilerBenchmark.expandFragments \
+  -p elements=100,1000 -p composition=fragment,component \
+  -wi 3 -i 5 -w 1s -r 1s -f 2 -prof gc -rf json -rff components-link.json
+```

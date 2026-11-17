@@ -3,6 +3,7 @@ package no.beint.thim.compiler
 internal class FragmentExpander(
     templates: Map<String, List<Node>>,
 ) {
+    private val components = ComponentCatalog(templates)
     private val fragments = templates.mapValues { (template, nodes) ->
         val defined = linkedMapOf<String, Fragment>()
         nodes.asSequence().flatMap(Node::elements).forEach { element ->
@@ -25,6 +26,8 @@ internal class FragmentExpander(
     fun unusedFragments(): List<String> = fragments.flatMap { (template, defined) ->
         defined.keys.filterNot { "$template::$it" in used }.map { "$template :: $it" }
     }
+
+    fun unusedComponents(): List<String> = components.unused()
 
     /**
      * Parameters of used fragments that never appear in an expression of the fragment
@@ -54,22 +57,29 @@ internal class FragmentExpander(
         template: String,
         bindings: Map<String, Binding>,
         stack: Set<String>,
-    ): List<Node> = when (node) {
-        is RawNode -> listOf(node)
-        is ElementNode -> {
-            val replacement = node.attributes["th:replace"]
-            if (replacement == null) {
-                val attributes = linkedMapOf<String, String?>()
-                node.attributes.forEach { (name, value) ->
-                    attributes[name] = value?.let { substitute(it, bindings) }
-                }
-                val children = node.children.flatMap { expand(it, template, bindings, stack) }.toMutableList()
-                listOf(ElementNode(node.name, attributes, node.location, node.attributeLocations, children))
-            } else {
-                val reference = reference(substitute(replacement, bindings), template, bindings)
-                expand(reference, bindings, stack)
-            }
+    ): List<Node> {
+        if (node is RawNode) return listOf(node)
+        node as ElementNode
+        if (node.callerContent) return listOf(node)
+        if (':' in node.name && !node.name.startsWith("th:")) {
+            val attributes = LinkedHashMap(node.attributes.mapValues { (_, value) -> value?.let { substitute(it, bindings) } })
+            return listOf(components.expand(
+                node.copy(attributes = attributes), stack,
+                expandCaller = { content -> content.flatMap { expand(it, template, bindings, stack) } },
+                expandDefinition = { origin, content, nested -> content.flatMap { expand(it, origin, emptyMap(), nested) } },
+            ))
         }
+        requireDiagnostic(
+            node.attributes.keys.none { it in setOf("th:slot", "th:fill", "th:props", "th:component") },
+            "THIM-COMPONENT-CONTEXT", node.location,
+        ) { "component directives must belong to a component definition, call, or slot" }
+        val replacement = node.attributes["th:replace"]
+        if (replacement != null) {
+            return expand(reference(substitute(replacement, bindings), template, bindings), bindings, stack)
+        }
+        val attributes = LinkedHashMap(node.attributes.mapValues { (_, value) -> value?.let { substitute(it, bindings) } })
+        val children = node.children.flatMap { expand(it, template, bindings, stack) }.toMutableList()
+        return listOf(node.copy(attributes = attributes, children = children))
     }
 
     private fun expand(reference: Reference, parentBindings: Map<String, Binding>, stack: Set<String>): List<Node> {

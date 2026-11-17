@@ -59,7 +59,7 @@ pluginManagement {
 }
 
 plugins {
-    id("no.beint.thim.settings") version "0.13.3"
+    id("no.beint.thim.settings") version "0.14.0"
 }
 ```
 
@@ -81,7 +81,7 @@ plugins {
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.13.3")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.14.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -124,6 +124,79 @@ Use `thimCheck` for template validation and application-wide dead-message and de
 ```
 
 `thimCheck` runs the same validation as normal compilation. Java modules also write a report to `build/reports/thim/check.json`.
+
+## Server components
+
+Components are HTML templates linked at build time. They add no browser runtime,
+custom elements, reflection, or runtime template lookup. Their props are ordinary
+immutable Kotlin classes or Java records; constructors check required values and
+supply defaults, and enums express the variants your UI actually supports.
+
+Define components anywhere under `src/main/resources/templates`. Names have a
+namespace, are unique within the module, and are resolved without imports:
+
+```html
+<!-- ui/button.html -->
+<button th:component="ui:button" th:props="example.ui.ButtonProps"
+        type="button" th:disabled="${disabled}">
+    <th:block th:slot="default" required/>
+</button>
+```
+
+```kotlin
+package example.ui
+
+data class ButtonProps(val disabled: Boolean = false)
+```
+
+Expose the props on the page model, then use the component:
+
+```html
+<ui:button th:props="${saveButton}">
+    <span th:text="#{save}"/>
+</ui:button>
+```
+
+`th:props` accepts one non-null property path of exactly the declared class. Missing,
+wrong, nullable, and generic props fail compilation. Inside the definition, property
+paths start at the props object. The component cannot reach the caller's page or
+loop variables. Omit both `th:props` attributes for components that only need content.
+
+Use named slots for structural composition:
+
+```html
+<section th:component="ui:card">
+    <header><th:block th:slot="heading" required/></header>
+    <div><th:block th:slot="default" required/></div>
+    <footer><th:block th:slot="footer"/></footer>
+</section>
+
+<ui:card>
+    <th:block th:fill="heading"><h2 th:text="${title}"/></th:block>
+    <p th:text="${description}"/>
+    <th:block th:fill="footer"><a th:href="${detailsUrl}">Details</a></th:block>
+</ui:card>
+```
+
+Slot content keeps the **caller's** scope, including its loop variables, translations,
+and form binding. An unfilled optional slot renders its definition's fallback
+children in the **component's** scope. A required slot must be supplied and cannot
+have fallback content. Unknown or duplicate fills and discarded default content are
+build errors. `th:slot` and `th:fill` belong on `th:block`; their wrappers disappear.
+
+Calls accept `th:each`, `th:if`, and `th:unless`, evaluated in caller scope before props
+are bound. Components compose with other components and existing fragments. Finite
+nesting through slots is supported; recursive definitions are rejected. Native
+`th:field` controls retain their enclosing form context across a component boundary.
+
+HTML and HTMX attributes belong on the definition, or come from typed props. They are
+never silently forwarded from a call. URL and raw-HTML props retain the existing
+`TrustedUrl` and `SafeHtml` checks. Use slots for markup rather than strings of HTML.
+
+Component libraries need no conventional `*Page` model. Like fragments, unused
+components fail the build under `failOnUnusedFragments`. Definitions are currently
+local to one rendering module; this release does not introduce cross-jar component
+linking, scoped CSS, automatic asset loading, or client hydration.
 
 ## CSS usage
 
@@ -275,6 +348,7 @@ Thim accepts:
 - `th:each`
 - `th:if` and `th:unless`
 - fixed, build-time `th:fragment` and `th:replace` composition
+- typed `th:component` / `th:props` composition with `th:slot` and `th:fill`
 - property, message, static URL and quoted-literal values on ordinary `th:*` attributes
 - `no.beint.thim.TrustedUrl` properties on URL attributes such as `th:href`, `th:src` and `th:action` (not `javascript:` or blank values)
 - conditional HTML boolean attributes
@@ -316,7 +390,7 @@ Its default fixtures contain 100 and 1,000 fragment calls. To measure an applica
 
 ```shell
 ./gradlew :benchmark:jmhJar
-java -jar benchmark/build/libs/benchmark-0.13.3-jmh.jar TemplateCompilerBenchmark \
+java -jar benchmark/build/libs/benchmark-0.14.0-jmh.jar TemplateCompilerBenchmark \
   -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
   -f 2 -prof gc
 ```

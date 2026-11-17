@@ -33,6 +33,13 @@ The template language is intentionally limited to statically resolvable property
 
 Layouts and fragments link fixed templates and typed values during compilation. Composition is erased from the request path and cannot introduce runtime template lookup or a general expression language.
 
+Server components extend this linker with an explicit props-class boundary and content slots.
+Props retain their Kotlin/Java types; a component cannot capture page properties or caller loop
+bindings. Supplied slots use the caller's lexical scope, while slot fallbacks use the component's
+props. The expanded HTML tree retains scope metadata only until code generation, so escaping,
+URL safety, form binding and document validation continue through the existing compiler. Generated
+renderers bind props to a local variable and write HTML directly; there is no runtime component API.
+
 ## Frameworks and JDK
 
 The compiler and runtime do not depend on Spring. The MVC adapter recognizes page-model return types and writes the response. A non-Spring application can call its generated `TemplateSet` directly.

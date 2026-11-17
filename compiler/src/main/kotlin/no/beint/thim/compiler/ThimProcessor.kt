@@ -154,6 +154,11 @@ private class ThimProcessor(
     }
 
     private fun reportUnusedFragments(expander: FragmentExpander) {
+        val unusedComponents = expander.unusedComponents()
+        if (unusedComponents.isNotEmpty()) {
+            val message = "THIM-COMPONENT-UNUSED components never used by a compiled page: ${unusedComponents.joinToString(", ")}"
+            if (failOnUnusedFragments) error(message) else logger.warn(message)
+        }
         val unusedParameters = expander.unusedParameters()
         if (unusedParameters.isNotEmpty()) {
             if (failOnUnusedFragments) {
@@ -366,7 +371,7 @@ private class ThimProcessor(
 }
 
 private fun List<Node>.hasFragments(): Boolean =
-    asSequence().flatMap(Node::elements).any { "th:fragment" in it.attributes }
+    asSequence().flatMap(Node::elements).any { "th:fragment" in it.attributes || "th:component" in it.attributes }
 
 internal fun Node.elements(): Sequence<ElementNode> = when (this) {
     is ElementNode -> sequenceOf(this) + children.asSequence().flatMap(Node::elements)

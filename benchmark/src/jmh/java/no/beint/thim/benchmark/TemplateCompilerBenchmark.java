@@ -38,6 +38,9 @@ public class TemplateCompilerBenchmark {
     @Param({"100", "1000"})
     public int elements;
 
+    @Param({"fragment", "component"})
+    public String composition;
+
     private Map<String, String> sources;
     private Map<String, List<Node>> parsed;
     private List<String> pages;
@@ -46,9 +49,13 @@ public class TemplateCompilerBenchmark {
     public void setup() throws IOException {
         sources = new LinkedHashMap<>();
         if (templatesDirectory.equals("synthetic")) {
-            sources.put("card", "<section th:fragment=\"card(title)\" class=\"card\"><h2 th:text=\"${title}\"></h2></section>");
-            sources.put("page", "<main>\n" +
-                    "<div th:replace=\"~{card :: card(${heading})}\"></div>\n".repeat(elements) + "</main>\n");
+            if (composition.equals("component")) {
+                sources.put("card", "<section th:component=\"ui:card\" th:props=\"sample.Card\" class=\"card\"><h2 th:text=\"${title}\"></h2></section>");
+                sources.put("page", "<main>\n" + "<ui:card th:props=\"${card}\"/>\n".repeat(elements) + "</main>\n");
+            } else {
+                sources.put("card", "<section th:fragment=\"card(title)\" class=\"card\"><h2 th:text=\"${title}\"></h2></section>");
+                sources.put("page", "<main>\n" + "<div th:replace=\"~{card :: card(${heading})}\"></div>\n".repeat(elements) + "</main>\n");
+            }
         } else {
             var root = Path.of(templatesDirectory);
             try (var files = Files.walk(root)) {
@@ -79,7 +86,7 @@ public class TemplateCompilerBenchmark {
     private static boolean hasFragments(List<Node> nodes) {
         for (var node : nodes) {
             if (node instanceof ElementNode element && (element.getAttributes().containsKey("th:fragment") ||
-                    hasFragments(element.getChildren()))) return true;
+                    element.getAttributes().containsKey("th:component") || hasFragments(element.getChildren()))) return true;
         }
         return false;
     }
