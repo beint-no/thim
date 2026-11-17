@@ -29,6 +29,12 @@ internal class ComponentCatalog(templates: Map<String, List<Node>>) {
                             slots[slot] = child
                         }
                     }
+                    fun checkSlotOutput(node: ElementNode, replaced: Boolean) {
+                        check(!replaced || "th:slot" !in node.attributes, node, "SLOT", "a slot cannot be inside content replaced by th:text, th:utext, th:errors, th:field or th:replace")
+                        val replacesChildren = replaced || node.attributes.keys.any { it in contentDirectives }
+                        node.children.filterIsInstance<ElementNode>().forEach { checkSlotOutput(it, replacesChildren) }
+                    }
+                    if (slots.isNotEmpty()) checkSlotOutput(element, false)
                     definitions[name] = Definition(template, element, slots)
                 }
             }
@@ -98,6 +104,7 @@ internal class ComponentCatalog(templates: Map<String, List<Node>>) {
         val componentName = Regex("[a-z][a-z0-9-]*:[a-z][a-z0-9-]*")
         val typeName = Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)+")
         val slotName = Regex("[a-z][a-z0-9-]*")
+        val contentDirectives = setOf("th:text", "th:utext", "th:errors", "th:field", "th:replace")
         fun meaningful(node: Node): Boolean = node !is RawNode || node.value.isNotBlank()
     }
 }

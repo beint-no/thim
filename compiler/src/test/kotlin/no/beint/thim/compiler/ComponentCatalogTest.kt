@@ -103,6 +103,13 @@ class ComponentCatalogTest {
         rejects("CONTEXT", "", """<th:block th:fill="heading"/>""")
     }
 
+    @Test fun `slots cannot silently disappear under content replacing directives`() {
+        for (directive in listOf("th:text", "th:utext", "th:errors", "th:field", "th:replace")) {
+            rejects("SLOT", """<div th:component="ui:card" $directive="ignored"><th:block th:slot="default"/></div>""", "<ui:card>Content</ui:card>")
+            rejects("SLOT", """<div th:component="ui:card"><p $directive="ignored"><th:block th:slot="default"/></p></div>""", "<ui:card>Content</ui:card>")
+        }
+    }
+
     @Test fun `recursive components and mixed fragment cycles fail`() {
         rejects("RECURSIVE", """<div th:component="ui:card"><ui:card/></div>""", "<ui:card/>")
         rejects("RECURSIVE", """<div th:component="ui:a"><ui:b/></div><div th:component="ui:b"><ui:a/></div>""", "<ui:a/>")
