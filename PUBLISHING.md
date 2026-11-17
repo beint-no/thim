@@ -31,3 +31,25 @@ git push origin vX.Y.Z
 
 GitHub Actions verifies that the tag matches the Gradle version, then builds
 and publishes that exact tagged commit. No local Maven credentials are needed.
+
+## Publish an existing tag to GitHub Packages
+
+The release workflow can also publish the same signed publications to the existing
+GitHub Packages repository. Use this when Central publication is unavailable:
+
+```sh
+gh workflow run publish.yml -f tag=v0.14.0 -f registry=github
+```
+
+The workflow checks out the tag, verifies its version, runs the clean build and
+publishes with its repository-scoped `GITHUB_TOKEN`. Signing uses the existing
+release environment secrets. It never changes or moves the release tag.
+
+Consumers add `https://maven.pkg.github.com/beint-no/thim` as a Maven repository for
+both plugin management and dependencies. GitHub requires authentication for its
+Maven registry, including public packages: use a classic token with `read:packages`
+through Gradle credentials, never a committed token. The repository's publishing
+configuration accepts `gpr.user` / `gpr.key` or `GITHUB_ACTOR` and
+`GITHUB_TOKEN` / `GH_TOKEN`.
+
+To retry Central later, dispatch the same workflow with `registry=central`.
