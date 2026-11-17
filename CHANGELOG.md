@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 - 2026-11-17
+
+- Add compiled server components: named `th:component` definitions, Kotlin class and
+  Java record `th:props`, and required, optional and fallback content slots using
+  `th:slot` / `th:fill`. Calls are inlined into generated renderers without a browser
+  runtime or runtime component lookup.
+- Check exact props types, nullability, component scope isolation, slot names and
+  requirements, recursion, and discarded content at build time. Caller content keeps
+  its lexical loop and form context; fallback content uses the component's props.
+- Preserve existing URL, escaping, translation, native form and complete-document
+  checks across component boundaries, including components rendering the document root.
+- Add component correctness, failing-application compilation, byte-identical rendering,
+  large-renderer capture and performance regression tests, plus forked JMH comparisons
+  against direct HTML and compile-time fragment composition.
+
 
 - Update KSP to 2.3.13, the version the Gradle plugin applies to consumers and uses for the
   standalone compiler. It keeps library caches between KSP rounds and speeds up incremental

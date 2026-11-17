@@ -234,7 +234,9 @@ internal class RendererGenerator(
             "<${element.name}> content is a $language context; dynamic output is not supported"
         }
 
-        var scope = parentScope
+        var scope = if (element.callerContent) {
+            requireNotNull(parentScope.callerScope) { "${element.location}: slot content has no caller scope" }
+        } else parentScope
         var blocks = 0
         attributes["th:each"]?.let { each ->
             val attributeLocation = attributeLocation(element, "th:each")
@@ -318,6 +320,24 @@ internal class RendererGenerator(
                 }
                 code.open("if (!${resolved.code})")
                 blocks++
+            }
+        }
+
+        element.component?.let { component ->
+            if (component.expression == null) {
+                scope = scope.forComponent(null, null)
+            } else {
+                val resolved = scope.resolve(Expressions.path(component.expression, location), location, element.location)
+                requireDiagnostic(!resolved.nullable && resolved.type.declaration.qualifiedName?.asString() == component.type && resolved.type.arguments.isEmpty(),
+                    "THIM-COMPONENT-PROPS-TYPE", element.location) {
+                    "<${component.name}> requires non-null ${component.type}, found ${resolved.type}"
+                }
+                requireDiagnostic(resolved.type.declaration is KSClassDeclaration, "THIM-COMPONENT-PROPS-TYPE", element.location) {
+                    "component props must be a class"
+                }
+                val variable = "props${generatedVariable++}"
+                code.statement("var $variable = ${resolved.code};")
+                scope = scope.forComponent(resolved.type.declaration as KSClassDeclaration, variable)
             }
         }
 
@@ -1264,18 +1284,25 @@ internal class RendererGenerator(
         private val bindings: Map<String, Binding> = emptyMap(),
         private val selection: Binding? = null,
         private val select: Binding? = null,
+        private val rootCode: String? = "model",
+        val callerScope: Scope? = null,
     ) {
         fun withBinding(name: String, binding: Binding) =
-            Scope(model, propertyCache, recordUse, bindings + (name to binding), selection, select)
+            Scope(model, propertyCache, recordUse, bindings + (name to binding), selection, select, rootCode, callerScope)
 
-        fun withSelection(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, binding, select)
+        fun withSelection(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, binding, select, rootCode, callerScope)
 
-        fun withSelectValue(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, selection, binding)
+        fun withSelectValue(binding: Binding) = Scope(model, propertyCache, recordUse, bindings, selection, binding, rootCode, callerScope)
+
+        fun forComponent(props: KSClassDeclaration?, code: String?) =
+            Scope(props ?: model, propertyCache, {}, selection = selection, select = select, rootCode = code, callerScope = this)
 
         fun hasSelection(): Boolean = selection != null
 
         fun capturedBindings(): List<Binding> =
-            (bindings.values + listOfNotNull(selection, select)).distinctBy(Binding::code)
+            (bindings.values + listOfNotNull(selection, select) +
+                listOfNotNull(rootCode?.takeIf { it != "model" }?.let { Binding(it, model.asStarProjectedType(), false) }) +
+                callerScope?.capturedBindings().orEmpty()).distinctBy(Binding::code)
 
         fun selectValue(): Binding? = select
 
@@ -1335,6 +1362,9 @@ internal class RendererGenerator(
                 type = bound.type
                 nullable = bound.nullable
             } else {
+                requireDiagnostic(rootCode != null, "THIM-COMPONENT-SCOPE", location) {
+                    "a component without props cannot access caller property '${first.name}'; pass typed props or use a slot"
+                }
                 val property = model.property(first.name, model.asStarProjectedType())
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
@@ -1344,7 +1374,7 @@ internal class RendererGenerator(
                 recordUse(first.name)
                 type = property.type
                 nullable = type.nullability == Nullability.NULLABLE
-                code = "model.${property.accessor}()"
+                code = "$rootCode.${property.accessor}()"
             }
 
             expression.segments.drop(1).forEach { segment ->

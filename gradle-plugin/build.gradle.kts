@@ -10,6 +10,8 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(project(":compiler"))
+    testRuntimeOnly(project(":runtime"))
 }
 
 gradlePlugin {
@@ -45,4 +47,5 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+    systemProperty("thim.test.processorClasspath", configurations.testRuntimeClasspath.get().asPath)
 }

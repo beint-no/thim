@@ -10,7 +10,11 @@ internal data class ElementNode(
     val location: SourceLocation,
     val attributeLocations: Map<String, SourceLocation>,
     val children: MutableList<Node> = mutableListOf(),
+    val component: ComponentBinding? = null,
+    val callerContent: Boolean = false,
 ) : Node
+
+internal data class ComponentBinding(val name: String, val type: String?, val expression: String?)
 
 internal class TemplateParser(
     private val templateName: String,

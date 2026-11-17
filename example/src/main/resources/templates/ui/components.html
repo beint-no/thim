@@ -1,0 +1,7 @@
+<section th:component="ui:card" th:props="no.beint.thim.example.page.CardProps">
+    <header><th:block th:slot="heading"><h2 th:text="${title}"/></th:block></header>
+    <th:block th:slot="default" required/>
+</section>
+<button th:component="ui:button" th:props="no.beint.thim.example.page.ButtonProps" type="button" th:class="${appearance.cssClass}" th:disabled="${disabled}"><th:block th:slot="default" required/></button>
+<a th:component="ui:link" th:props="no.beint.thim.example.ui.LinkProps" th:href="${href}" th:text="${label}"/>
+<th:block th:component="ui:name-field"><label for="name">Name</label><input th:field="*{name}" autocomplete="name"></th:block>

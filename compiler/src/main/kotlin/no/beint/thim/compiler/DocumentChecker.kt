@@ -17,7 +17,10 @@ internal class DocumentChecker(private val warn: (String) -> Unit) {
     val problems = mutableListOf<String>()
 
     fun check(nodes: List<Node>) {
-        val root = nodes.firstOrNull { it is ElementNode } as? ElementNode ?: return
+        fun roots(nodes: List<Node>): Sequence<ElementNode> = nodes.asSequence().filterIsInstance<ElementNode>().flatMap {
+            if (it.name == "th:block") roots(it.children) else sequenceOf(it)
+        }
+        val root = roots(nodes).firstOrNull() ?: return
         if (root.name != "html") return
         val ids = linkedMapOf<String, MutableList<DeclaredId>>()
         nodes.forEach { collectIds(it, inLoop = false, conditional = false, ids) }
