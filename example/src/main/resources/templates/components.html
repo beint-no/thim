@@ -1,0 +1,10 @@
+<!doctype html>
+<html><body><main>
+<ui:card th:props="${card}">
+    <th:block th:fill="heading"><h1 th:text="${title}"/></th:block>
+    <ui:button th:props="${button}"><span th:text="${title}"/></ui:button>
+    <ui:link th:each="link : ${links}" th:props="${link}"/>
+    <form th:object="${form}" action="/feedback" method="post"><ui:name-field/></form>
+</ui:card>
+<ui:card th:props="${card}"><p>Fallback heading</p></ui:card>
+</main></body></html>
