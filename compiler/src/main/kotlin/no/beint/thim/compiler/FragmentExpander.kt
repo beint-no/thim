@@ -70,7 +70,7 @@ internal class FragmentExpander(
             ))
         }
         requireDiagnostic(
-            node.attributes.keys.none { it in setOf("th:slot", "th:fill", "th:props", "th:component") },
+            node.attributes.keys.none { it in componentDirectives },
             "THIM-COMPONENT-CONTEXT", node.location,
         ) { "component directives must belong to a component definition, call, or slot" }
         val replacement = node.attributes["th:replace"]
@@ -272,6 +272,7 @@ internal class FragmentExpander(
     private data class FragmentBinding(val reference: Reference) : Binding
 
     private companion object {
+        val componentDirectives = setOf("th:slot", "th:fill", "th:props", "th:component")
         val identifierPattern = Regex("[A-Za-z_][A-Za-z0-9_-]*")
         val variablePattern = Regex("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}")
     }
