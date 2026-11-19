@@ -72,6 +72,7 @@ class HtmlOutputTest {
         var bytes = new ByteArrayOutputStream();
         var output = new HtmlOutput(bytes);
         output.raw(new byte[] {'<', 'b', '>'}, 0, 3);
+        output.raw((SafeHtml) null);
         output.raw(new SafeHtml("<i>ok</i>"));
         output.flush();
         assertEquals("<b><i>ok</i>", bytes.toString(StandardCharsets.UTF_8));
