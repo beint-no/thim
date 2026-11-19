@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0 - 2026-11-19
+
+- Add dependency-free `no.beint.thim.TemplateRenderer` in `runtime` so non-web/email modules can render compiled templates without depending on `spring-webmvc`.
+- Preserve `th:if`, `th:unless`, and `th:each` directives on `th:replace` elements (wrapping expanded fragments in `<th:block>` and rejecting unexpected `th:*` directives with `THIM-REPLACE-ATTRIBUTE`).
+- Fix `Scope.recordRootProperty` inside server components so `th:field` and `th:errors` mark the page model's `errors` property as used under `strictModels = true`.
+- Emit typed parameters directly on split `renderPart*` helper methods to avoid `-Xlint:unchecked -Werror` failures with generic captured bindings.
+- Allow message-only modules to compile without a dummy `templates/` directory, allow nullable `SafeHtml?` in `th:utext`, and harden `TrustedUrl` against ASCII control characters, leading/trailing whitespace, and `data:image/svg+xml` / `data:application/xhtml+xml`.
+- Fix generic property resolution (`asMemberOf`), private/internal property visibility handling, Kotlin `is*` getter naming, regex replacement escaping in fragment arguments, and single-quoted attribute trimming.
+- Chunk `index()`, `isSupertypeOfModel()`, and `renderSubtype()` in `RegistryGenerator` to stay under HotSpot's 8,000-byte JIT method limit for large applications.
+- Cache `contextPath` in `SpringRequestDataValues`, call `encodeRedirectURL` on `ThimResult.Redirect`, guard `ThimWebMvcConfigurer` with servlet-web conditionals, scope KSP inputs in `ThimPlugin` to `kspKotlin`, and update standalone `ThimCompile` flags to JDK 27 / Kotlin 2.5.
+
 ## 0.14.1 - 2026-11-17
 
 - Reuse the set of reserved component directives during template compilation. On the ReAI web-app
