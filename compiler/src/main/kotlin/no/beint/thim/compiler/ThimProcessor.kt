@@ -295,6 +295,7 @@ private class ThimProcessor(
     }
 
     private fun parsedTemplates(): Map<String, List<Node>> {
+        if (!Files.isDirectory(templatesDirectory)) return emptyMap()
         val paths = mutableListOf<Path>()
         Files.walk(templatesDirectory).use { stream ->
             stream.filter { Files.isRegularFile(it) && it.fileName.toString().endsWith(".html") }.forEach(paths::add)
@@ -334,7 +335,10 @@ private class ThimProcessor(
         .removeSuffix(".html")
 
     private fun validateConfiguration() {
-        require(Files.isDirectory(templatesDirectory)) { "Template directory does not exist: $templatesDirectory" }
+        require(
+            Files.isDirectory(templatesDirectory) ||
+                (!Files.exists(templatesDirectory) && Files.isDirectory(messagesDirectory)),
+        ) { "Template directory does not exist: $templatesDirectory" }
         require(generatedPackage.matches(Regex("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"))) {
             "Invalid generated package '$generatedPackage'"
         }

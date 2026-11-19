@@ -75,7 +75,34 @@ internal class FragmentExpander(
         ) { "component directives must belong to a component definition, call, or slot" }
         val replacement = node.attributes["th:replace"]
         if (replacement != null) {
-            return expand(reference(substitute(replacement, bindings), template, bindings), bindings, stack)
+            val unexpected = node.attributes.keys.filter { it.startsWith("th:") && it !in replaceDirectives }
+            requireDiagnostic(unexpected.isEmpty(), "THIM-REPLACE-ATTRIBUTE", node.location) {
+                "th:replace only combines with th:if, th:unless, and th:each; remove $unexpected"
+            }
+            val control = LinkedHashMap<String, String?>()
+            val controlLocations = linkedMapOf<String, SourceLocation>()
+            var innerBindings = bindings
+            if ("th:each" in node.attributes) {
+                val each = node.attributes["th:each"]
+                control["th:each"] = each?.let { substitute(it, bindings) }
+                node.attributeLocations["th:each"]?.let { controlLocations["th:each"] = it }
+                val loopVariable = each?.substringBefore(':', "")?.trim().orEmpty()
+                if (loopVariable.isNotEmpty() && loopVariable in innerBindings) {
+                    innerBindings = innerBindings - loopVariable
+                }
+            }
+            for (directive in listOf("th:if", "th:unless")) {
+                if (directive in node.attributes) {
+                    control[directive] = node.attributes[directive]?.let { substitute(it, innerBindings) }
+                    node.attributeLocations[directive]?.let { controlLocations[directive] = it }
+                }
+            }
+            val expanded = expand(reference(substitute(replacement, innerBindings), template, innerBindings), innerBindings, stack)
+            return if (control.isEmpty()) {
+                expanded
+            } else {
+                listOf(ElementNode("th:block", control, node.location, controlLocations, expanded.toMutableList()))
+            }
         }
         val attributes = LinkedHashMap(node.attributes.mapValues { (_, value) -> value?.let { substitute(it, bindings) } })
         val children = node.children.flatMap { expand(it, template, bindings, stack) }.toMutableList()
@@ -182,7 +209,7 @@ internal class FragmentExpander(
                     .takeIf { it.startsWith("\${") && it.endsWith('}') }
                     ?.substring(2, binding.value.length - 1)
                     ?: binding.value
-                result = identifier(name).replace(result, replacement)
+                result = identifier(name).replace(result, Regex.escapeReplacement(replacement))
             }
         }
         return result
@@ -273,6 +300,7 @@ internal class FragmentExpander(
 
     private companion object {
         val componentDirectives = setOf("th:slot", "th:fill", "th:props", "th:component")
+        val replaceDirectives = setOf("th:replace", "th:if", "th:unless", "th:each", "th:fragment")
         val identifierPattern = Regex("[A-Za-z_][A-Za-z0-9_-]*")
         val variablePattern = Regex("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}")
     }
