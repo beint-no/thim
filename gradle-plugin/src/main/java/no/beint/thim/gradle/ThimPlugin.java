@@ -110,7 +110,9 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
 
-        project.getTasks().withType(KspAATask.class).configureEach(task -> {
+        var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
+                .matching(task -> task.getName().equals("kspKotlin"));
+        kspKotlinTasks.configureEach(task -> {
             task.getInputs().files(extension.getTemplates().map(directory -> htmlFiles(project, directory.getAsFile())))
                     .withPropertyName("thimTemplates")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
@@ -121,7 +123,7 @@ public final class ThimPlugin implements Plugin<Project> {
 
         var projectDirectory = project.getLayout().getProjectDirectory().getAsFile().toPath();
         // KSP initializes cache options after Kotlin finalizes its compilations.
-        project.afterEvaluate(evaluated -> project.getTasks().withType(KspAATask.class).configureEach(task ->
+        project.afterEvaluate(evaluated -> kspKotlinTasks.configureEach(task ->
                 task.getKspConfig().getApOptions().putAll(task.getKspConfig().getProcessorOptions().map(options -> {
                     var paths = new java.util.LinkedHashMap<String, String>();
                     for (var key : List.of("thim.templates", "thim.messages")) {
@@ -133,9 +135,6 @@ public final class ThimPlugin implements Plugin<Project> {
                     }
                     return paths;
                 }))));
-
-        var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
-                .matching(task -> task.getName().equals("kspKotlin"));
         var messageUsageCheck = ":" + MESSAGE_USAGE_TASK;
         project.getTasks().register("thimCheck", task -> {
             task.setGroup("verification");
@@ -274,20 +273,23 @@ public final class ThimPlugin implements Plugin<Project> {
     }
 
     private void configureResourceFiltering(Project project, ThimExtension extension) {
-        project.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME, ProcessResources.class).configure(task ->
-                task.exclude(element -> {
-                    var file = element.getFile().toPath().toAbsolutePath().normalize();
-                    var messages = extension.getMessages().get().getAsFile().toPath().toAbsolutePath().normalize();
-                    if (file.startsWith(messages)) {
-                        return true;
-                    }
-                    if (!extension.getStrictTemplates().get()) {
-                        return false;
-                    }
-                    var templates = extension.getTemplates().get().getAsFile().toPath().toAbsolutePath().normalize();
-                    return file.startsWith(templates);
-                })
-        );
+        var messages = extension.getMessages();
+        var templates = extension.getTemplates();
+        var strictTemplates = extension.getStrictTemplates();
+        project.afterEvaluate(evaluated -> {
+            var messagesPath = messages.get().getAsFile().toPath().toAbsolutePath().normalize();
+            var templatesPath = templates.get().getAsFile().toPath().toAbsolutePath().normalize();
+            var excludeTemplates = strictTemplates.get();
+            evaluated.getTasks().named(JavaPlugin.PROCESS_RESOURCES_TASK_NAME, ProcessResources.class).configure(task ->
+                    task.exclude(element -> {
+                        var file = element.getFile().toPath().toAbsolutePath().normalize();
+                        if (file.startsWith(messagesPath)) {
+                            return true;
+                        }
+                        return excludeTemplates && file.startsWith(templatesPath);
+                    })
+            );
+        });
     }
 
     private String catalogId(Project project, File directory) {

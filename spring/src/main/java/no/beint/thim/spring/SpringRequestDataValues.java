@@ -17,6 +17,8 @@ final class SpringRequestDataValues implements RequestDataValues {
     private final RequestDataValueProcessor processor;
     private final ResourceUrlProvider resourceUrlProvider;
     private final boolean lookupPathIsWithinApplication;
+    private final String contextPath;
+    private final String contextPathSlash;
 
     static RequestDataValues create(
             HttpServletRequest request,
@@ -38,6 +40,8 @@ final class SpringRequestDataValues implements RequestDataValues {
         this.processor = processor;
         this.resourceUrlProvider = resourceUrlProvider;
         this.lookupPathIsWithinApplication = lookupPathIsWithinApplication(request);
+        this.contextPath = Objects.requireNonNullElse(request.getContextPath(), "");
+        this.contextPathSlash = this.contextPath + "/";
     }
 
     @Override
@@ -57,17 +61,15 @@ final class SpringRequestDataValues implements RequestDataValues {
     }
 
     private boolean isApplicationUrl(String url) {
-        return !url.startsWith("//") && url.startsWith(request.getContextPath() + "/");
+        return !url.startsWith("//") && url.startsWith(contextPathSlash);
     }
 
     private String resolveApplicationUrl(String url) {
-        var contextPath = request.getContextPath();
         var pathEnd = url.length();
         var queryIndex = url.indexOf('?');
         if (queryIndex >= 0) pathEnd = queryIndex;
         var fragmentIndex = url.indexOf('#');
         if (fragmentIndex >= 0) pathEnd = Math.min(pathEnd, fragmentIndex);
-        if (!isApplicationUrl(url)) return null;
         var resolved = resourceUrlProvider.getForLookupPath(url.substring(contextPath.length(), pathEnd));
         return resolved == null ? null : contextPath + resolved + url.substring(pathEnd);
     }

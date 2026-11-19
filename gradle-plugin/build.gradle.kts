@@ -3,9 +3,15 @@ plugins {
     id("thim.publishing")
 }
 
+val testKotlinPlugin = configurations.create("testKotlinPlugin") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     implementation(project(":settings-plugin"))
     implementation("com.google.devtools.ksp:symbol-processing-gradle-plugin:${providers.gradleProperty("kspVersion").get()}")
+    testKotlinPlugin("org.jetbrains.kotlin:kotlin-gradle-plugin:${providers.gradleProperty("kotlinVersion").get()}")
     testImplementation(gradleTestKit())
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -43,6 +49,10 @@ tasks.jar {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Xlint:deprecation")
+}
+
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(testKotlinPlugin)
 }
 
 tasks.test {

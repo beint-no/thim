@@ -38,7 +38,7 @@ public final class ThimReturnValueHandler implements HandlerMethodReturnValueHan
         if (returnValue instanceof ThimResult.Redirect redirect) {
             var path = redirect.path();
             var location = path.startsWith("/") && !path.startsWith("//") ? request.getContextPath() + path : path;
-            response.sendRedirect(location);
+            response.sendRedirect(response.encodeRedirectURL(location));
             return;
         }
         var model = returnValue instanceof ThimResult.Page page ? page.model() : returnValue;

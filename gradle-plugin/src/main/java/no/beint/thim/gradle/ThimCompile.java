@@ -186,7 +186,7 @@ public abstract class ThimCompile extends DefaultTask {
                 "-java-source-roots=" + javaSources,
                 "-java-output-dir=" + getJavaOutput().get().getAsFile().getAbsolutePath(),
                 "-jdk-home=" + getJdkHome().get(),
-                "-jvm-target=26",
+                "-jvm-target=27",
                 "-module-name=" + getModuleName().get(),
                 "-source-roots=" + getEmptyKotlinSources().get().getAsFile().getAbsolutePath(),
                 "-project-base-dir=" + getProjectBase().get().getAsFile().getAbsolutePath(),
@@ -196,8 +196,8 @@ public abstract class ThimCompile extends DefaultTask {
                 "-kotlin-output-dir=" + getKotlinOutput().get().getAsFile().getAbsolutePath(),
                 "-resource-output-dir=" + getResourceOutput().get().getAsFile().getAbsolutePath(),
                 "-libraries=" + getLibraries().getAsPath(),
-                "-language-version=2.3",
-                "-api-version=2.3",
+                "-language-version=2.5",
+                "-api-version=2.5",
                 "-processor-options=" + processorOptions,
                 getProcessorClasspath().getAsPath()
         );

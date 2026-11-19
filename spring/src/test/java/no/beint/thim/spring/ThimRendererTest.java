@@ -22,6 +22,10 @@ import org.springframework.web.servlet.resource.*;
 import org.springframework.web.servlet.support.RequestDataValueProcessor;
 
 import java.io.IOException;
+import java.lang.classfile.AnnotationElement;
+import java.lang.classfile.AnnotationValue;
+import java.lang.classfile.Attributes;
+import java.lang.classfile.ClassFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +34,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.core.MethodParameter;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -287,6 +294,112 @@ class ThimRendererTest {
         assertNotEquals(firstUrl, secondUrl);
         assertResourceServed(second.handler(), secondUrl, "second");
         assertThrows(NoResourceFoundException.class, () -> serve(second.handler(), firstUrl));
+    }
+
+    @Test
+    void redirectReturnValueEncodesLocationThroughServletResponse() throws Exception {
+        var handler = new ThimReturnValueHandler(new ThimRenderer(List.of()));
+        var method = RedirectSample.class.getDeclaredMethod("redirect");
+        var parameter = new MethodParameter(method, -1);
+
+        var request = new MockHttpServletRequest("POST", "/app/save");
+        request.setContextPath("/app");
+        var response = new MockHttpServletResponse() {
+            @Override
+            public String encodeRedirectURL(@NonNull String url) {
+                return url + ";jsessionid=abc";
+            }
+        };
+        var container = new ModelAndViewContainer();
+
+        handler.handleReturnValue(new ThimResult.Redirect("/done"), parameter, container, new ServletWebRequest(request, response));
+
+        assertTrue(container.isRequestHandled());
+        assertEquals("/app/done;jsessionid=abc", response.getRedirectedUrl());
+
+        var externalResponse = new MockHttpServletResponse() {
+            @Override
+            public String encodeRedirectURL(@NonNull String url) {
+                return "encoded:" + url;
+            }
+        };
+        handler.handleReturnValue(
+                new ThimResult.Redirect("https://example.com/ok"),
+                parameter,
+                new ModelAndViewContainer(),
+                new ServletWebRequest(request, externalResponse)
+        );
+        assertEquals("encoded:https://example.com/ok", externalResponse.getRedirectedUrl());
+    }
+
+    @Test
+    void cachesContextPathInSpringRequestDataValues() throws Exception {
+        var contextPathCalls = new AtomicInteger();
+        var request = new MockHttpServletRequest("GET", "/app/") {
+            @Override
+            public String getContextPath() {
+                contextPathCalls.incrementAndGet();
+                return "/app";
+            }
+        };
+        request.setHttpServletMapping(new MockHttpServletMapping("", "/", "dispatcher", MappingMatch.DEFAULT));
+        request.setAttribute(
+                ResourceUrlProviderExposingInterceptor.RESOURCE_URL_PROVIDER_ATTR,
+                contentVersionResourceUrlProvider()
+        );
+        var values = SpringRequestDataValues.create(request, new MockHttpServletResponse(), null);
+
+        assertEquals("/app/assets/app-bf072e9119077b4e76437a93986787ef.js", values.processUrl("/app/assets/app.js"));
+        assertEquals("/app/assets/missing.js", values.processUrl("/app/assets/missing.js"));
+        assertEquals("https://cdn.example/app.js", values.processUrl("https://cdn.example/app.js"));
+        assertEquals(1, contextPathCalls.get());
+    }
+
+    @Test
+    void guardsWebMvcConfigurerBeanWithServletWebApplicationAndClassConditions() throws Exception {
+        byte[] bytes;
+        try (var input = ThimAutoConfiguration.class.getResourceAsStream("ThimAutoConfiguration.class")) {
+            bytes = Objects.requireNonNull(input).readAllBytes();
+        }
+        var method = ClassFile.of().parse(bytes).methods().stream()
+                .filter(candidate -> candidate.methodName().stringValue().equals("thimWebMvcConfigurer"))
+                .findFirst()
+                .orElseThrow();
+        var annotations = method.findAttribute(Attributes.runtimeVisibleAnnotations()).orElseThrow().annotations();
+        var webApp = annotations.stream()
+                .filter(annotation -> annotation.classSymbol().descriptorString()
+                        .equals("Lorg/springframework/boot/autoconfigure/condition/ConditionalOnWebApplication;"))
+                .findFirst()
+                .orElseThrow();
+        var typeElement = webApp.elements().stream()
+                .filter(element -> element.name().stringValue().equals("type"))
+                .map(AnnotationElement::value)
+                .map(AnnotationValue.OfEnum.class::cast)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("SERVLET", typeElement.constantName().stringValue());
+
+        var onClass = annotations.stream()
+                .filter(annotation -> annotation.classSymbol().descriptorString()
+                        .equals("Lorg/springframework/boot/autoconfigure/condition/ConditionalOnClass;"))
+                .findFirst()
+                .orElseThrow();
+        var classValues = onClass.elements().stream()
+                .filter(element -> element.name().stringValue().equals("value"))
+                .map(AnnotationElement::value)
+                .map(AnnotationValue.OfArray.class::cast)
+                .flatMap(array -> array.values().stream())
+                .map(AnnotationValue.OfClass.class::cast)
+                .map(value -> value.classSymbol().descriptorString())
+                .toList();
+        assertEquals(List.of("Lorg/springframework/web/servlet/config/annotation/WebMvcConfigurer;"), classValues);
+    }
+
+    private static final class RedirectSample {
+        @SuppressWarnings("unused")
+        ThimResult redirect() {
+            return new ThimResult.Redirect("/done");
+        }
     }
 
     private static final class RecordingTemplateSet implements TemplateSet {

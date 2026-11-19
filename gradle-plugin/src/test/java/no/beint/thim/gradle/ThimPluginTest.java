@@ -303,6 +303,80 @@ class ThimPluginTest {
                 .build();
     }
 
+    @Test
+    void processResourcesExclusionReusesConfigurationCache() throws IOException {
+        var project = project("resource-cc", "");
+        var runner = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("processResources", "-x", "compileThim", "--configuration-cache", "--stacktrace")
+                .withPluginClasspath();
+
+        var first = runner.build();
+        assertTrue(first.getOutput().contains("Configuration cache entry stored"), first.getOutput());
+        assertFalse(Files.exists(project.resolve("build/resources/main/templates/home.html")));
+        assertFalse(Files.exists(project.resolve("build/resources/main/i18n/en/home.yaml")));
+        assertTrue(Files.exists(project.resolve("build/resources/main/public.txt")));
+
+        var second = runner.build();
+        assertTrue(second.getOutput().contains("Reusing configuration cache"), second.getOutput());
+    }
+
+    @Test
+    void kotlinPluginScopesThimInputsAndApOptionsToKspKotlinOnly() throws IOException {
+        var project = temporaryDirectory.resolve("ksp-scope");
+        write(project.resolve("settings.gradle"), "plugins { id 'no.beint.thim.settings' }\nrootProject.name = 'ksp-scope'\n");
+        write(project.resolve("src/main/resources/templates/home.html"), "<html></html>\n");
+        write(project.resolve("src/main/resources/i18n/en/home.yaml"), "title: Home\n");
+        write(project.resolve("build.gradle"), """
+                plugins {
+                    id 'org.jetbrains.kotlin.jvm'
+                    id 'no.beint.thim'
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                afterEvaluate {
+                    configurations.implementation.dependencies.removeAll { it.group == 'no.beint.thim' }
+                    configurations.ksp.dependencies.removeAll { it.group == 'no.beint.thim' }
+                }
+
+                tasks.register('inspectKspTasks') {
+                    doLast {
+                        def mainTask = tasks.named('kspKotlin').get()
+                        def testTask = tasks.named('kspTestKotlin').get()
+                        def mainFiles = mainTask.inputs.files.files.collect { it.name }.findAll { it in ['home.html', 'home.yaml'] }.sort()
+                        def testFiles = testTask.inputs.files.files.collect { it.name }.findAll { it in ['home.html', 'home.yaml'] }.sort()
+                        file('ksp-inspection.txt').text = [
+                            'mainFiles=' + mainFiles.join(','),
+                            'testFiles=' + testFiles.join(','),
+                            'mainTemplates=' + mainTask.kspConfig.apOptions.get().get('thim.templates'),
+                            'mainMessages=' + mainTask.kspConfig.apOptions.get().get('thim.messages'),
+                            'testTemplatesAbsolute=' + new File(testTask.kspConfig.apOptions.get().get('thim.templates')).isAbsolute(),
+                        ].join('\\n')
+                    }
+                }
+                """);
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("inspectKspTasks", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+
+        assertEquals(
+                List.of(
+                        "mainFiles=home.html,home.yaml",
+                        "testFiles=",
+                        "mainTemplates=src/main/resources/templates",
+                        "mainMessages=src/main/resources/i18n",
+                        "testTemplatesAbsolute=true"
+                ),
+                Files.readAllLines(project.resolve("ksp-inspection.txt"))
+        );
+    }
+
     private Path project(String name, String thimConfiguration) throws IOException {
         var project = temporaryDirectory.resolve(name);
         write(project.resolve("settings.gradle"), "plugins { id 'no.beint.thim.settings' }\nrootProject.name = '" + name + "'\n");
