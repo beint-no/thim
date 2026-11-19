@@ -23,15 +23,23 @@ internal class RegistryGenerator(private val entries: List<RegistryEntry>) {
         appendLine("    // only serves subclasses of open models, matching the previous linear dispatch.")
         appendLine("    private static final java.util.Map<Class<?>, Integer> INDEX = index();")
         appendLine()
-        appendLine("    // Built imperatively: javac's inference over one Map.ofEntries call with hundreds of")
-        appendLine("    // distinct Class arguments took several seconds for a large application.")
+        appendLine("    // Built imperatively and split into chunks so javac avoids huge Map.ofEntries inference")
+        appendLine("    // and every generated method stays below HotSpot's 8000-byte JIT compilation limit.")
         appendLine("    private static java.util.Map<Class<?>, Integer> index() {")
         appendLine("        var index = new java.util.HashMap<Class<?>, Integer>(${entries.size * 2});")
-        entries.forEachIndexed { index, template ->
-            appendLine("        index.put(${template.modelName}.class, $index);")
+        chunks.indices.forEach { chunk ->
+            appendLine("        index$chunk(index);")
         }
         appendLine("        return java.util.Map.copyOf(index);")
         appendLine("    }")
+        chunks.forEachIndexed { chunk, templates ->
+            appendLine()
+            appendLine("    private static void index$chunk(java.util.HashMap<Class<?>, Integer> index) {")
+            templates.forEach { (index, template) ->
+                appendLine("        index.put(${template.modelName}.class, $index);")
+            }
+            appendLine("    }")
+        }
         appendLine()
         appendLine("    private static final boolean[] REQUEST_DATA_VALUES = {")
         appendLine("        " + entries.joinToString(", ") { it.usesRequestDataValues.toString() })
@@ -52,10 +60,20 @@ internal class RegistryGenerator(private val entries: List<RegistryEntry>) {
         appendLine("    }")
         appendLine()
         appendLine("    private static boolean isSupertypeOfModel(Class<?> returnType) {")
-        appendLine("        return " + entries.joinToString(" ||\n            ") {
-            "returnType.isAssignableFrom(${it.modelName}.class)"
-        } + ";")
+        if (chunks.isEmpty()) {
+            appendLine("        return false;")
+        } else {
+            appendLine("        return " + chunks.indices.joinToString(" || ") { "isSupertypeOfModel$it(returnType)" } + ";")
+        }
         appendLine("    }")
+        chunks.forEachIndexed { chunk, templates ->
+            appendLine()
+            appendLine("    private static boolean isSupertypeOfModel$chunk(Class<?> returnType) {")
+            appendLine("        return " + templates.joinToString(" ||\n            ") { (_, template) ->
+                "returnType.isAssignableFrom(${template.modelName}.class)"
+            } + ";")
+            appendLine("    }")
+        }
         appendLine()
         appendLine("    @Override")
         appendLine("    public boolean usesRequestDataValues(Class<?> modelType) {")
@@ -93,14 +111,25 @@ internal class RegistryGenerator(private val entries: List<RegistryEntry>) {
         appendLine()
         appendLine("    // Only instances of subclasses of open page models reach this chain.")
         appendLine("    private static void renderSubtype(Object model, RenderContext context, HtmlOutput output) throws IOException {")
-        entries.forEach {
-            appendLine("        if (model instanceof ${it.modelName} typed) {")
-            appendLine("            ${it.rendererReference}.render(typed, context, output);")
+        chunks.indices.forEach { chunk ->
+            appendLine("        if (renderSubtype$chunk(model, context, output)) {")
             appendLine("            return;")
             appendLine("        }")
         }
         appendLine("        throw new IllegalArgumentException(\"No compiled template for \" + model.getClass().getName());")
         appendLine("    }")
+        chunks.forEachIndexed { chunk, templates ->
+            appendLine()
+            appendLine("    private static boolean renderSubtype$chunk(Object model, RenderContext context, HtmlOutput output) throws IOException {")
+            templates.forEach { (_, template) ->
+                appendLine("        if (model instanceof ${template.modelName} typed) {")
+                appendLine("            ${template.rendererReference}.render(typed, context, output);")
+                appendLine("            return true;")
+                appendLine("        }")
+            }
+            appendLine("        return false;")
+            appendLine("    }")
+        }
         appendLine("}")
     }
 

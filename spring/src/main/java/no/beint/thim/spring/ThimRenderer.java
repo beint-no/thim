@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import no.beint.thim.HtmlOutput;
 import no.beint.thim.RenderContext;
 import no.beint.thim.RequestDataValues;
+import no.beint.thim.TemplateRenderer;
 import no.beint.thim.TemplateSet;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import org.springframework.web.servlet.support.RequestDataValueProcessor;
@@ -20,6 +21,7 @@ public final class ThimRenderer {
     private static final int OUTPUT_BUFFER_SIZE = 1024;
 
     private final List<TemplateSet> templates;
+    private final TemplateRenderer renderer;
     private final RequestDataValueProcessor requestDataValueProcessor;
     private final List<ThimRenderObserver> observers;
 
@@ -56,26 +58,17 @@ public final class ThimRenderer {
             List<ThimRenderObserver> observers
     ) {
         this.templates = List.copyOf(templates);
+        this.renderer = new TemplateRenderer(this.templates);
         this.requestDataValueProcessor = requestDataValueProcessor;
         this.observers = List.copyOf(observers);
     }
 
     public boolean supports(Class<?> modelType) {
-        for (var templateSet : templates) {
-            if (templateSet.supports(modelType)) {
-                return true;
-            }
-        }
-        return false;
+        return renderer.supports(modelType);
     }
 
     public boolean supportsReturnType(Class<?> returnType) {
-        for (var templateSet : templates) {
-            if (templateSet.supportsReturnType(returnType)) {
-                return true;
-            }
-        }
-        return false;
+        return renderer.supportsReturnType(returnType);
     }
 
     public void render(Object model, HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -133,12 +126,7 @@ public final class ThimRenderer {
     }
 
     private String renderString(Object model, Locale locale, String contextPath) throws IOException {
-        var templateSet = templateSetFor(model);
-        var bytes = new ByteArrayOutputStream(4096);
-        var output = new HtmlOutput(bytes, OUTPUT_BUFFER_SIZE);
-        templateSet.render(model, new RenderContext(locale, contextPath), output);
-        output.flush();
-        return bytes.toString(StandardCharsets.UTF_8);
+        return renderer.renderToString(model, locale, contextPath);
     }
 
     private void started(ThimRender render) {

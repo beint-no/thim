@@ -2,10 +2,13 @@ package no.beint.thim.compiler
 
 import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.getDeclaredFunctions
+import com.google.devtools.ksp.isInternal
+import com.google.devtools.ksp.isPrivate
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.Nullability
+import com.google.devtools.ksp.symbol.Variance
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
@@ -129,15 +132,12 @@ internal class RendererGenerator(
                 val helper = pendingHelpers.removeFirst()
                 code.line()
                 val localeParameter = if (hasMessageLocale) ", int messageLocale" else ""
-                val capturedParameters = helper.captures.joinToString("") { ", Object ${it.code}Value" }
+                val capturedParameters = helper.captures.joinToString("") { ", ${it.castType()} ${it.code}" }
                 code.line(
                     "private static void ${helper.name}($modelName model, RenderContext context, " +
                             "HtmlOutput output$localeParameter$capturedParameters) throws IOException {",
                 )
                 code.indent {
-                    helper.captures.forEach { binding ->
-                        code.statement("var ${binding.code} = (${binding.castType()}) ${binding.code}Value;")
-                    }
                     helper.nodes.forEach { renderNodeCollecting(it, helper.scope, code, helper.context) }
                 }
                 code.line("}")
@@ -444,7 +444,7 @@ internal class RendererGenerator(
                 diagnostic(
                     "THIM-RAW-MESSAGE-UNSUPPORTED",
                     attributeLocation,
-                    "localized messages are escaped text; use a non-null SafeHtml model property for th:utext",
+                    "localized messages are escaped text; use a SafeHtml model property for th:utext",
                 )
             } else {
                 val value = scope.resolve(
@@ -456,11 +456,11 @@ internal class RendererGenerator(
                     attributeLocation,
                 )
                 requireDiagnostic(
-                    value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml" && !value.nullable,
+                    value.type.declaration.qualifiedName?.asString() == "no.beint.thim.SafeHtml",
                     "THIM-RAW-HTML-TYPE",
                     attributeLocation,
                 ) {
-                    "th:utext requires a non-null no.beint.thim.SafeHtml property"
+                    "th:utext requires a no.beint.thim.SafeHtml property"
                 }
                 code.statement("output.raw(${value.code});")
             }
@@ -532,14 +532,15 @@ internal class RendererGenerator(
             return
         }
 
+        val trimmed = expression.trim()
         when {
-            expression.trim().toBooleanStrictOrNull() != null -> {
+            trimmed.toBooleanStrictOrNull() != null -> {
                 code.static(" $name=\"")
-                code.static(expression.trim())
+                code.static(trimmed)
                 code.static("\"")
             }
 
-            expression.trim().startsWith("@{") -> {
+            trimmed.startsWith("@{") -> {
                 val expressionUrl =
                     Expressions.url(expression, diagnosticContext(attributeLocation, "THIM-URL-SYNTAX", "th:$name"))
                 checkRoute(expressionUrl, name, element, scope, attributeLocation)
@@ -563,7 +564,7 @@ internal class RendererGenerator(
                 code.static("\"")
             }
 
-            expression.trim().startsWith("#{") -> {
+            trimmed.startsWith("#{") -> {
                 val message = Expressions.message(
                     expression,
                     diagnosticContext(attributeLocation, "THIM-MESSAGE-SYNTAX", "th:$name")
@@ -586,7 +587,7 @@ internal class RendererGenerator(
                 code.static("\"")
             }
 
-            expression.trim().startsWith("\${") -> {
+            trimmed.startsWith("\${") -> {
                 val value = scope.resolve(
                     Expressions.path(
                         expression,
@@ -618,8 +619,8 @@ internal class RendererGenerator(
                 }
             }
 
-            expression.length >= 2 && expression.first() == '\'' && expression.last() == '\'' ->
-                code.static(" $name=\"${escapeHtml(expression.substring(1, expression.length - 1))}\"")
+            trimmed.length >= 2 && trimmed.first() == '\'' && trimmed.last() == '\'' ->
+                code.static(" $name=\"${escapeHtml(trimmed.substring(1, trimmed.length - 1))}\"")
 
             else -> diagnostic(
                 "THIM-ATTRIBUTE-EXPRESSION",
@@ -1238,7 +1239,7 @@ internal class RendererGenerator(
         if (primitiveArray != null) return primitiveArray
         if (name == "kotlin.Array") {
             val element = type.arguments.firstOrNull()?.type?.resolve()
-            return (element?.let { javaType(it) } ?: "java.lang.Object") + "[]"
+            return (element?.let { javaType(it, boxed = true) } ?: "java.lang.Object") + "[]"
         }
         val javaName = when (name) {
             "kotlin.String" -> "java.lang.String"
@@ -1250,12 +1251,15 @@ internal class RendererGenerator(
             "kotlin.collections.Map", "kotlin.collections.MutableMap" -> "java.util.Map"
             else -> name
         }
-        val arguments = type.arguments.mapNotNull { it.type?.resolve() }
-        return if (arguments.isEmpty()) javaName else arguments.joinToString(", ", "$javaName<", ">") {
-            javaType(
-                it,
-                boxed = true
-            )
+        val arguments = type.arguments
+        return if (arguments.isEmpty()) javaName else arguments.joinToString(", ", "$javaName<", ">") { argument ->
+            val resolved = argument.type?.resolve()
+            when (argument.variance) {
+                Variance.STAR -> "?"
+                Variance.COVARIANT -> resolved?.let { "? extends ${javaType(it, boxed = true)}" } ?: "?"
+                Variance.CONTRAVARIANT -> resolved?.let { "? super ${javaType(it, boxed = true)}" } ?: "?"
+                else -> resolved?.let { javaType(it, boxed = true) } ?: "?"
+            }
         }
     }
 
@@ -1314,7 +1318,7 @@ internal class RendererGenerator(
         }
 
         fun recordRootProperty(name: String) {
-            recordUse(name)
+            if (callerScope != null) callerScope.recordRootProperty(name) else recordUse(name)
         }
 
         fun resolveField(expression: PathExpression, location: SourceLocation?): ResolvedPath {
@@ -1333,7 +1337,7 @@ internal class RendererGenerator(
                         location,
                         "${type.declaration.qualifiedName?.asString()} has no properties"
                     )
-                val property = declaration.property(segment.name, type)
+                val property = declaration.property(segment.name, type, location)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1365,7 +1369,7 @@ internal class RendererGenerator(
                 requireDiagnostic(rootCode != null, "THIM-COMPONENT-SCOPE", location) {
                     "a component without props cannot access caller property '${first.name}'; pass typed props or use a slot"
                 }
-                val property = model.property(first.name, model.asStarProjectedType())
+                val property = model.property(first.name, model.asStarProjectedType(), location)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1387,7 +1391,7 @@ internal class RendererGenerator(
                         location,
                         "${type.declaration.qualifiedName?.asString()} has no properties"
                     )
-                val property = declaration.property(segment.name, type)
+                val property = declaration.property(segment.name, type, location)
                     ?: diagnostic(
                         "THIM-PROPERTY-UNKNOWN",
                         location,
@@ -1406,24 +1410,52 @@ internal class RendererGenerator(
             return ResolvedPath(code, type, nullable)
         }
 
-        private fun KSClassDeclaration.property(name: String, containingType: KSType): Property? {
+        private fun KSClassDeclaration.property(
+            name: String,
+            containingType: KSType,
+            location: SourceLocation? = null,
+        ): Property? {
             if (name in objectMethods) return null
-            return propertyCache.getOrPut(PropertyKey(this, containingType.toString(), name)) {
-                getAllProperties().firstOrNull { it.simpleName.asString() == name }?.let { property ->
-                    val type = property.type.resolve()
-                    return@getOrPut Property(type, getter(name, type))
-                }
+            return propertyCache.getOrPut(PropertyKey(this, typeKey(containingType), name)) {
+                getAllProperties()
+                    .filterNot { it.isPrivate() }
+                    .firstOrNull { it.simpleName.asString() == name }
+                    ?.let { property ->
+                        requireDiagnostic(!property.isInternal(), "THIM-PROPERTY-INTERNAL", location) {
+                            "'$name' on ${qualifiedName?.asString()} is internal and cannot be accessed from generated Java renderers; make it public"
+                        }
+                        val type = runCatching { property.asMemberOf(containingType) }.getOrElse { property.type.resolve() }
+                        return@getOrPut Property(type, getter(name))
+                    }
                 val capitalized = name.replaceFirstChar(Char::uppercaseChar)
                 val accessors = listOf(name, "get$capitalized", "is$capitalized")
                 val functions = getDeclaredFunctions() + getAllSuperTypes().flatMap { type ->
                     (type.declaration as? KSClassDeclaration)?.getDeclaredFunctions() ?: emptySequence()
                 }
-                val function = functions.firstOrNull { candidate ->
-                    candidate.simpleName.asString() in accessors &&
-                            candidate.parameters.isEmpty() &&
-                            candidate.returnType != null
+                val function = functions
+                    .filterNot { it.isPrivate() }
+                    .firstOrNull { candidate ->
+                        candidate.simpleName.asString() in accessors &&
+                                candidate.parameters.isEmpty() &&
+                                candidate.returnType != null
+                    }
+                function?.let {
+                    requireDiagnostic(!it.isInternal(), "THIM-PROPERTY-INTERNAL", location) {
+                        "'$name' on ${qualifiedName?.asString()} is internal and cannot be accessed from generated Java renderers; make it public"
+                    }
+                    val returnType = runCatching { it.asMemberOf(containingType).returnType }.getOrNull()
+                        ?: it.returnType!!.resolve()
+                    Property(returnType, it.simpleName.asString())
                 }
-                function?.let { Property(it.returnType!!.resolve(), it.simpleName.asString()) }
+            }
+        }
+
+        private fun typeKey(type: KSType): String {
+            val name = type.declaration.qualifiedName?.asString() ?: type.toString()
+            val nullability = if (type.nullability == Nullability.NULLABLE) "?" else ""
+            if (type.arguments.isEmpty()) return "$name$nullability"
+            return type.arguments.joinToString(",", "$name<", ">$nullability") { argument ->
+                argument.type?.resolve()?.let(::typeKey) ?: "*"
             }
         }
 
@@ -1433,14 +1465,14 @@ internal class RendererGenerator(
         }
 
         private fun KSClassDeclaration.propertyNames(): Set<String> = buildSet {
-            getAllProperties().forEach { add(it.simpleName.asString()) }
+            getAllProperties().filterNot { it.isPrivate() }.forEach { add(it.simpleName.asString()) }
             primaryConstructor?.parameters?.forEach { parameter ->
                 val name = parameter.name?.asString() ?: return@forEach
-                if (getDeclaredFunctions().any { it.simpleName.asString() == name && it.parameters.isEmpty() }) {
+                if (getDeclaredFunctions().any { !it.isPrivate() && it.simpleName.asString() == name && it.parameters.isEmpty() }) {
                     add(name)
                 }
             }
-            getDeclaredFunctions().forEach { function ->
+            getDeclaredFunctions().filterNot { it.isPrivate() }.forEach { function ->
                 val name = function.simpleName.asString()
                 when {
                     name.startsWith("get") && name.length > 3 -> add(
@@ -1469,14 +1501,12 @@ internal class RendererGenerator(
             return previous[right.length]
         }
 
-        private fun getter(name: String, type: KSType): String {
-            val boolean = type.isBoolean()
-            return if (boolean && name.startsWith("is") && name.getOrNull(2)?.isUpperCase() == true) {
+        private fun getter(name: String): String =
+            if (name.startsWith("is") && name.length > 2 && !name[2].isLowerCase()) {
                 name
             } else {
                 "get" + name.replaceFirstChar(Char::uppercaseChar)
             }
-        }
     }
 
     private class CodeWriter(

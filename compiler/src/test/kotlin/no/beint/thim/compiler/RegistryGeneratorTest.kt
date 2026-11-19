@@ -31,7 +31,7 @@ class RegistryGeneratorTest {
             appendLine("package example;")
             appendLine("final class Renderers {")
             (0..models).forEach { index ->
-                val model = if (index == models) "Open" else "M$index"
+                val model = if (index == models) "Models.Open" else "Models.M$index"
                 appendLine("    static final class R$index {")
                 appendLine("        static void render($model model, no.beint.thim.RenderContext context, no.beint.thim.HtmlOutput output) throws java.io.IOException {")
                 appendLine("            output.text($index);")
@@ -43,13 +43,15 @@ class RegistryGeneratorTest {
         Files.writeString(source.resolve("Renderers.java"), renderers)
         Files.writeString(source.resolve("Models.java"), buildString {
             appendLine("package example;")
-            appendLine("interface Page {}")
-            (0 until models).forEach { appendLine("final class M$it implements Page {}") }
-            appendLine("class Open {}")
-            appendLine("final class OpenChild extends Open {}")
+            appendLine("final class Models {")
+            appendLine("    interface Page {}")
+            (0 until models).forEach { appendLine("    static final class M$it implements Page {}") }
+            appendLine("    static class Open {}")
+            appendLine("    static final class OpenChild extends Open {}")
+            appendLine("}")
         })
-        val entries = (0 until models).map { RegistryEntry("example.M$it", "Renderers.R$it", it % 2 == 0) } +
-            RegistryEntry("example.Open", "Renderers.R$models", false)
+        val entries = (0 until models).map { RegistryEntry("example.Models.M$it", "Renderers.R$it", it % 2 == 0) } +
+            RegistryEntry("example.Models.Open", "Renderers.R$models", false)
         Files.writeString(source.resolve("Registry.java"), RegistryGenerator(entries).generate("example", "Registry"))
 
         val classes = Files.createDirectory(directory.resolve("classes"))
@@ -59,17 +61,16 @@ class RegistryGeneratorTest {
             val runtime = Path.of(TemplateSet::class.java.protectionDomain.codeSource.location.toURI())
             val sources = listOf("Renderers.java", "Models.java", "Registry.java").map(source::resolve)
             assertTrue(compiler.getTask(diagnostics, files, null,
-                listOf("-classpath", runtime.toString(), "-d", classes.toString()), null,
+                listOf("-Xlint:all", "-Werror", "-classpath", runtime.toString(), "-d", classes.toString()), null,
                 files.getJavaFileObjects(*sources.toTypedArray())).call(), diagnostics.toString())
         }
 
-        // Methods on the per-request path; the one-time index initializer and the subclass fallback may grow.
-        val hot = ClassFile.of().parse(classes.resolve("example/Registry.class")).methods().filter {
-            val name = it.methodName().stringValue()
-            name in setOf("supports", "supportsReturnType", "usesRequestDataValues", "render") || name.matches(Regex("render\\d+"))
+        val methods = ClassFile.of().parse(classes.resolve("example/Registry.class")).methods()
+        val names = methods.map { it.methodName().stringValue() }.toSet()
+        for (prefix in listOf("index", "isSupertypeOfModel", "render", "renderSubtype")) {
+            assertTrue(setOf("${prefix}0", "${prefix}1", "${prefix}2").all(names::contains), "Missing chunked $prefix helpers in $names")
         }
-        assertEquals(7, hot.size)
-        hot.forEach { method ->
+        methods.forEach { method ->
             val length = (method.code().orElseThrow() as CodeAttribute).codeLength()
             assertTrue(length < 8_000, "${method.methodName().stringValue()} has $length bytes of bytecode")
         }
@@ -83,7 +84,7 @@ class RegistryGeneratorTest {
                 output.flush()
                 return bytes.toString(Charsets.UTF_8)
             }
-            fun instance(name: String): Any = loader.loadClass("example.$name")
+            fun instance(name: String): Any = loader.loadClass("example.Models\$$name")
                 .getDeclaredConstructor().apply { isAccessible = true }.newInstance()
 
             (0 until models).forEach { index ->
@@ -95,8 +96,8 @@ class RegistryGeneratorTest {
             val child = instance("OpenChild")
             assertEquals(models.toString(), render(child))
             assertFalse(registry.supports(child.javaClass))
-            assertTrue(registry.supportsReturnType(loader.loadClass("example.Open")))
-            assertTrue(registry.supportsReturnType(loader.loadClass("example.Page")))
+            assertTrue(registry.supportsReturnType(loader.loadClass("example.Models\$Open")))
+            assertTrue(registry.supportsReturnType(loader.loadClass("example.Models\$Page")))
             assertFalse(registry.supportsReturnType(Any::class.java))
             assertFalse(registry.supportsReturnType(String::class.java))
             val failure = assertFailsWith<IllegalArgumentException> { render("not a page") }
