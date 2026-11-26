@@ -70,6 +70,10 @@ private class ThimProcessor(
         .split(',')
         .map(String::trim)
         .filter(String::isNotEmpty)
+    private val externalRoutesFile = environment.options["thim.externalRoutes"]
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?.let { Path.of(it).toAbsolutePath().normalize() }
     private var completed = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -101,7 +105,7 @@ private class ThimProcessor(
             }
 
             val extractedRoutes = if (validateRoutes || generateRoutes) {
-                RouteCatalog.load(resolver, trustedPaths)
+                RouteCatalog.load(resolver, trustedPaths, externalRoutesFile)
             } else {
                 RouteCatalog(emptyList(), emptyList())
             }

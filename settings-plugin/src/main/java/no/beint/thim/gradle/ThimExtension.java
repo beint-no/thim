@@ -49,4 +49,18 @@ public abstract class ThimExtension {
     public abstract Property<Boolean> getFailOnUnusedCss();
 
     public abstract ListProperty<String> getRuntimeCssClasses();
+
+    public abstract ListProperty<String> getRuntimeIds();
+
+    public abstract Property<Boolean> getFailOnUnusedCssVariables();
+
+    public abstract ListProperty<String> getIgnoredCssVariablePrefixes();
+
+    public abstract ListProperty<String> getCheckedCssClassPrefixes();
+
+    public abstract Property<Boolean> getFailOnUnstyledCss();
+
+    public abstract ConfigurableFileCollection getExternalCss();
+
+    public abstract Property<Boolean> getFailOnBrokenIdReferences();
 }

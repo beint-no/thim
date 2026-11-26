@@ -76,6 +76,13 @@ internal class TemplateParser(
         val selfClosing = inside.trimEnd().endsWith('/')
         val content = if (selfClosing) inside.trimEnd().dropLast(1) else inside
         val parsed = parseTag(content, index + 1)
+        requireDiagnostic(
+            !selfClosing || '-' !in parsed.name || ':' in parsed.name,
+            "THIM-HTML-SELF-CLOSING-CUSTOM-ELEMENT",
+            parsed.location,
+        ) {
+            "custom element <${parsed.name}> cannot be self-closing; use an explicit </${parsed.name}> closing tag"
+        }
         while (stack.lastOrNull()?.name?.let { autoCloses(it, parsed.name) } == true) {
             stack.removeLast()
         }

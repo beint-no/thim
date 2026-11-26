@@ -8,6 +8,9 @@ import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal sealed interface RouteSegment {
     data class Literal(val value: String) : RouteSegment
@@ -177,7 +180,7 @@ internal class RouteCatalog(
             "$MAPPING_PACKAGE.RequestMapping" to emptySet(),
         )
 
-        fun load(resolver: Resolver, trustedPaths: List<String>): RouteCatalog {
+        fun load(resolver: Resolver, trustedPaths: List<String>, externalRoutesFile: Path? = null): RouteCatalog {
             val routes = mutableListOf<Route>()
             val files = mutableListOf<KSFile>()
             mappingAnnotations.forEach { (annotationName, httpMethods) ->
@@ -208,8 +211,39 @@ internal class RouteCatalog(
                         }
                     }
             }
-            return RouteCatalog(routes, trustedPaths, files.distinct())
+            if (externalRoutesFile != null && Files.isRegularFile(externalRoutesFile)) {
+                routes.addAll(parseExternalRoutes(Files.readAllLines(externalRoutesFile, StandardCharsets.UTF_8)))
+            }
+            return RouteCatalog(routes.distinct(), trustedPaths, files.distinct())
         }
+
+        internal fun parseExternalRoutes(lines: List<String>): List<Route> {
+            if (lines.isEmpty()) return emptyList()
+            require(lines.first() == "thim-external-routes\t1") {
+                "Unsupported Thim external routes file header: '${lines.first()}'"
+            }
+            return lines.drop(1).mapNotNull { line ->
+                if (line.isBlank()) return@mapNotNull null
+                val fields = line.split('\t')
+                require(fields.size >= 3 && fields[0] == "route") {
+                    "Invalid Thim external route entry: '$line'"
+                }
+                val methods = fields[1].split(',').filter(String::isNotBlank).toSet()
+                val pattern = fields[2]
+                val pathParameters = parseParameters(fields.getOrElse(3) { "" })
+                val queryParameters = parseParameters(fields.getOrElse(4) { "" })
+                Route(methods, pattern, segments(pattern), pathParameters, queryParameters)
+            }
+        }
+
+        private fun parseParameters(encoded: String): List<RouteParameter> =
+            encoded.split(',')
+                .filter(String::isNotBlank)
+                .mapNotNull { entry ->
+                    val separator = entry.indexOf('=')
+                    if (separator <= 0 || separator >= entry.length - 1) null
+                    else RouteParameter(entry.substring(0, separator), entry.substring(separator + 1))
+                }
 
         private fun KSAnnotation.matches(qualifiedName: String): Boolean =
             shortName.asString() == qualifiedName.substringAfterLast('.') &&

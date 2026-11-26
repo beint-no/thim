@@ -6,14 +6,20 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.component.ComponentIdentifier;
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.file.Directory;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileTree;
+import org.gradle.api.file.RegularFile;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.TaskProvider;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
@@ -31,6 +37,9 @@ public final class ThimPlugin implements Plugin<Project> {
     private static final String KOTLIN_VERSION = TOOL_VERSIONS.getProperty("kotlin");
     private static final String MESSAGE_USAGE_TASK = "thimMessageUsageCheck";
     private static final String CSS_USAGE_TASK = "thimCssUsageCheck";
+    private static final String ID_REFERENCE_TASK = "thimIdReferenceCheck";
+    private static final Spec<ComponentIdentifier> PROJECT_COMPONENT_ONLY =
+            ProjectComponentIdentifier.class::isInstance;
 
     @Override
     public void apply(Project project) {
@@ -63,32 +72,62 @@ public final class ThimPlugin implements Plugin<Project> {
         extension.getCss().convention(project.getLayout().getProjectDirectory().dir("src/main/resources/static"));
         extension.getFailOnUnusedCss().convention(true);
         extension.getRuntimeCssClasses().convention(java.util.List.of("htmx-request", "htmx-indicator"));
+        extension.getRuntimeIds().convention(java.util.List.of());
+        extension.getFailOnUnusedCssVariables().convention(true);
+        extension.getIgnoredCssVariablePrefixes().convention(ThimCssUsageCheck.DEFAULT_IGNORED_CSS_VARIABLE_PREFIXES);
+        extension.getCheckedCssClassPrefixes().convention(java.util.List.of());
+        extension.getFailOnUnstyledCss().convention(false);
+        extension.getFailOnBrokenIdReferences().convention(true);
 
         ThimUsagePlugin.configureCss(project, extension);
         var cssUsageCheck = ":" + CSS_USAGE_TASK;
+        var idReferenceCheck = ":" + ID_REFERENCE_TASK;
+        var externalRoutesLocation = project.getLayout().getBuildDirectory().file("thim/external-routes.tsv");
+        var extractExternalRoutes = project.getTasks().register("thimExtractExternalRoutes", ThimExtractExternalRoutes.class, task -> {
+            task.setGroup("build");
+            task.setDescription("Extracts Spring MVC routes from sibling project classes");
+            task.getOutputFile().set(externalRoutesLocation);
+        });
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored ->
-                configureKotlinProject(project, extension, cssUsageCheck));
+                configureKotlinProject(project, extension, cssUsageCheck, idReferenceCheck, extractExternalRoutes, externalRoutesLocation));
         project.getPluginManager().withPlugin("java", ignored -> {
+            var compileClasspath = project.getConfigurations().named(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME);
+            var runtimeClasspath = project.getConfigurations().named(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME);
+            extractExternalRoutes.configure(task -> {
+                task.getProjectClasses().from(compileClasspath.map(ThimPlugin::projectArtifactFiles));
+                task.getProjectClasses().from(runtimeClasspath.map(ThimPlugin::projectArtifactFiles));
+            });
             configureRuntimeDependencies(project);
             configureResourceFiltering(project, extension);
             project.afterEvaluate(evaluated -> {
                 if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
-                    configureJavaProject(project, extension, cssUsageCheck);
+                    configureJavaProject(project, extension, cssUsageCheck, idReferenceCheck, extractExternalRoutes);
                 }
             });
         });
     }
 
+    private static FileCollection projectArtifactFiles(Configuration configuration) {
+        return configuration.getIncoming().artifactView(view -> {
+            view.setLenient(true);
+            view.componentFilter(PROJECT_COMPONENT_ONLY);
+        }).getFiles();
+    }
+
     private void configureKotlinProject(
             Project project,
             ThimExtension extension,
-            String cssUsageCheck
+            String cssUsageCheck,
+            String idReferenceCheck,
+            TaskProvider<ThimExtractExternalRoutes> extractExternalRoutes,
+            Provider<RegularFile> externalRoutesLocation
     ) {
         project.getPluginManager().apply("com.google.devtools.ksp");
         var version = implementationVersion(project);
         project.getDependencies().add("ksp", "no.beint.thim:compiler:" + version);
 
+        var externalRoutesFile = extractExternalRoutes.flatMap(ThimExtractExternalRoutes::getOutputFile);
         var ksp = project.getExtensions().getByType(KspExtension.class);
         ksp.arg("thim.templates", extension.getTemplates().map(directory -> directory.getAsFile().getAbsolutePath()));
         ksp.arg("thim.messages", extension.getMessages().map(directory -> directory.getAsFile().getAbsolutePath()));
@@ -109,6 +148,7 @@ public final class ThimPlugin implements Plugin<Project> {
         ksp.arg("thim.trustedPaths", extension.getTrustedPaths().map(paths -> String.join(",", paths)));
         ksp.arg("thim.strictModels", extension.getStrictModels().map(String::valueOf));
         ksp.arg("thim.forbiddenModelAnnotations", extension.getForbiddenModelAnnotations().map(names -> String.join(",", names)));
+        ksp.arg("thim.externalRoutes", externalRoutesLocation.map(file -> file.getAsFile().getAbsolutePath()));
 
         var kspKotlinTasks = project.getTasks().withType(KspAATask.class)
                 .matching(task -> task.getName().equals("kspKotlin"));
@@ -119,6 +159,9 @@ public final class ThimPlugin implements Plugin<Project> {
             task.getInputs().files(extension.getMessages().map(directory -> allFiles(project, directory.getAsFile())))
                     .withPropertyName("thimMessages")
                     .withPathSensitivity(PathSensitivity.RELATIVE);
+            task.getInputs().file(externalRoutesFile)
+                    .withPropertyName("thimExternalRoutes")
+                    .withPathSensitivity(PathSensitivity.NONE);
         });
 
         var projectDirectory = project.getLayout().getProjectDirectory().getAsFile().toPath();
@@ -126,7 +169,7 @@ public final class ThimPlugin implements Plugin<Project> {
         project.afterEvaluate(evaluated -> kspKotlinTasks.configureEach(task ->
                 task.getKspConfig().getApOptions().putAll(task.getKspConfig().getProcessorOptions().map(options -> {
                     var paths = new java.util.LinkedHashMap<String, String>();
-                    for (var key : List.of("thim.templates", "thim.messages")) {
+                    for (var key : List.of("thim.templates", "thim.messages", "thim.externalRoutes")) {
                         var value = options.get(key);
                         if (value == null) continue;
                         var path = new File(value).toPath();
@@ -139,10 +182,10 @@ public final class ThimPlugin implements Plugin<Project> {
         project.getTasks().register("thimCheck", task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
-            task.dependsOn(kspKotlinTasks, messageUsageCheck, cssUsageCheck);
+            task.dependsOn(kspKotlinTasks, messageUsageCheck, cssUsageCheck, idReferenceCheck);
         });
         project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME).configure(task ->
-                task.dependsOn(messageUsageCheck, cssUsageCheck));
+                task.dependsOn(messageUsageCheck, cssUsageCheck, idReferenceCheck));
 
         var generatedResources = project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources");
         project.getTasks().matching(task -> task.getName().equals("bootRun")).configureEach(task -> {
@@ -156,7 +199,9 @@ public final class ThimPlugin implements Plugin<Project> {
     private void configureJavaProject(
             Project project,
             ThimExtension extension,
-            String cssUsageCheck
+            String cssUsageCheck,
+            String idReferenceCheck,
+            TaskProvider<ThimExtractExternalRoutes> extractExternalRoutes
     ) {
         if (extension.getGenerateRoutes().get()) {
             throw new GradleException("Thim route builders currently require the Kotlin JVM plugin");
@@ -177,21 +222,22 @@ public final class ThimPlugin implements Plugin<Project> {
         var main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         var modelSourceDirectories = new ArrayList<>(main.getJava().getSrcDirs());
         var generatedBase = project.getLayout().getBuildDirectory().dir("generated/thim/main");
+        var externalRoutesFile = extractExternalRoutes.flatMap(ThimExtractExternalRoutes::getOutputFile);
         var compileThim = project.getTasks().register("compileThim", ThimCompile.class, task -> {
             task.setGroup("build");
             task.setDescription("Compiles typed HTML templates into Java renderers");
-            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, generatedBase, "main");
+            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, generatedBase, "main", externalRoutesFile);
         });
         var checkBase = project.getLayout().getBuildDirectory().dir("generated/thim/check");
         var messageUsageCheck = ":" + MESSAGE_USAGE_TASK;
         project.getTasks().register("thimCheck", ThimCompile.class, task -> {
             task.setGroup("verification");
             task.setDescription("Validates Thim templates with the production compiler");
-            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, checkBase, "check");
-            task.dependsOn(messageUsageCheck, cssUsageCheck);
+            configureThimTask(project, extension, main, modelSourceDirectories, runner, processor, task, checkBase, "check", externalRoutesFile);
+            task.dependsOn(messageUsageCheck, cssUsageCheck, idReferenceCheck);
         });
         project.getTasks().named(LifecycleBasePlugin.CHECK_TASK_NAME).configure(task ->
-                task.dependsOn(messageUsageCheck, cssUsageCheck));
+                task.dependsOn(messageUsageCheck, cssUsageCheck, idReferenceCheck));
 
         main.getJava().srcDir(compileThim.flatMap(ThimCompile::getJavaOutput));
         main.getResources().srcDir(compileThim.flatMap(ThimCompile::getResourceOutput));
@@ -209,7 +255,8 @@ public final class ThimPlugin implements Plugin<Project> {
             Configuration processor,
             ThimCompile task,
             Provider<Directory> generatedBase,
-            String purpose
+            String purpose,
+            Provider<RegularFile> externalRoutesFile
     ) {
         task.getModelSources().from(modelSourceDirectories);
         task.getTemplates().set(extension.getTemplates());
@@ -232,6 +279,7 @@ public final class ThimPlugin implements Plugin<Project> {
         task.getTrustedPaths().set(extension.getTrustedPaths());
         task.getStrictModels().set(extension.getStrictModels());
         task.getForbiddenModelAnnotations().set(extension.getForbiddenModelAnnotations());
+        task.getExternalRoutes().set(externalRoutesFile);
         task.getModuleName().set(project.getName() + "-" + purpose);
         task.getJdkHome().set(System.getProperty("java.home"));
         task.getProjectBase().set(project.getLayout().getProjectDirectory());

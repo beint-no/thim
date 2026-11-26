@@ -83,4 +83,35 @@ class RouteCatalogTest {
         catalog.check("/{status}", "GET", null, "th:href", mapOf("status" to listOf("READY")))
     }
 
+    @Test
+    fun `external routes file is parsed and validated`() {
+        val external = RouteCatalog.parseExternalRoutes(
+            listOf(
+                "thim-external-routes\t1",
+                "route\tGET\t/quiz/{id}\tid=kotlin.Long\tpage=kotlin.Int",
+                "route\tPOST\t/quiz/{id}/submit\tid=kotlin.Long\t",
+                "route\t\t/health\t\t",
+            ),
+        )
+        assertEquals(3, external.size)
+        assertEquals(listOf(RouteParameter("id", "kotlin.Long")), external[0].pathParameters)
+        assertEquals(listOf(RouteParameter("page", "kotlin.Int")), external[0].queryParameters)
+
+        val externalCatalog = RouteCatalog(external, emptyList())
+        externalCatalog.check("/quiz/42", "GET", null, "th:href")
+        externalCatalog.check("/quiz/42/submit", "POST", null, "th:action")
+        externalCatalog.check("/health", "GET", null, "th:href")
+        externalCatalog.check("/health", "POST", null, "th:action")
+
+        val methodError = assertFailsWith<ThimDiagnostic> {
+            externalCatalog.check("/quiz/42", "POST", null, "th:action")
+        }
+        assertEquals("THIM-URL-METHOD", methodError.code)
+
+        val unknownError = assertFailsWith<ThimDiagnostic> {
+            externalCatalog.check("/quiz/42/unknown", "GET", null, "th:href")
+        }
+        assertEquals("THIM-URL-UNKNOWN-ROUTE", unknownError.code)
+    }
+
 }

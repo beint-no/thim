@@ -59,7 +59,7 @@ pluginManagement {
 }
 
 plugins {
-    id("no.beint.thim.settings") version "0.15.0"
+    id("no.beint.thim.settings") version "0.16.0"
 }
 ```
 
@@ -81,7 +81,7 @@ plugins {
 }
 ```
 
-The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.15.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
+The plugin supplies the dependency-free runtime and the build-time compiler, and tracks templates and messages as compilation inputs. When the Spring Boot plugin is present it also adds the Spring MVC adapter automatically, regardless of plugin application order. Plain Spring applications can opt in explicitly with `implementation("no.beint.thim:spring:0.16.0")`. Compiled template jars publish their registries through Java's service loader, so templates can live in any application module.
 
 ```kotlin
 thim {
@@ -198,11 +198,11 @@ components fail the build under `failOnUnusedFragments`. Definitions are current
 local to one rendering module; this release does not introduce cross-jar component
 linking, scoped CSS, automatic asset loading, or client hydration.
 
-## CSS usage
+## CSS usage and ID references
 
-First-party CSS under `src/main/resources/static` is checked for dead class selectors by default. The root `thimCssUsageCheck` task aggregates HTML, Java, Kotlin, JavaScript and TypeScript production sources from every module in the Gradle build, so a stylesheet can be consumed by sibling modules without extra configuration. Vendor stylesheets and `node_modules` are not treated as application-owned CSS. Literal class names and statically visible dynamic prefixes such as `r-chart-$index` count as usage.
+First-party CSS under `src/main/resources/static` is checked for dead class selectors, dead `#id` selectors, and unused custom properties (`--*`) by default. The root `thimCssUsageCheck` task aggregates HTML, Java, Kotlin, JavaScript and TypeScript production sources from every module in the Gradle build, so a stylesheet can be consumed by sibling modules without extra configuration. Vendor stylesheets and `node_modules` are not treated as application-owned CSS. Literal names and statically visible dynamic prefixes such as `r-chart-$index` count as usage; third-party custom property prefixes (`--wa-`, `--sl-`, `--adyen-`, `--tw-`, `--bs-`) are ignored by default and configurable via `ignoredCssVariablePrefixes`.
 
-The task is part of both `check` and `thimCheck`. It writes `build/reports/thim/css-usage.json` and fails when a first-party class is never referenced. Classes applied by an external runtime whose source is not in the build must be listed exactly:
+The task is part of both `check` and `thimCheck`. It writes `build/reports/thim/css-usage.json` and fails on unused first-party classes, `#id` selectors, or custom properties (disable custom property enforcement with `failOnUnusedCssVariables.set(false)`). Classes and IDs applied by an external runtime whose source is not in the build must be listed explicitly:
 
 ```kotlin
 thim {
@@ -210,8 +210,13 @@ thim {
         "external-widget__container",
         "external-widget__button",
     ))
+    runtimeIds.add("external-modal")
 }
 ```
+
+Modules can also enable the reverse CSS check to catch unstyled static HTML `class="..."` tokens against first-party CSS, optional `externalCss` files (such as generated Tailwind output), and `runtimeCssClasses`. Set `failOnUnstyledCss.set(true)` to require every static HTML class token in that module to exist in CSS, or `checkedCssClassPrefixes.set(listOf("r-"))` to enforce specific prefixes without affecting sibling modules.
+
+The root `thimIdReferenceCheck` task (also wired into `check` and `thimCheck`, gated by `failOnBrokenIdReferences`, default `true`) validates static `#id` references across all templates (including partials) and first-party JavaScript — covering `hx-target`, `hx-include`, `hx-indicator`, `hx-status:*="target:#id"`, `popovertarget`, `document.getElementById("id")`, and `querySelector("#id")` — against declared IDs across the build (`id`, `th:field`, `th:id`, JS `.id` / `setAttribute('id', ...)`, and `runtimeIds`).
 
 Use `cssUsage.from(...)` only for generated or nonstandard production source roots. Set `failOnUnusedCss` to `false` only for a module whose stylesheet consumers live outside the current Gradle build.
 
@@ -390,7 +395,7 @@ Its default fixtures contain 100 and 1,000 fragment calls. To measure an applica
 
 ```shell
 ./gradlew :benchmark:jmhJar
-java -jar benchmark/build/libs/benchmark-0.15.0-jmh.jar TemplateCompilerBenchmark \
+java -jar benchmark/build/libs/benchmark-0.16.0-jmh.jar TemplateCompilerBenchmark \
   -p templatesDirectory=/absolute/path/to/src/main/resources/templates -p elements=100 \
   -f 2 -prof gc
 ```

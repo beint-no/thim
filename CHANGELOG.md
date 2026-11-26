@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0 - 2026-11-26
+
+- Reject self-closing HTML5 custom elements (`<*-* />` without a namespace colon) in `TemplateParser` with `THIM-HTML-SELF-CLOSING-CUSTOM-ELEMENT`, while keeping `<th:block .../>` and namespaced server components `<ui:button .../>` allowed.
+- Strengthen `thimCssUsageCheck` to detect dead `#id` selectors in first-party CSS (excluding hex colors and declaration blocks), unused first-party CSS custom properties (`--*`, gated by `failOnUnusedCssVariables` and `ignoredCssVariablePrefixes`), and per-module unstyled static HTML classes (`failOnUnstyledCss`, `checkedCssClassPrefixes`, and `externalCss`), plus `runtimeIds` aggregation.
+- Add build-wide `thimIdReferenceCheck` (wired to `check` and `thimCheck`, gated by `failOnBrokenIdReferences`) to validate static `#id` references in HTML templates (including partials) and first-party JS (`hx-target`, `hx-include`, `hx-indicator`, `hx-status:*`, `popovertarget`, `document.getElementById`, and `querySelector`) against all declared IDs across the build.
+- Add cross-module Spring MVC route discovery (`thimExtractExternalRoutes` using JDK 27 `java.lang.classfile.ClassFile`) passed via `thim.externalRoutes` into `RouteCatalog.load`, enabling `validateRoutes` and `generateRoutes` across sibling project modules with configuration cache and Isolated Projects support.
+
 ## 0.15.0 - 2026-11-19
 
 - Add dependency-free `no.beint.thim.TemplateRenderer` in `runtime` so non-web/email modules can render compiled templates without depending on `spring-webmvc`.
