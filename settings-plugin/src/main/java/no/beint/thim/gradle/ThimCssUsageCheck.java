@@ -34,7 +34,7 @@ import java.util.TreeSet;
 
 @CacheableTask
 public abstract class ThimCssUsageCheck extends DefaultTask {
-    static final List<String> DEFAULT_IGNORED_CSS_VARIABLE_PREFIXES = List.of(
+    public static final List<String> DEFAULT_IGNORED_CSS_VARIABLE_PREFIXES = List.of(
             "--wa-", "--sl-", "--adyen-", "--tw-", "--bs-"
     );
 
