@@ -27,7 +27,7 @@ include("runtime", "compiler", "spring", "gradle-plugin", "settings-plugin", "ex
 
 gradle.lifecycle.beforeProject {
     group = "no.beint.thim"
-    version = "0.16.0"
+    version = "0.16.1"
     plugins.withId("java") {
         extensions.configure<JavaPluginExtension> {
             toolchain.languageVersion.set(JavaLanguageVersion.of(27))
