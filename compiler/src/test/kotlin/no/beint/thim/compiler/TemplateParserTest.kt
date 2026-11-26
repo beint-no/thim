@@ -75,4 +75,28 @@ class TemplateParserTest {
 
         assertEquals(listOf("li", "li"), items.map(ElementNode::name))
     }
+
+    @Test
+    fun `self-closing custom elements fail compilation`() {
+        val error = assertFailsWith<ThimDiagnostic> {
+            TemplateParser("custom", "<div>\n  <wa-button label=\"Save\" />\n</div>").parse()
+        }
+
+        assertEquals("THIM-HTML-SELF-CLOSING-CUSTOM-ELEMENT", error.code)
+        assertEquals(SourceLocation("custom", 2, 4), error.location)
+        assertTrue(
+            error.message.orEmpty().contains("custom element <wa-button> cannot be self-closing; use an explicit </wa-button> closing tag"),
+            error.message,
+        )
+    }
+
+    @Test
+    fun `explicitly closed custom elements and self-closing namespaced tags stay valid`() {
+        val nodes = TemplateParser(
+            "custom-ok",
+            "<wa-button label=\"Save\"></wa-button><r-card></r-card><th:block th:slot=\"default\"/><ui:email-field th:props=\"\${p}\"/>",
+        ).parse().filterIsInstance<ElementNode>()
+
+        assertEquals(listOf("wa-button", "r-card", "th:block", "ui:email-field"), nodes.map(ElementNode::name))
+    }
 }

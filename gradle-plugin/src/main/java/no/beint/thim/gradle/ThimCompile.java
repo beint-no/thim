@@ -13,6 +13,7 @@ import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
+import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.OutputDirectory;
@@ -108,6 +109,11 @@ public abstract class ThimCompile extends DefaultTask {
     @Input
     public abstract ListProperty<String> getForbiddenModelAnnotations();
 
+    @InputFile
+    @Optional
+    @PathSensitive(PathSensitivity.NONE)
+    public abstract RegularFileProperty getExternalRoutes();
+
     @Input
     public abstract Property<String> getModuleName();
 
@@ -180,7 +186,9 @@ public abstract class ThimCompile extends DefaultTask {
                 "thim.catalogId=" + getCatalogId().get(),
                 "thim.trustedPaths=" + String.join(",", getTrustedPaths().get()),
                 "thim.strictModels=" + getStrictModels().get(),
-                "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get())
+                "thim.forbiddenModelAnnotations=" + String.join(",", getForbiddenModelAnnotations().get()),
+                "thim.externalRoutes=" + (getExternalRoutes().isPresent()
+                        ? getExternalRoutes().get().getAsFile().getAbsolutePath() : "")
         );
         var arguments = List.of(
                 "-java-source-roots=" + javaSources,

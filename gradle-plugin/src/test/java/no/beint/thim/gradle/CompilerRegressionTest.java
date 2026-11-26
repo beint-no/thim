@@ -227,6 +227,140 @@ class CompilerRegressionTest {
         assertFalse(result.getOutput().contains("did you mean 'secret'"), result.getOutput());
     }
 
+    @Test
+    void validatesAndGeneratesRoutesAcrossSiblingModules() throws Exception {
+        var classpath = System.getProperty("thim.test.processorClasspath").replace("\\", "\\\\").replace("'", "\\'");
+        var project = directory.resolve("multi-module-routes");
+        write(project.resolve("gradle.properties"), "ksp.project.isolation.enabled=true\n");
+        write(project.resolve("settings.gradle"), """
+                plugins { id 'no.beint.thim.settings' }
+                rootProject.name = 'multi-module-routes'
+                include 'feature', 'app'
+                """);
+        write(project.resolve("feature/build.gradle"), """
+                plugins {
+                    id 'org.jetbrains.kotlin.jvm'
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation 'org.springframework:spring-web:7.0.9'
+                }
+
+                tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                    compilerOptions {
+                        javaParameters.set(true)
+                    }
+                }
+                """);
+        write(project.resolve("feature/src/main/kotlin/feature/QuizController.kt"), """
+                package feature
+
+                import org.springframework.web.bind.annotation.GetMapping
+                import org.springframework.web.bind.annotation.PathVariable
+                import org.springframework.web.bind.annotation.PostMapping
+                import org.springframework.web.bind.annotation.RequestMapping
+                import org.springframework.web.bind.annotation.RequestParam
+
+                @RequestMapping("/quiz")
+                class QuizController {
+                    @GetMapping("/{id}")
+                    fun show(@PathVariable id: Long, @RequestParam(required = false) page: Int?): String = "ok"
+
+                    @PostMapping("/{id}/submit")
+                    fun submit(@PathVariable id: Long): String = "ok"
+                }
+                """);
+        write(project.resolve("app/build.gradle"), """
+                plugins {
+                    id 'org.jetbrains.kotlin.jvm'
+                    id 'no.beint.thim'
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                thim {
+                    modelPackages.set(['sample'])
+                    generateRoutes.set(true)
+                }
+
+                dependencies {
+                    implementation project(':feature')
+                    implementation 'org.springframework:spring-web:7.0.9'
+                }
+
+                afterEvaluate {
+                    configurations.implementation.dependencies.removeAll { it.group == 'no.beint.thim' }
+                    configurations.ksp.dependencies.removeAll { it.group == 'no.beint.thim' }
+                    dependencies {
+                        implementation files('%s'.split(java.io.File.pathSeparator))
+                        ksp files('%s'.split(java.io.File.pathSeparator))
+                    }
+                }
+                """.formatted(classpath, classpath));
+        write(project.resolve("app/src/main/kotlin/sample/HomePage.kt"), """
+                package sample
+
+                data class HomePage(val quizId: Long)
+                """);
+        write(project.resolve("app/src/main/resources/templates/home.html"), """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <a th:href="@{/quiz/{id}(id=${quizId})}">Start</a>
+                    <form th:action="@{/quiz/{id}/submit(id=${quizId})}" method="post">
+                        <button type="submit">Submit</button>
+                    </form>
+                </body>
+                </html>
+                """);
+
+        var runner = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments(":app:classes", "--isolated-projects", "--stacktrace")
+                .withPluginClasspath();
+        var first = runner.build();
+        assertTrue(first.getOutput().contains(":app:thimExtractExternalRoutes"), first.getOutput());
+        var routesFile = project.resolve("app/build/generated/ksp/main/kotlin/app/thim/generated/ThimRoutes.kt");
+        assertTrue(Files.isRegularFile(routesFile), "Expected generated ThimRoutes.kt");
+        var generatedRoutes = Files.readString(routesFile);
+        assertTrue(generatedRoutes.contains("fun `quiz`("), generatedRoutes);
+        assertTrue(generatedRoutes.contains("`id`: kotlin.Long"), generatedRoutes);
+        assertTrue(generatedRoutes.contains("`page`: kotlin.Int? = null"), generatedRoutes);
+        assertTrue(generatedRoutes.contains("fun `quizSubmit`("), generatedRoutes);
+
+        // Unknown route in sibling module fails compilation
+        write(project.resolve("app/src/main/resources/templates/home.html"), """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <a th:href="@{/quiz/{id}/missing(id=${quizId})}">Broken</a>
+                </body>
+                </html>
+                """);
+        var unknownFail = runner.buildAndFail();
+        assertTrue(unknownFail.getOutput().contains("THIM-URL-UNKNOWN-ROUTE"), unknownFail.getOutput());
+
+        // Wrong HTTP method against sibling module route fails compilation
+        write(project.resolve("app/src/main/resources/templates/home.html"), """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <form th:action="@{/quiz/{id}(id=${quizId})}" method="post">
+                        <button type="submit">Wrong method</button>
+                    </form>
+                </body>
+                </html>
+                """);
+        var methodFail = runner.buildAndFail();
+        assertTrue(methodFail.getOutput().contains("THIM-URL-METHOD"), methodFail.getOutput());
+    }
+
     private Path kotlinProject(String name, boolean strictModels) throws Exception {
         var classpath = System.getProperty("thim.test.processorClasspath").replace("\\", "\\\\").replace("'", "\\'");
         var project = directory.resolve(name);

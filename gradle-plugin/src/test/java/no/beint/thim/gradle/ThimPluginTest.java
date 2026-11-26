@@ -234,6 +234,269 @@ class ThimPluginTest {
     }
 
     @Test
+    void cssParserExtractsIdsAndCustomPropertiesWithoutHexColors() {
+        var parsed = ThimCssUsageCheck.parseCss("""
+                :root {
+                  --brand: #1a2b3c;
+                  --unused-token: 1rem;
+                  --wa-color: #fff;
+                }
+                /* #commented-id { --commented-var: 1px; } */
+                #hero, a[href="#ignored-attr"] {
+                  color: var(--brand);
+                  background: #abcdef;
+                  border-color: #123
+                }
+                @media (min-width: 768px) {
+                  #sidebar .nav-link:hover {
+                    color: var(--brand, var(--fallback));
+                  }
+                }
+                @keyframes pulse {
+                  from { color: #111; }
+                  to { color: #222; }
+                }
+                """);
+
+        assertEquals(Set.of("nav-link"), parsed.classes());
+        assertEquals(Set.of("hero", "sidebar"), parsed.ids());
+        assertEquals(Set.of("--brand", "--unused-token", "--wa-color"), parsed.variables());
+        assertEquals(Set.of("--brand", "--fallback"), parsed.varRefs());
+    }
+
+    @Test
+    void cssUsageCheckDetectsDeadIdsAndHonorsRuntimeIds() throws IOException {
+        var project = dependencyProject("dead-css-id", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { runtimeIds.add('runtime-panel') }
+                """);
+        write(project.resolve("src/main/resources/static/app.css"), """
+                #used-id { color: #112233; }
+                #runtime-panel { background: #fff; }
+                #dead-id { color: #ff0000; }
+                """);
+        write(project.resolve("src/main/resources/templates/home.html"), "<div id=\"used-id\"></div>\n");
+
+        var result = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+
+        assertTrue(result.getOutput().contains("Unused first-party CSS #id selectors:"), result.getOutput());
+        assertTrue(result.getOutput().contains("#dead-id (src/main/resources/static/app.css)"), result.getOutput());
+        assertFalse(result.getOutput().contains("#used-id"), result.getOutput());
+        assertFalse(result.getOutput().contains("#runtime-panel"), result.getOutput());
+        assertFalse(result.getOutput().contains("#112233"), result.getOutput());
+        assertFalse(result.getOutput().contains("#fff"), result.getOutput());
+    }
+
+    @Test
+    void cssUsageCheckDetectsUnusedCustomPropertiesAndIgnoresThirdPartyPrefixes() throws IOException {
+        var project = dependencyProject("dead-css-vars", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("src/main/resources/static/app.css"), """
+                :root {
+                  --used-in-css: #111;
+                  --used-in-html: #222;
+                  --dead-var: #333;
+                  --wa-brand: #444;
+                  --sl-spacing: 1rem;
+                  --adyen-color: #555;
+                  --tw-shadow: 0 0;
+                  --bs-primary: #666;
+                }
+                /* var(--dead-var) */
+                .card { color: var(--used-in-css); }
+                """);
+        write(project.resolve("src/main/resources/templates/home.html"), """
+                <div class="card" style="background: var(--used-in-html)"></div>
+                """);
+
+        var result = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+
+        assertTrue(result.getOutput().contains("Unused first-party CSS custom properties:"), result.getOutput());
+        assertTrue(result.getOutput().contains("--dead-var (src/main/resources/static/app.css)"), result.getOutput());
+        assertFalse(result.getOutput().contains("--used-in-css"), result.getOutput());
+        assertFalse(result.getOutput().contains("--used-in-html"), result.getOutput());
+        assertFalse(result.getOutput().contains("--wa-brand"), result.getOutput());
+        assertFalse(result.getOutput().contains("--tw-shadow"), result.getOutput());
+
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { failOnUnusedCssVariables.set(false) }
+                """);
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+    }
+
+    @Test
+    void reverseCssCheckIsScopedPerModuleWithExternalCssAndPrefixes() throws IOException {
+        var project = temporaryDirectory.resolve("reverse-css");
+        write(project.resolve("settings.gradle"), """
+                plugins { id 'no.beint.thim.settings' }
+                rootProject.name = 'reverse-css'
+                include 'bedri', 'web-app'
+                """);
+        write(project.resolve("bedri/build.gradle"), """
+                plugins {
+                    id 'java'
+                    id 'no.beint.thim'
+                }
+                thim {
+                    failOnUnstyledCss.set(true)
+                    externalCss.from(file('generated/tailwind.css'))
+                }
+                tasks.matching { it.name == 'compileThim' }.configureEach { enabled = false }
+                """);
+        write(project.resolve("web-app/build.gradle"), """
+                plugins {
+                    id 'java'
+                    id 'no.beint.thim'
+                }
+                thim {
+                    checkedCssClassPrefixes.set(['r-'])
+                }
+                tasks.matching { it.name == 'compileThim' }.configureEach { enabled = false }
+                """);
+        write(project.resolve("bedri/generated/tailwind.css"), """
+                .flex { display: flex; }
+                .hover\\:underline:hover { text-decoration: underline; }
+                """);
+        write(project.resolve("bedri/src/main/resources/static/bedri.css"), ".bedri-hero { padding: 1rem; }\n");
+        write(project.resolve("bedri/src/main/resources/templates/home.html"), """
+                <div class="flex hover:underline bedri-hero htmx-request"></div>
+                <span class="ignored-by-th-class" th:class="${dynamicClass}"></span>
+                """);
+        write(project.resolve("web-app/src/main/resources/static/app.css"), ".r-card { display: block; }\n");
+        write(project.resolve("web-app/src/main/resources/templates/dashboard.html"), """
+                <div class="r-card wa-stack wa-gap-m"></div>
+                """);
+
+        GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--isolated-projects", "--stacktrace")
+                .withPluginClasspath()
+                .build();
+
+        // :bedri must fail if it uses a class from :web-app (not in :bedri's own CSS)
+        write(project.resolve("bedri/src/main/resources/templates/home.html"), """
+                <div class="flex bedri-hero r-card"></div>
+                """);
+        var bedriFail = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--isolated-projects", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+        assertTrue(bedriFail.getOutput().contains("Unstyled HTML classes:"), bedriFail.getOutput());
+        assertTrue(bedriFail.getOutput().contains("r-card (bedri/src/main/resources/templates/home.html:1)"), bedriFail.getOutput());
+
+        // Restore :bedri and introduce a missing r-* class in :web-app
+        write(project.resolve("bedri/src/main/resources/templates/home.html"), """
+                <div class="flex bedri-hero"></div>
+                """);
+        write(project.resolve("web-app/src/main/resources/templates/dashboard.html"), """
+                <div class="r-card r-typo wa-stack"></div>
+                """);
+        var webFail = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimCssUsageCheck", "--isolated-projects", "--stacktrace")
+                .withPluginClasspath()
+                .buildAndFail();
+        assertTrue(webFail.getOutput().contains("r-typo (web-app/src/main/resources/templates/dashboard.html:1)"), webFail.getOutput());
+        assertFalse(webFail.getOutput().contains("wa-stack"), webFail.getOutput());
+    }
+
+    @Test
+    void idReferenceCheckValidatesCrossTemplateAndJsReferences() throws IOException {
+        var project = dependencyProject("id-references", """
+                id 'java'
+                id 'no.beint.thim'
+                """);
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { runtimeIds.add('runtime-toast') }
+                """);
+        write(project.resolve("src/main/resources/templates/layout.html"), """
+                <div id="main-panel"></div>
+                <div id="spinner"></div>
+                <div id="err-box"></div>
+                <div id="menu-pop" popover></div>
+                <div th:id="|row-${item.id}|"></div>
+                <input th:field="*{email}">
+                """);
+        write(project.resolve("src/main/resources/templates/partial.html"), """
+                <button hx-target="#main-panel"
+                        hx-include="#email, closest form, [name='q']"
+                        hx-indicator="#spinner"
+                        hx-status:422="swap:innerHTML target:#err-box"
+                        popovertarget="menu-pop">Go</button>
+                <button hx-target="this" hx-indicator="closest .btn">Local</button>
+                <button hx-target="#row-42">Dynamic prefix</button>
+                <button hx-target="#runtime-toast">Runtime</button>
+                """);
+        write(project.resolve("src/main/resources/static/app.js"), """
+                const el = document.createElement('div');
+                el.id = 'js-created';
+                el.setAttribute('id', 'js-attr-id');
+                document.getElementById('js-created');
+                document.querySelector('#js-attr-id');
+                document.querySelector('#main-panel .nested');
+                document.querySelector('#main-panel:hover');
+                // document.getElementById('commented-out')
+                """);
+        write(project.resolve("src/main/resources/static/vendor/third-party.js"), """
+                document.getElementById('vendor-missing-id');
+                """);
+
+        var runner = GradleRunner.create()
+                .withProjectDir(project.toFile())
+                .withArguments("thimIdReferenceCheck", "--isolated-projects", "--stacktrace")
+                .withPluginClasspath();
+        var ok = runner.build();
+        assertTrue(ok.getOutput().contains("Configuration cache entry stored"), ok.getOutput());
+        assertTrue(runner.build().getOutput().contains("Reusing configuration cache"));
+
+        // Introduce broken references in partial HTML and JS
+        write(project.resolve("src/main/resources/templates/partial.html"), """
+                <button hx-target="#missing-panel">Go</button>
+                <button popovertarget="missing-pop">Open</button>
+                """);
+        write(project.resolve("src/main/resources/static/app.js"), """
+                document.getElementById('missing-js-id');
+                document.querySelector('#missing-qs-id');
+                """);
+
+        var failed = runner.buildAndFail();
+        assertTrue(failed.getOutput().contains("Broken #id references:"), failed.getOutput());
+        assertTrue(failed.getOutput().contains("partial.html:1 hx-target=\"#missing-panel\" -> #missing-panel"), failed.getOutput());
+        assertTrue(failed.getOutput().contains("partial.html:2 popovertarget=\"missing-pop\" -> #missing-pop"), failed.getOutput());
+        assertTrue(failed.getOutput().contains("app.js:1 document.getElementById(\"missing-js-id\") -> #missing-js-id"), failed.getOutput());
+        assertTrue(failed.getOutput().contains("app.js:2 querySelector(\"#missing-qs-id\") -> #missing-qs-id"), failed.getOutput());
+        assertFalse(failed.getOutput().contains("vendor-missing-id"), failed.getOutput());
+
+        // Opt-out disables failure
+        write(project.resolve("build.gradle"), Files.readString(project.resolve("build.gradle")) + """
+
+                thim { failOnBrokenIdReferences.set(false) }
+                """);
+        runner.build();
+    }
+
+    @Test
     void migrationModulesKeepRuntimeTemplatesButNotCompiledCatalogs() throws IOException {
         var project = project("migration", "thim { strictTemplates.set(false) }");
 
