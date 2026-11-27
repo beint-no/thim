@@ -4,19 +4,23 @@ import org.gradle.api.DefaultTask;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.tasks.CacheableTask;
-import org.gradle.api.tasks.Classpath;
+import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.IgnoreEmptyDirectories;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.TaskAction;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.classfile.Annotation;
 import java.lang.classfile.AnnotationValue;
 import java.lang.classfile.Attributes;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
 import java.lang.classfile.MethodModel;
+import java.lang.classfile.MethodSignature;
+import java.lang.classfile.Signature;
+import java.lang.classfile.attribute.SignatureAttribute;
 import java.lang.constant.ClassDesc;
 import java.lang.reflect.AccessFlag;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +29,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -63,6 +68,11 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
             Map.entry("java.util.List", "kotlin.collections.List"),
             Map.entry("java.util.Set", "kotlin.collections.Set")
     );
+    private static final Set<String> RAW_SINGLE_ARG_COLLECTIONS = Set.of(
+            "java.util.Collection",
+            "java.util.List",
+            "java.util.Set"
+    );
     private static final Set<String> UNSUPPORTED_URL_TYPES = Set.of(
             "java.util.Map",
             "kotlin.collections.Map",
@@ -73,7 +83,7 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
     );
     private static final Pattern REPEATED_SLASHES = Pattern.compile("/+");
 
-    @Classpath
+    @CompileClasspath
     @IgnoreEmptyDirectories
     public abstract ConfigurableFileCollection getProjectClasses();
 
@@ -82,38 +92,32 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
 
     @TaskAction
     public void extractRoutes() throws IOException {
-        var classFile = ClassFile.of();
-        var seenClasses = new HashSet<String>();
-        var rows = new TreeSet<String>();
+        var classFile = ClassFile.of(
+                ClassFile.DebugElementsOption.DROP_DEBUG,
+                ClassFile.LineNumbersOption.DROP_LINE_NUMBERS,
+                ClassFile.StackMapsOption.DROP_STACK_MAPS
+        );
 
         var inputs = getProjectClasses().getFiles().stream()
+                .filter(File::exists)
                 .sorted(Comparator.comparing(File::getAbsolutePath))
                 .toList();
 
-        for (var input : inputs) {
-            if (!input.exists()) continue;
-            if (input.isDirectory()) {
-                var classPaths = new ArrayList<Path>();
-                try (var stream = Files.walk(input.toPath())) {
-                    stream.filter(Files::isRegularFile)
-                            .filter(path -> path.getFileName().toString().endsWith(".class"))
-                            .forEach(classPaths::add);
-                }
-                classPaths.sort(Comparator.comparing(Path::toAbsolutePath));
-                for (var path : classPaths) {
-                    inspectClass(classFile.parse(path), seenClasses, rows);
-                }
-            } else if (input.isFile() && input.getName().endsWith(".jar")) {
-                try (var jar = new JarFile(input)) {
-                    var entries = jar.stream()
-                            .filter(entry -> !entry.isDirectory() && entry.getName().endsWith(".class"))
-                            .sorted(Comparator.comparing(java.util.zip.ZipEntry::getName))
-                            .toList();
-                    for (var entry : entries) {
-                        try (var in = jar.getInputStream(entry)) {
-                            inspectClass(classFile.parse(in.readAllBytes()), seenClasses, rows);
-                        }
-                    }
+        List<Map<String, List<String>>> perInput;
+        try {
+            perInput = inputs.parallelStream()
+                    .map(input -> extractInput(classFile, input))
+                    .toList();
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
+        }
+
+        var seenClasses = new HashSet<String>();
+        var rows = new TreeSet<String>();
+        for (var extracted : perInput) {
+            for (var entry : extracted.entrySet()) {
+                if (seenClasses.add(entry.getKey())) {
+                    rows.addAll(entry.getValue());
                 }
             }
         }
@@ -126,8 +130,53 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
         Files.write(output, lines, StandardCharsets.UTF_8);
     }
 
+    private static Map<String, List<String>> extractInput(ClassFile classFile, File input) {
+        var extracted = new LinkedHashMap<String, List<String>>();
+        try {
+            if (input.isDirectory()) {
+                var classPaths = new ArrayList<Path>();
+                try (var stream = Files.walk(input.toPath())) {
+                    stream.filter(Files::isRegularFile)
+                            .filter(path -> path.getFileName().toString().endsWith(".class"))
+                            .forEach(classPaths::add);
+                }
+                classPaths.sort(Comparator.comparing(Path::toAbsolutePath));
+                for (var path : classPaths) {
+                    collectClassRoutes(classFile.parse(path), extracted);
+                }
+            } else if (input.isFile() && input.getName().endsWith(".jar")) {
+                try (var jar = new JarFile(input)) {
+                    var entries = jar.stream()
+                            .filter(entry -> !entry.isDirectory() && entry.getName().endsWith(".class"))
+                            .sorted(Comparator.comparing(java.util.zip.ZipEntry::getName))
+                            .toList();
+                    for (var entry : entries) {
+                        try (var in = jar.getInputStream(entry)) {
+                            collectClassRoutes(classFile.parse(in.readAllBytes()), extracted);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return extracted;
+    }
+
+    private static void collectClassRoutes(ClassModel model, Map<String, List<String>> extracted) {
+        var internalName = model.thisClass().asInternalName();
+        if (extracted.containsKey(internalName)) return;
+        var rows = new ArrayList<String>();
+        inspectClassRoutes(model, rows);
+        extracted.put(internalName, rows);
+    }
+
     static void inspectClass(ClassModel model, Set<String> seenClasses, Set<String> rows) {
         if (!seenClasses.add(model.thisClass().asInternalName())) return;
+        inspectClassRoutes(model, rows);
+    }
+
+    private static void inspectClassRoutes(ClassModel model, java.util.Collection<String> rows) {
 
         var classPrefixes = classPrefixes(model);
         for (var method : model.methods()) {
@@ -224,6 +273,11 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
 
         var paramAnnotations = paramAnnAttr.get().parameterAnnotations();
         var paramTypes = method.methodTypeSymbol().parameterList();
+        var signatureArgs = method.findAttribute(Attributes.signature())
+                .map(SignatureAttribute::asMethodSignature)
+                .map(MethodSignature::arguments)
+                .filter(args -> args.size() == paramTypes.size())
+                .orElse(null);
         var paramNames = method.findAttribute(Attributes.methodParameters())
                 .map(attr -> attr.parameters().stream()
                         .map(info -> info.name().map(n -> n.stringValue()).orElse(null))
@@ -247,11 +301,70 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
             if (name == null || name.isBlank()) continue;
             if (query && isSecretQueryName(name)) continue;
 
-            var typeName = kotlinType(paramTypes.get(i));
-            if (query && UNSUPPORTED_URL_TYPES.contains(rawTypeName(paramTypes.get(i)))) continue;
-            result.add(new Param(name, typeName));
+            if (signatureArgs != null) {
+                var signature = signatureArgs.get(i);
+                if (query && isUnsupportedUrlType(signature)) continue;
+                result.add(new Param(name, kotlinType(signature)));
+            } else {
+                var paramType = paramTypes.get(i);
+                if (query && UNSUPPORTED_URL_TYPES.contains(rawTypeName(paramType))) continue;
+                result.add(new Param(name, kotlinType(paramType)));
+            }
         }
         return result;
+    }
+
+    private static boolean isUnsupportedUrlType(Signature signature) {
+        if (signature instanceof Signature.ClassTypeSig classSig) {
+            if (UNSUPPORTED_URL_TYPES.contains(rawTypeName(classSig))) return true;
+            for (var arg : classSig.typeArgs()) {
+                if (arg instanceof Signature.TypeArg.Bounded bounded && isUnsupportedUrlType(bounded.boundType())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (signature instanceof Signature.ArrayTypeSig arraySig) {
+            return isUnsupportedUrlType(arraySig.componentSignature());
+        }
+        return false;
+    }
+
+    private static String kotlinType(Signature signature) {
+        if (signature instanceof Signature.BaseTypeSig baseSig) {
+            return primitiveKotlinType(baseSig.signatureString());
+        }
+        if (signature instanceof Signature.ClassTypeSig classSig) {
+            var raw = rawTypeName(classSig);
+            var mapped = JAVA_TYPES.getOrDefault(raw, raw);
+            var typeArgs = classSig.typeArgs();
+            if (typeArgs.isEmpty()) {
+                return RAW_SINGLE_ARG_COLLECTIONS.contains(raw) ? mapped + "<*>" : mapped;
+            }
+            var sb = new StringBuilder(mapped).append('<');
+            for (var i = 0; i < typeArgs.size(); i++) {
+                if (i > 0) sb.append(", ");
+                var arg = typeArgs.get(i);
+                if (arg instanceof Signature.TypeArg.Bounded bounded) {
+                    sb.append(kotlinType(bounded.boundType()));
+                } else {
+                    sb.append('*');
+                }
+            }
+            return sb.append('>').toString();
+        }
+        return "kotlin.Any";
+    }
+
+    private static String rawTypeName(Signature.ClassTypeSig classSig) {
+        var outer = classSig.outerType().map(ThimExtractExternalRoutes::rawTypeName).orElse(null);
+        if (outer != null) {
+            return outer + "." + classSig.className().replace('$', '.');
+        }
+        return classSig.classDesc().descriptorString()
+                .replaceAll("^L|;$", "")
+                .replace('/', '.')
+                .replace('$', '.');
     }
 
     private static String firstNonBlankString(Annotation annotation, String... names) {
@@ -267,20 +380,25 @@ public abstract class ThimExtractExternalRoutes extends DefaultTask {
 
     private static String kotlinType(ClassDesc desc) {
         if (desc.isPrimitive()) {
-            return switch (desc.descriptorString()) {
-                case "Z" -> "kotlin.Boolean";
-                case "B" -> "kotlin.Byte";
-                case "C" -> "kotlin.Char";
-                case "D" -> "kotlin.Double";
-                case "F" -> "kotlin.Float";
-                case "I" -> "kotlin.Int";
-                case "J" -> "kotlin.Long";
-                case "S" -> "kotlin.Short";
-                default -> "kotlin.Any";
-            };
+            return primitiveKotlinType(desc.descriptorString());
         }
         var raw = rawTypeName(desc);
-        return JAVA_TYPES.getOrDefault(raw, raw);
+        var mapped = JAVA_TYPES.getOrDefault(raw, raw);
+        return RAW_SINGLE_ARG_COLLECTIONS.contains(raw) ? mapped + "<*>" : mapped;
+    }
+
+    private static String primitiveKotlinType(String descriptor) {
+        return switch (descriptor) {
+            case "Z" -> "kotlin.Boolean";
+            case "B" -> "kotlin.Byte";
+            case "C" -> "kotlin.Char";
+            case "D" -> "kotlin.Double";
+            case "F" -> "kotlin.Float";
+            case "I" -> "kotlin.Int";
+            case "J" -> "kotlin.Long";
+            case "S" -> "kotlin.Short";
+            default -> "kotlin.Any";
+        };
     }
 
     private static String rawTypeName(ClassDesc desc) {
