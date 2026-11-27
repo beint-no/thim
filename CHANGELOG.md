@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.2 - 2026-11-27
+
+- Preserve generic type arguments (e.g. `kotlin.collections.List<kotlin.String>`) and recursively filter unsupported URL types (e.g. `List<MultipartFile>`) in `thimExtractExternalRoutes`, falling back to `<*>` for raw `Collection`/`List`/`Set` signatures so `-java-parameters` sibling modules always produce valid Kotlin route builders.
+- Switch `thimExtractExternalRoutes` classpath input from `@Classpath` to `@CompileClasspath` and scan inputs in parallel with lightweight Class-File parsing options, keeping external route extraction `UP-TO-DATE` across body-only edits in sibling modules.
+
+## 0.16.1 - 2026-11-26
+
+- Make `ThimCssUsageCheck.DEFAULT_IGNORED_CSS_VARIABLE_PREFIXES` public.
+
 ## 0.16.0 - 2026-11-26
 
 - Reject self-closing HTML5 custom elements (`<*-* />` without a namespace colon) in `TemplateParser` with `THIM-HTML-SELF-CLOSING-CUSTOM-ELEMENT`, while keeping `<th:block .../>` and namespaced server components `<ui:button .../>` allowed.

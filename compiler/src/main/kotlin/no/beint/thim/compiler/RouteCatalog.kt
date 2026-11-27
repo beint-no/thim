@@ -236,14 +236,28 @@ internal class RouteCatalog(
             }
         }
 
-        private fun parseParameters(encoded: String): List<RouteParameter> =
-            encoded.split(',')
-                .filter(String::isNotBlank)
-                .mapNotNull { entry ->
-                    val separator = entry.indexOf('=')
-                    if (separator <= 0 || separator >= entry.length - 1) null
-                    else RouteParameter(entry.substring(0, separator), entry.substring(separator + 1))
+        private fun parseParameters(encoded: String): List<RouteParameter> {
+            if (encoded.isBlank()) return emptyList()
+            val entries = mutableListOf<String>()
+            var depth = 0
+            var start = 0
+            for (i in encoded.indices) {
+                when (encoded[i]) {
+                    '<' -> depth++
+                    '>' -> if (depth > 0) depth--
+                    ',' -> if (depth == 0) {
+                        entries.add(encoded.substring(start, i))
+                        start = i + 1
+                    }
                 }
+            }
+            entries.add(encoded.substring(start))
+            return entries.filter(String::isNotBlank).mapNotNull { entry ->
+                val separator = entry.indexOf('=')
+                if (separator <= 0 || separator >= entry.length - 1) null
+                else RouteParameter(entry.substring(0, separator), entry.substring(separator + 1))
+            }
+        }
 
         private fun KSAnnotation.matches(qualifiedName: String): Boolean =
             shortName.asString() == qualifiedName.substringAfterLast('.') &&

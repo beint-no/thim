@@ -268,7 +268,12 @@ class CompilerRegressionTest {
                 @RequestMapping("/quiz")
                 class QuizController {
                     @GetMapping("/{id}")
-                    fun show(@PathVariable id: Long, @RequestParam(required = false) page: Int?): String = "ok"
+                    fun show(
+                        @PathVariable id: Long,
+                        @RequestParam(required = false) page: Int?,
+                        @RequestParam(required = false) tags: List<String>?,
+                        @RequestParam(required = false) uploads: List<org.springframework.web.multipart.MultipartFile>?,
+                    ): String = "ok"
 
                     @PostMapping("/{id}/submit")
                     fun submit(@PathVariable id: Long): String = "ok"
@@ -332,7 +337,36 @@ class CompilerRegressionTest {
         assertTrue(generatedRoutes.contains("fun `quiz`("), generatedRoutes);
         assertTrue(generatedRoutes.contains("`id`: kotlin.Long"), generatedRoutes);
         assertTrue(generatedRoutes.contains("`page`: kotlin.Int? = null"), generatedRoutes);
+        assertTrue(generatedRoutes.contains("`tags`: kotlin.collections.List<kotlin.String>? = null"), generatedRoutes);
+        assertFalse(generatedRoutes.contains("uploads"), generatedRoutes);
         assertTrue(generatedRoutes.contains("fun `quizSubmit`("), generatedRoutes);
+
+        // Body-only change in sibling module leaves thimExtractExternalRoutes UP-TO-DATE (@CompileClasspath)
+        write(project.resolve("feature/src/main/kotlin/feature/QuizController.kt"), """
+                package feature
+
+                import org.springframework.web.bind.annotation.GetMapping
+                import org.springframework.web.bind.annotation.PathVariable
+                import org.springframework.web.bind.annotation.PostMapping
+                import org.springframework.web.bind.annotation.RequestMapping
+                import org.springframework.web.bind.annotation.RequestParam
+
+                @RequestMapping("/quiz")
+                class QuizController {
+                    @GetMapping("/{id}")
+                    fun show(
+                        @PathVariable id: Long,
+                        @RequestParam(required = false) page: Int?,
+                        @RequestParam(required = false) tags: List<String>?,
+                        @RequestParam(required = false) uploads: List<org.springframework.web.multipart.MultipartFile>?,
+                    ): String = "updated body"
+
+                    @PostMapping("/{id}/submit")
+                    fun submit(@PathVariable id: Long): String = "ok"
+                }
+                """);
+        var bodyOnly = runner.build();
+        assertTrue(bodyOnly.getOutput().contains(":app:thimExtractExternalRoutes UP-TO-DATE"), bodyOnly.getOutput());
 
         // Unknown route in sibling module fails compilation
         write(project.resolve("app/src/main/resources/templates/home.html"), """

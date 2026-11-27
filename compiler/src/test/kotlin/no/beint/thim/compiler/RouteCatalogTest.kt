@@ -114,4 +114,23 @@ class RouteCatalogTest {
         assertEquals("THIM-URL-UNKNOWN-ROUTE", unknownError.code)
     }
 
+    @Test
+    fun `external routes preserve generic parameter types including multi-argument generics`() {
+        val external = RouteCatalog.parseExternalRoutes(
+            listOf(
+                "thim-external-routes\t1",
+                "route\tGET\t/items\t\ttags=kotlin.collections.List<kotlin.String>,pair=kotlin.Pair<kotlin.String, kotlin.Int>,raw=kotlin.collections.Set<*>",
+            ),
+        )
+        assertEquals(1, external.size)
+        assertEquals(
+            listOf(
+                RouteParameter("tags", "kotlin.collections.List<kotlin.String>"),
+                RouteParameter("pair", "kotlin.Pair<kotlin.String, kotlin.Int>"),
+                RouteParameter("raw", "kotlin.collections.Set<*>"),
+            ),
+            external[0].queryParameters,
+        )
+    }
+
 }
