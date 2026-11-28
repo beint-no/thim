@@ -15,7 +15,7 @@ kotlin {
 dependencies {
     implementation(kotlin("reflect"))
     implementation(project(":spring"))
-    implementation("org.springframework.boot:spring-boot-starter-webmvc:4.2.0-RC1")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc:4.2.0")
     ksp(project(":compiler"))
 
     testImplementation(platform("org.junit:junit-bom:6.1.3"))

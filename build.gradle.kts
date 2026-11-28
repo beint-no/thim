@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm") apply false
     id("com.google.devtools.ksp") apply false
-    id("org.springframework.boot") version "4.2.0-RC1" apply false
+    id("org.springframework.boot") version "4.2.0" apply false
     id("me.champeau.jmh") version "0.7.3" apply false
 }
 
